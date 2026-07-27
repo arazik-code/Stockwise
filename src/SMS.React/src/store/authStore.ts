@@ -7,6 +7,7 @@ interface User {
   username: string
   fullName: string
   role: string
+  mustChangePassword?: boolean
 }
 
 interface AuthState {
@@ -17,6 +18,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>
   logout: () => void
   clearError: () => void
+  clearMustChangePassword: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -50,6 +52,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
+
+      clearMustChangePassword: () =>
+        set((state) => ({
+          user: state.user ? { ...state.user, mustChangePassword: false } : state.user,
+        })),
     }),
     {
       name: 'sms-auth',

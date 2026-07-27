@@ -15,14 +15,16 @@ public static class SeedData
         var cashierHash = HashPassword("cashier123");
         var stockManagerHash = HashPassword("stock123");
 
-        var admin = new User { Username = "admin", PasswordHash = adminHash, FullName = "Administrateur", Role = UserRole.Admin, IsActive = true, CreatedAt = DateTime.UtcNow };
-        var cashier = new User { Username = "cashier", PasswordHash = cashierHash, FullName = "Caissier", Role = UserRole.Cashier, IsActive = true, CreatedAt = DateTime.UtcNow };
-        var stockManager = new User { Username = "stock_manager", PasswordHash = stockManagerHash, FullName = "Gestionnaire Stock", Role = UserRole.StockManager, IsActive = true, CreatedAt = DateTime.UtcNow };
+        var admin = new User { Username = "admin", PasswordHash = adminHash, FullName = "Administrateur", Role = UserRole.Admin, IsActive = true, MustChangePassword = true, CreatedAt = DateTime.UtcNow };
+        var cashier = new User { Username = "cashier", PasswordHash = cashierHash, FullName = "Caissier", Role = UserRole.Cashier, IsActive = true, MustChangePassword = true, CreatedAt = DateTime.UtcNow };
+        var stockManager = new User { Username = "stock_manager", PasswordHash = stockManagerHash, FullName = "Gestionnaire Stock", Role = UserRole.StockManager, IsActive = true, MustChangePassword = true, CreatedAt = DateTime.UtcNow };
 
         db.Users.AddRange(admin, cashier, stockManager);
         await db.SaveChangesAsync();
 
-        Console.WriteLine($"[SeedData] Seeded 3 users: admin/admin123, cashier/cashier123, stock_manager/stock123");
+        // Deliberately not printed to stdout - default credentials in a log file is exactly
+        // the kind of thing that ends up committed or screen-shared. See deploy/SETUP.md.
+        Console.WriteLine("[SeedData] Seeded 3 default accounts. See deploy/SETUP.md for initial credentials - change them on first login.");
     }
 
     private static string HashPassword(string password)

@@ -1,6 +1,7 @@
 using System.Text;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SMS.API.Endpoints;
@@ -68,7 +69,27 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Was implicit-anonymous-by-default: any controller/endpoint that forgot [Authorize]
+    // was silently public. AuthController.Register was one such gap and accepted an
+    // anonymous Role in the body - a full unauthenticated admin-mint path. Now the
+    // default is authenticated, and anonymous access is opt-in via [AllowAnonymous].
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("login", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 10;
+        limiterOptions.Window = TimeSpan.FromMinutes(5);
+        limiterOptions.QueueLimit = 0;
+    });
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
 
 builder.Services.AddControllers(options =>
 {
@@ -111,13 +132,21 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddCors(options =>
 {
+    // Was hardcoded to a specific developer's LAN IP (192.168.1.105). Now driven by
+    // Cors:AllowedOrigins in config (see appsettings.example.json), defaulting to
+    // localhost-only - matching the API now binding to 127.0.0.1 by default too.
+    var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+    var defaultOrigins = new[]
+    {
+        builder.Configuration["React:BaseUrl"] ?? "http://localhost:5173",
+        "http://localhost:5173",
+        "http://localhost:5001",
+        "http://localhost:5000"
+    };
+    var origins = defaultOrigins.Concat(configuredOrigins).Distinct().ToArray();
+
     options.AddPolicy("ReactSpa", policy =>
-        policy.WithOrigins(
-                builder.Configuration["React:BaseUrl"] ?? "http://localhost:5173",
-                "http://localhost:5173",
-                "http://localhost:5001",
-                "http://192.168.1.105:5173",
-                "http://192.168.1.105:5001")
+        policy.WithOrigins(origins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());
@@ -164,11 +193,14 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<InventoryHub>("/hubs/inventory");
 app.MapWebhookEndpoints();
 app.MapHealthEndpoints();
-app.MapFallbackToFile("index.html");
+// The SPA shell itself must load before a user can log in - without this the new
+// fallback authorization policy would 401 index.html and nothing could ever render.
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
 

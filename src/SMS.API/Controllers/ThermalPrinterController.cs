@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SMS.Application.DTOs.Printer;
 using SMS.Application.DTOs.Products;
@@ -9,6 +10,7 @@ namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/printer")]
+[Authorize]
 public class ThermalPrinterController : ControllerBase
 {
     private readonly ThermalPrinterService _printerService;

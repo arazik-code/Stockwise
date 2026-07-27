@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SMS.Infrastructure.Data;
@@ -10,6 +12,7 @@ namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -22,6 +25,8 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username && u.IsActive, ct);
@@ -41,12 +46,17 @@ public class AuthController : ControllerBase
                 user.Id,
                 user.Username,
                 user.FullName,
-                Role = user.Role.ToString()
+                Role = user.Role.ToString(),
+                user.MustChangePassword
             }
         });
     }
 
+    // Creating accounts is an admin action, not a public signup form - this used to be
+    // AllowAnonymous and accepted a Role straight from the request body, so anyone who
+    // could reach the API could mint themselves an Admin account.
     [HttpPost("register")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken ct)
     {
         var existing = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username, ct);
@@ -60,17 +70,15 @@ public class AuthController : ControllerBase
             FullName = request.FullName,
             Role = request.Role ?? SMS.Domain.Enums.UserRole.Cashier,
             IsActive = true,
+            MustChangePassword = true,
             CreatedAt = DateTime.UtcNow
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
 
-        var token = GenerateJwtToken(user);
-
         return CreatedAtAction(null, new
         {
-            token,
             user = new
             {
                 user.Id,
@@ -84,12 +92,32 @@ public class AuthController : ControllerBase
     [HttpGet("me")]
     public IActionResult Me()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var username = User.FindFirstValue(ClaimTypes.Name) ?? string.Empty;
         var fullName = User.FindFirstValue("FullName") ?? string.Empty;
         var role = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
 
         return Ok(new { userId, username, fullName, role });
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null) return NotFound();
+
+        if (!VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { message = "Mot de passe actuel incorrect" });
+
+        if (request.NewPassword.Length < 8)
+            return BadRequest(new { message = "Le nouveau mot de passe doit contenir au moins 8 caracteres" });
+
+        user.PasswordHash = HashPassword(request.NewPassword);
+        user.MustChangePassword = false;
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new { message = "Mot de passe change avec succes" });
     }
 
     private string GenerateJwtToken(SMS.Domain.Entities.User user)
@@ -147,3 +175,4 @@ public class AuthController : ControllerBase
 
 public record LoginRequest(string Username, string Password);
 public record RegisterRequest(string Username, string Password, string FullName, SMS.Domain.Enums.UserRole? Role);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);

@@ -195,14 +195,27 @@ The default token expires after 8 hours. To extend:
 
 ---
 
+## Default Accounts
+
+A fresh install seeds three accounts, each flagged to require a password change on first
+login:
+
+| Username | Default password | Role |
+|---|---|---|
+| `admin` | `admin123` | Admin |
+| `cashier` | `cashier123` | Cashier |
+| `stock_manager` | `stock123` | StockManager |
+
 ## Security Checklist
 
+- [ ] Log in with each default account once and set a new password (enforced automatically)
 - [ ] Change default PostgreSQL password
 - [ ] Generate secure JWT secret
 - [ ] Change store information
 - [ ] Configure printer IP address
-- [ ] Set up daily backups
-- [ ] Restrict API access (firewall)
+- [ ] Set up daily backups (`tools/backup-db.ps1` + `tools/register-backup-task.ps1`)
+- [ ] Restrict API access (firewall) - the app binds to 127.0.0.1 by default; only set
+      `FLEXSHOES_LAN_ACCESS=1` if you specifically need another machine to reach it
 - [ ] Enable HTTPS (recommended for production)
 
 ---

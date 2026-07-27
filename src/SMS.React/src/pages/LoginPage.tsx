@@ -73,10 +73,6 @@ export default function LoginPage() {
             {isLoading ? t('auth.signingIn') : t('auth.signIn')}
           </button>
         </form>
-
-        <p className="text-xs text-slate-400 text-center mt-6">
-          admin / admin123
-        </p>
       </div>
     </div>
   )

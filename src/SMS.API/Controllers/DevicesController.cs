@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.Net.Sockets;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/devices")]
+[Authorize]
 public class DevicesController : ControllerBase
 {
     private readonly IConfiguration _configuration;

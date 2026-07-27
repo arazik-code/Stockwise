@@ -23,7 +23,11 @@ export default function ProtectedRoute() {
     return <Navigate to="/login" replace />
   }
 
-  if (user) {
+  if (user?.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
+  }
+
+  if (user && !user.mustChangePassword) {
     const allowed = ROLE_ROUTES[user.role] || ROLE_ROUTES['Admin']
     if (!allowed.includes(location.pathname)) {
       return <Navigate to={DEFAULT_ROUTE[user.role] || '/'} replace />

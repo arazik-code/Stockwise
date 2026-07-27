@@ -209,6 +209,13 @@ public partial class MainForm : Form
         try
         {
             var apiDir = Path.GetDirectoryName(apiExePath)!;
+            // The API only ever needs to talk to this machine's own WebView2 instance.
+            // Binding to 0.0.0.0 exposed it - and every unauthenticated endpoint on it -
+            // to the whole LAN. Opt into LAN access explicitly via FLEXSHOES_LAN_ACCESS=1
+            // (e.g. for a shared back-office setup) rather than defaulting to it.
+            var bindHost = Environment.GetEnvironmentVariable("FLEXSHOES_LAN_ACCESS") == "1"
+                ? "0.0.0.0"
+                : "127.0.0.1";
             var startInfo = new ProcessStartInfo
             {
                 FileName = apiExePath,
@@ -217,7 +224,7 @@ public partial class MainForm : Form
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                Arguments = $"--urls=http://0.0.0.0:{_apiPort}"
+                Arguments = $"--urls=http://{bindHost}:{_apiPort}"
             };
 
             _apiProcess = Process.Start(startInfo);

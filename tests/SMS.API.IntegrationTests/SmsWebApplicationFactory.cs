@@ -64,6 +64,15 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        // Existing tests send no Authorization header and rely on always being "logged in"
+        // as Admin. Regression tests for the auth holes need to simulate a genuinely
+        // anonymous caller, so they opt in with this header instead of us flipping the
+        // default (which would silently 401 every other test in the suite).
+        if (Request.Headers.ContainsKey("X-Test-Anonymous"))
+        {
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, "1"),
