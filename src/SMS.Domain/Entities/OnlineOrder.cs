@@ -19,6 +19,10 @@ public class OnlineOrder
 
     public string? AddressLine { get; set; }
     public string? City { get; set; }
+    // Resolved at ingest time (not just at parcel-creation time, as before) via ICityResolverService.
+    // City stays as the raw customer-entered text; these are the canonicalized result.
+    public int? OzonCityId { get; set; }
+    public string? CityCanonical { get; set; }
     public string? CarrierName { get; set; }
     public string? TrackingNumber { get; set; }
     public decimal DeliveryFee { get; set; }

@@ -18,6 +18,7 @@ public class ShopifySyncAppServiceTests
     private readonly Mock<IClientRepository> _clientRepoMock;
     private readonly Mock<IInventoryNotifier> _notifierMock;
     private readonly Mock<IOnlineOrderService> _onlineOrderServiceMock;
+    private readonly Mock<ICityResolverService> _cityResolverMock;
     private readonly ShopifySyncAppService _service;
 
     public ShopifySyncAppServiceTests()
@@ -28,6 +29,8 @@ public class ShopifySyncAppServiceTests
         _clientRepoMock = new Mock<IClientRepository>();
         _notifierMock = new Mock<IInventoryNotifier>();
         _onlineOrderServiceMock = new Mock<IOnlineOrderService>();
+        _cityResolverMock = new Mock<ICityResolverService>();
+        _cityResolverMock.Setup(r => r.ResolveAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync((CityResolution?)null);
 
         _unitOfWorkMock.Setup(u => u.Stock).Returns(_stockRepoMock.Object);
         _unitOfWorkMock.Setup(u => u.OnlineOrders).Returns(_orderRepoMock.Object);
@@ -37,7 +40,7 @@ public class ShopifySyncAppServiceTests
         var logger = new Mock<ILogger<ShopifySyncAppService>>();
 
         _service = new ShopifySyncAppService(
-            _unitOfWorkMock.Object, _notifierMock.Object, _onlineOrderServiceMock.Object,
+            _unitOfWorkMock.Object, _notifierMock.Object, _onlineOrderServiceMock.Object, _cityResolverMock.Object,
             options, logger.Object, shopifyClient: null);
     }
 

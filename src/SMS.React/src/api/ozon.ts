@@ -158,6 +158,12 @@ export const ozonApi = {
     api.post<OzonDeliveryNoteResult>('/ozonexpress/delivery-notes', { trackingNumbers }, { timeout: 60000 }).then((r) => r.data),
   getSettings: () => api.get<OzonSettingsConfig>('/settings/ozonexpress').then((r) => r.data),
   updateSettings: (data: OzonSettingsUpdate) => api.put<{ message: string }>('/settings/ozonexpress', data).then((r) => r.data),
+  bootstrapCities: () =>
+    api.post<{ distinctSpellings: number; resolved: number; ordersUpdated: number; stillUnresolved: number }>(
+      '/ozonexpress/cities/bootstrap', {}, { timeout: 60000 }
+    ).then((r) => r.data),
+  getUnresolvedCities: () =>
+    api.get<{ rawCity: string; orderCount: number }[]>('/ozonexpress/cities/unresolved').then((r) => r.data),
 }
 
 // The real, OzonExpress-branded PDF for a given Bon de Livraison reference — this is what actually

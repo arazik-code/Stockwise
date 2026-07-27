@@ -24,6 +24,7 @@ public class OzonExpressAppService : IOzonExpressService
     private readonly ILogger<OzonExpressAppService> _logger;
     private readonly IOnlineOrderService _onlineOrderService;
     private readonly ICodLedgerService _codLedgerService;
+    private readonly ICityResolverService _cityResolver;
 
     public OzonExpressAppService(
         IUnitOfWork unitOfWork,
@@ -31,6 +32,7 @@ public class OzonExpressAppService : IOzonExpressService
         ILogger<OzonExpressAppService> logger,
         IOnlineOrderService onlineOrderService,
         ICodLedgerService codLedgerService,
+        ICityResolverService cityResolver,
         IOzonExpressApiClient? client = null)
     {
         _unitOfWork = unitOfWork;
@@ -38,6 +40,7 @@ public class OzonExpressAppService : IOzonExpressService
         _logger = logger;
         _onlineOrderService = onlineOrderService;
         _codLedgerService = codLedgerService;
+        _cityResolver = cityResolver;
         _client = client;
     }
 
@@ -80,30 +83,14 @@ public class OzonExpressAppService : IOzonExpressService
             }
         }
         await _unitOfWork.SaveChangesAsync(ct);
+        _cityResolver.InvalidateCache();
         return apiCities.Count;
     }
 
     public async Task<IReadOnlyList<OzonCityDto>> GetCitiesAsync(string? search = null, CancellationToken ct = default)
     {
-        var all = await _unitOfWork.Set<OzonCity>()
-            .Select(c => new OzonCityDto(c.Id, c.Ref, c.Name, c.DeliveredPrice, c.ReturnedPrice, c.RefusedPrice))
-            .ToListAsync(ct);
-
-        if (string.IsNullOrWhiteSpace(search))
-            return all.OrderBy(c => c.Name).ToList();
-
-        // Accent-insensitive filter, ranked so the closest match (exact, then prefix) surfaces first —
-        // otherwise the main city ("Meknes") can get buried below dozens of alphabetically-earlier
-        // suburb entries ("Agouray - Meknes", "Ain Jemaa-meknes", …) and get misclicked by mistake.
-        var norm = NormalizeCityText(search);
-        return all
-            .Select(c => (City: c, Norm: NormalizeCityText(c.Name)))
-            .Where(x => x.Norm.Contains(norm) || NormalizeCityText(x.City.Ref).Contains(norm))
-            .OrderBy(x => x.Norm == norm ? 0 : x.Norm.StartsWith(norm) ? 1 : 2)
-            .ThenBy(x => x.City.Name.Length)
-            .ThenBy(x => x.City.Name)
-            .Select(x => x.City)
-            .ToList();
+        var results = await _cityResolver.SearchAsync(search, ct);
+        return results.Select(c => new OzonCityDto(c.Id, c.Ref, c.Name, c.DeliveredPrice, c.ReturnedPrice, c.RefusedPrice)).ToList();
     }
 
     public async Task<OzonParcelResultDto> CreateParcelAsync(CreateOzonParcelRequest request, CancellationToken ct = default)
@@ -218,7 +205,10 @@ public class OzonExpressAppService : IOzonExpressService
         if (string.IsNullOrWhiteSpace(order.City))
             return new OzonParcelResultDto(false, "Ville de livraison manquante — créez le colis manuellement", null);
 
-        var cityId = await ResolveCityIdAsync(order.City, ct);
+        // City is resolved at order-ingest time now (ShopifySyncAppService), so prefer the
+        // already-canonicalized value; fall back to a live resolve for orders created before this
+        // or via the manual/WhatsApp flow which doesn't go through that ingest path.
+        var cityId = order.OzonCityId ?? (await _cityResolver.ResolveAsync(order.City, ct))?.OzonCityId;
         if (cityId is null)
             return new OzonParcelResultDto(false, $"Ville « {order.City} » introuvable dans OzonExpress — créez le colis manuellement", null);
 
@@ -231,43 +221,6 @@ public class OzonExpressAppService : IOzonExpressService
             Price: order.TotalAmount,
             IsStock: false, // ramassage: the courier picks the goods up from the shop (no OzonExpress stock refs needed)
             Nature: "Chaussures"), ct);
-    }
-
-    // Best-effort match of an order's free-text city to an OzonExpress city ID. Diacritic-insensitive:
-    // Shopify/customer-entered city names commonly carry accents ("Meknès", "Salé", "Fès") while
-    // OzonExpress's own city catalog is plain ASCII ("Meknes", "Sale") — without normalizing both
-    // sides, exact/prefix matches silently fail and fall through to a much weaker "contains" match
-    // that can pick an unrelated sub-locality (wrong courier zone/fee) or fail outright.
-    private async Task<int?> ResolveCityIdAsync(string cityText, CancellationToken ct)
-    {
-        var norm = NormalizeCityText(cityText);
-        if (norm.Length == 0) return null;
-
-        var cities = await _unitOfWork.Set<OzonCity>().Select(c => new { c.Id, c.Name }).ToListAsync(ct);
-        var withNorm = cities.Select(c => (c.Id, c.Name, Norm: NormalizeCityText(c.Name))).ToList();
-
-        // 1. exact match, 2. shortest name starting with the text, 3. shortest name containing the text.
-        var exact = withNorm.FirstOrDefault(c => c.Norm == norm);
-        if (exact.Name is not null) return exact.Id;
-
-        var starts = withNorm.Where(c => c.Norm.StartsWith(norm)).OrderBy(c => c.Name.Length).FirstOrDefault();
-        if (starts.Name is not null) return starts.Id;
-
-        var contains = withNorm.Where(c => c.Norm.Contains(norm)).OrderBy(c => c.Name.Length).FirstOrDefault();
-        return contains.Name is not null ? contains.Id : null;
-    }
-
-    // Lowercases and strips diacritics (é→e, è→e, ç→c, …) via Unicode normalization, so accented and
-    // plain spellings of the same city compare equal.
-    internal static string NormalizeCityText(string text)
-    {
-        var trimmed = text.Trim().ToLowerInvariant();
-        var decomposed = trimmed.Normalize(System.Text.NormalizationForm.FormD);
-        var sb = new System.Text.StringBuilder(decomposed.Length);
-        foreach (var ch in decomposed)
-            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
-                sb.Append(ch);
-        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 
     public async Task<IReadOnlyList<OzonParcelDto>> GetParcelsAsync(string? status = null, string? search = null, CancellationToken ct = default)

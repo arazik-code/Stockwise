@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback } from 'react'
 import Header from '../../components/layout/Header'
 import { onlineApi } from '../../api/online'
 import { shopifyApi, type ShopifySyncStatus } from '../../api/shopify'
+import { ozonApi } from '../../api/ozon'
 import { showToast } from '../../components/shared/Toast'
 import { formatCurrency, formatDateTime } from '../../utils/format'
 import type { OnlineOrder } from '../../types/onlineOrder'
 
-type SyncTab = 'conflicts' | 'status'
+type SyncTab = 'conflicts' | 'status' | 'cities'
 
 const TABS: { key: SyncTab; label: string }[] = [
   { key: 'conflicts', label: 'Conflits de stock' },
   { key: 'status', label: 'État de synchronisation' },
+  { key: 'cities', label: 'Villes non résolues' },
 ]
 
 export default function OnlineSyncPage() {
@@ -22,6 +24,9 @@ export default function OnlineSyncPage() {
   const [syncing, setSyncing] = useState(false)
   const [rematching, setRematching] = useState(false)
   const [backfilling, setBackfilling] = useState(false)
+  const [unresolvedCities, setUnresolvedCities] = useState<{ rawCity: string; orderCount: number }[]>([])
+  const [citiesLoading, setCitiesLoading] = useState(true)
+  const [bootstrapping, setBootstrapping] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -43,8 +48,35 @@ export default function OnlineSyncPage() {
     }
   }, [])
 
+  const loadUnresolvedCities = useCallback(async () => {
+    setCitiesLoading(true)
+    try {
+      const data = await ozonApi.getUnresolvedCities()
+      setUnresolvedCities(data)
+    } finally {
+      setCitiesLoading(false)
+    }
+  }, [])
+
   useEffect(() => { if (tab === 'conflicts') load() }, [tab, load])
   useEffect(() => { if (tab === 'status') loadStatus() }, [tab, loadStatus])
+  useEffect(() => { if (tab === 'cities') loadUnresolvedCities() }, [tab, loadUnresolvedCities])
+
+  const handleBootstrapCities = async () => {
+    setBootstrapping(true)
+    try {
+      const result = await ozonApi.bootstrapCities()
+      showToast(
+        `${result.resolved} ville(s) rapprochee(s) sur ${result.distinctSpellings}, ${result.ordersUpdated} commande(s) mise(s) a jour`,
+        'success'
+      )
+      loadUnresolvedCities()
+    } catch {
+      showToast('Echec du rapprochement des villes', 'error')
+    } finally {
+      setBootstrapping(false)
+    }
+  }
 
   const handleCancel = async (order: OnlineOrder) => {
     if (!confirm(`Annuler la commande ${order.orderNumber} et libérer le stock réservé ?`)) return
@@ -123,7 +155,7 @@ export default function OnlineSyncPage() {
         </div>
       </div>
 
-      {tab === 'conflicts' ? (
+      {tab === 'conflicts' && (
         <div className="p-6 flex-1">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -209,7 +241,8 @@ export default function OnlineSyncPage() {
             </div>
           )}
         </div>
-      ) : (
+      )}
+      {tab === 'status' && (
         <div className="p-6 flex-1">
           {statusLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -247,6 +280,51 @@ export default function OnlineSyncPage() {
                 La synchronisation automatique nécessite une connexion Shopify configurée dans{' '}
                 <span className="font-medium text-slate-500">Paramètres → Boutique en ligne → Shopify</span>. Sans domaine/jeton configurés, le déclenchement manuel n'a aucun effet.
               </p>
+            </div>
+          )}
+        </div>
+      )}
+      {tab === 'cities' && (
+        <div className="p-6 flex-1">
+          {citiesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+            </div>
+          ) : unresolvedCities.length === 0 ? (
+            <div className="text-center py-16">
+              <svg className="w-12 h-12 mx-auto mb-3 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-slate-500">Toutes les villes sont rapprochees du catalogue OzonExpress.</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-amber-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                <p className="text-sm font-medium text-amber-700">{unresolvedCities.length} orthographe(s) de ville non rapprochee(s)</p>
+                <button
+                  onClick={handleBootstrapCities}
+                  disabled={bootstrapping}
+                  className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {bootstrapping ? 'Rapprochement…' : 'Relancer le rapprochement'}
+                </button>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Ville (texte brut)</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Commandes concernees</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {unresolvedCities.map((c) => (
+                    <tr key={c.rawCity} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 text-sm text-slate-900" dir="auto">{c.rawCity}</td>
+                      <td className="px-4 py-2.5 text-sm text-right text-slate-600">{c.orderCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

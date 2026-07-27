@@ -14,6 +14,7 @@ public class ShopifySyncAppService : IShopifySyncService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IInventoryNotifier _notifier;
     private readonly IOnlineOrderService _onlineOrderService;
+    private readonly ICityResolverService _cityResolver;
     private readonly IShopifyApiClient? _shopifyClient;
     private readonly ShopifyOptions _shopifyOptions;
     private readonly ILogger<ShopifySyncAppService> _logger;
@@ -22,6 +23,7 @@ public class ShopifySyncAppService : IShopifySyncService
         IUnitOfWork unitOfWork,
         IInventoryNotifier notifier,
         IOnlineOrderService onlineOrderService,
+        ICityResolverService cityResolver,
         IOptions<ShopifyOptions> shopifyOptions,
         ILogger<ShopifySyncAppService> logger,
         IShopifyApiClient? shopifyClient = null)
@@ -29,6 +31,7 @@ public class ShopifySyncAppService : IShopifySyncService
         _unitOfWork = unitOfWork;
         _notifier = notifier;
         _onlineOrderService = onlineOrderService;
+        _cityResolver = cityResolver;
         _shopifyOptions = shopifyOptions.Value;
         _logger = logger;
         _shopifyClient = shopifyClient;
@@ -107,6 +110,11 @@ public class ShopifySyncAppService : IShopifySyncService
 
             var isPaid = string.Equals(financialStatus, "paid", StringComparison.OrdinalIgnoreCase);
 
+            // Resolved at ingest time now, not just at parcel-creation time - the fuzzy matcher
+            // used to only ever run when someone clicked "create parcel", so a bad match was
+            // discovered late and the raw city text sat unresolved for every order in between.
+            var cityResolution = await _cityResolver.ResolveAsync(city, ct);
+
             var order = new OnlineOrder
             {
                 OrderNumber = await _unitOfWork.OnlineOrders.GenerateOrderNumberAsync(OnlineOrderChannel.Shopify, ct),
@@ -119,6 +127,8 @@ public class ShopifySyncAppService : IShopifySyncService
                 CustomerPhone = normalizedPhone,
                 CustomerEmail = customerEmail,
                 City = Trim(city, 100),
+                OzonCityId = cityResolution?.OzonCityId,
+                CityCanonical = cityResolution?.CanonicalName,
                 AddressLine = Trim(addressLine, 500),
                 SubTotal = totalPrice,
                 TotalAmount = totalPrice,

@@ -11,8 +11,19 @@ namespace SMS.API.Controllers;
 public class OzonExpressController : ControllerBase
 {
     private readonly IOzonExpressService _service;
+    private readonly ICityResolverService _cityResolver;
 
-    public OzonExpressController(IOzonExpressService service) => _service = service;
+    public OzonExpressController(IOzonExpressService service, ICityResolverService cityResolver)
+    {
+        _service = service;
+        _cityResolver = cityResolver;
+    }
+
+    [HttpPost("cities/bootstrap")]
+    public async Task<IActionResult> BootstrapCities(CancellationToken ct) => Ok(await _cityResolver.BootstrapHistoricalOrdersAsync(ct));
+
+    [HttpGet("cities/unresolved")]
+    public async Task<IActionResult> UnresolvedCities(CancellationToken ct) => Ok(await _cityResolver.GetUnresolvedCitiesAsync(ct));
 
     [HttpGet("status")]
     public async Task<IActionResult> Status(CancellationToken ct) => Ok(await _service.GetConfigStatusAsync(ct));

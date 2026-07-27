@@ -55,6 +55,46 @@ namespace SMS.Infrastructure.Migrations
                     b.ToTable("Categories");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.CityAlias", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CanonicalName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("Confidence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OzonCityId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RawKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OzonCityId");
+
+                    b.HasIndex("RawKey")
+                        .IsUnique();
+
+                    b.ToTable("CityAliases");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Client", b =>
                 {
                     b.Property<int>("Id")
@@ -642,6 +682,9 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("CityCanonical")
+                        .HasColumnType("text");
+
                     b.Property<int?>("ClientId")
                         .HasColumnType("integer");
 
@@ -700,6 +743,9 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<int?>("OzonCityId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("integer");
 
@@ -750,6 +796,8 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
+
+                    b.HasIndex("OzonCityId");
 
                     b.HasIndex("SettlementStatus");
 
@@ -1831,6 +1879,17 @@ namespace SMS.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ParentCategory");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CityAlias", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.OzonCity", "OzonCity")
+                        .WithMany()
+                        .HasForeignKey("OzonCityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OzonCity");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.CodLedgerEntry", b =>

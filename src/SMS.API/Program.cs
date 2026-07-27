@@ -35,6 +35,8 @@ builder.Services.AddScoped<IShopifyProductService, ShopifyProductAppService>();
 builder.Services.AddScoped<IClientCrmService, ClientCrmAppService>();
 builder.Services.AddScoped<IOzonExpressService, OzonExpressAppService>();
 builder.Services.AddScoped<ICodLedgerService, CodLedgerAppService>();
+builder.Services.AddScoped<ICityResolverService, CityResolverService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ThermalPrinterService>();
 builder.Services.AddScoped<ReportPdfService>();
 builder.Services.AddScoped<ReportCsvService>();
