@@ -12,8 +12,8 @@ using SMS.Infrastructure.Data;
 namespace SMS.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260704132627_AddSizePresetTable")]
-    partial class AddSizePresetTable
+    [Migration("20260727153732_InitialBaseline")]
+    partial class InitialBaseline
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -66,14 +66,31 @@ namespace SMS.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AddressLine")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("LastVisitAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("LifetimePoints")
                         .HasColumnType("integer");
+
+                    b.Property<int>("LoyaltyRate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(5);
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -90,6 +107,20 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<long?>("ShopifyCustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("ShopifyOrdersCount")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("ShopifyTotalSpent")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Tags")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("TotalPoints")
                         .HasColumnType("integer");
 
@@ -99,10 +130,46 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("City");
+
                     b.HasIndex("QrCode")
                         .IsUnique();
 
+                    b.HasIndex("ShopifyCustomerId");
+
                     b.ToTable("Clients");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Color", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HexCode")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Colors");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.ColorPreset", b =>
@@ -131,7 +198,43 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ColorPresets");
+                    b.ToTable("ColorPreset");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ExchangeItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProductVariantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RefundId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("RefundId");
+
+                    b.ToTable("ExchangeItems");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Fournisseur", b =>
@@ -271,6 +374,12 @@ namespace SMS.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("ColorId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ColorName")
+                        .HasColumnType("text");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -286,9 +395,6 @@ namespace SMS.Infrastructure.Migrations
                     b.Property<int>("InvoiceId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("ProductId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ProductName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -298,8 +404,17 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<int?>("ProductVariantId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
+
+                    b.Property<int?>("SizeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SizeValue")
+                        .HasColumnType("text");
 
                     b.Property<decimal>("UnitCost")
                         .HasPrecision(18, 2)
@@ -309,7 +424,7 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("InvoiceId");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductVariantId");
 
                     b.ToTable("InvoiceLineItems");
                 });
@@ -397,6 +512,381 @@ namespace SMS.Infrastructure.Migrations
                     b.ToTable("LoyaltyTransactions");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.OnlineOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AddressLine")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CarrierName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("ClientId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CustomerEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DeliveryFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("ExpectedDeliveryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("LoyaltyDiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("LoyaltyPointsEarned")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LoyaltyPointsRedeemed")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("PaymentMethod")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PaymentStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ShippedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("ShippingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<long?>("ShopifyOrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("StockReserved")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("SubTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("TrackingNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Channel");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("OrderNumber")
+                        .IsUnique();
+
+                    b.HasIndex("ShopifyOrderId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("OnlineOrders");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OnlineOrderItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("OnlineOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProductNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("ProductVariantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityFulfilled")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityReserved")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SkuSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OnlineOrderId");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.ToTable("OnlineOrderItems");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OzonCity", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("DeliveredPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Ref")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("RefusedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("ReturnedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("OzonCities");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OzonDeliveryNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ParcelCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Ref")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTime?>("SavedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Ref")
+                        .IsUnique();
+
+                    b.ToTable("OzonDeliveryNotes");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OzonParcel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("AllowOpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanReplace")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("CityId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CityName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal?>("DeliveredPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("DeliveryNoteRef")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<bool>("Fragile")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsStock")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastSyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastTrackingRaw")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nature")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("OnlineOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Receiver")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("RefusedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("ReturnedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StatusText")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("TrackingNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveryNoteRef");
+
+                    b.HasIndex("OnlineOrderId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TrackingNumber")
+                        .IsUnique();
+
+                    b.ToTable("OzonParcels");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Product", b =>
                 {
                     b.Property<int>("Id")
@@ -415,10 +905,6 @@ namespace SMS.Infrastructure.Migrations
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
 
                     b.Property<decimal?>("CostPrice")
                         .HasPrecision(18, 2)
@@ -441,10 +927,18 @@ namespace SMS.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<decimal?>("LiquidationPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("OnlinePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<decimal>("Price")
                         .HasPrecision(18, 2)
@@ -453,9 +947,59 @@ namespace SMS.Infrastructure.Migrations
                     b.Property<long?>("ShopifyProductId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("Size")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique();
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("FournisseurId");
+
+                    b.HasIndex("ShopifyProductId");
+
+                    b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ProductVariant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("ColorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsLiquidation")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ShopifyVariantId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SizeId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Sku")
                         .IsRequired()
@@ -469,16 +1013,163 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("Barcode");
 
-                    b.HasIndex("CategoryId");
+                    b.HasIndex("ColorId");
 
-                    b.HasIndex("FournisseurId");
+                    b.HasIndex("ShopifyVariantId");
 
-                    b.HasIndex("ShopifyProductId");
+                    b.HasIndex("SizeId");
 
                     b.HasIndex("Sku")
                         .IsUnique();
 
-                    b.ToTable("Products");
+                    b.HasIndex("ProductId", "ColorId", "SizeId")
+                        .IsUnique();
+
+                    b.ToTable("ProductVariants");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ReceiptBarcode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsUsed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SaleId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique();
+
+                    b.HasIndex("SaleId");
+
+                    b.ToTable("ReceiptBarcodes");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Refund", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ClientId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("PriceDifference")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("ProcessedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RefundDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RefundNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SaleId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalExchangeAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("TotalRefundAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("ProcessedByUserId");
+
+                    b.HasIndex("SaleId");
+
+                    b.ToTable("Refunds");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.RefundItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ProductVariantId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("RefundId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SaleItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("RefundId");
+
+                    b.HasIndex("SaleItemId");
+
+                    b.ToTable("RefundItems");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Sale", b =>
@@ -581,7 +1272,7 @@ namespace SMS.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<int>("ProductId")
+                    b.Property<int>("ProductVariantId")
                         .HasColumnType("integer");
 
                     b.Property<int>("Quantity")
@@ -596,7 +1287,7 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductVariantId");
 
                     b.HasIndex("SaleId");
 
@@ -756,9 +1447,37 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("ShopifyProductId");
 
-                    b.HasIndex("ShopifyVariantId");
+                    b.HasIndex("ShopifyProductId", "ShopifyVariantId")
+                        .IsUnique();
 
                     b.ToTable("ShopifyProducts");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Size", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Value")
+                        .IsUnique();
+
+                    b.ToTable("Sizes");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.SizePreset", b =>
@@ -782,7 +1501,7 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SizePresets");
+                    b.ToTable("SizePreset");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.StockItem", b =>
@@ -796,7 +1515,7 @@ namespace SMS.Infrastructure.Migrations
                     b.Property<DateTime>("LastUpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("ProductId")
+                    b.Property<int>("ProductVariantId")
                         .HasColumnType("integer");
 
                     b.Property<int>("QuantityOnHand")
@@ -819,7 +1538,7 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId")
+                    b.HasIndex("ProductVariantId")
                         .IsUnique();
 
                     b.ToTable("StockItems");
@@ -837,10 +1556,9 @@ namespace SMS.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("text");
 
-                    b.Property<int>("ProductId")
+                    b.Property<int>("ProductVariantId")
                         .HasColumnType("integer");
 
                     b.Property<int>("QuantityAfter")
@@ -850,8 +1568,7 @@ namespace SMS.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("Reference")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
@@ -861,9 +1578,7 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedAt");
-
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductVariantId");
 
                     b.HasIndex("UserId");
 
@@ -958,6 +1673,25 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("ParentCategory");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.ExchangeItem", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Refund", "Refund")
+                        .WithMany("ExchangeItems")
+                        .HasForeignKey("RefundId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProductVariant");
+
+                    b.Navigation("Refund");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Invoice", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.User", "CreatedByUser")
@@ -984,15 +1718,14 @@ namespace SMS.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("SMS.Domain.Entities.Product", "Product")
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
                         .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Invoice");
 
-                    b.Navigation("Product");
+                    b.Navigation("ProductVariant");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.InvoicePayment", b =>
@@ -1024,6 +1757,52 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("Sale");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.OnlineOrder", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Client", "Client")
+                        .WithMany("OnlineOrders")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SMS.Domain.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Client");
+
+                    b.Navigation("CreatedByUser");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OnlineOrderItem", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.OnlineOrder", "OnlineOrder")
+                        .WithMany("Items")
+                        .HasForeignKey("OnlineOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("OnlineOrder");
+
+                    b.Navigation("ProductVariant");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OzonParcel", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.OnlineOrder", "OnlineOrder")
+                        .WithMany()
+                        .HasForeignKey("OnlineOrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("OnlineOrder");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Product", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.Category", "Category")
@@ -1040,6 +1819,94 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Fournisseur");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ProductVariant", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Color", "Color")
+                        .WithMany("Variants")
+                        .HasForeignKey("ColorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Product", "Product")
+                        .WithMany("Variants")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Size", "Size")
+                        .WithMany("Variants")
+                        .HasForeignKey("SizeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Color");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Size");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ReceiptBarcode", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Sale", "Sale")
+                        .WithMany("ReceiptBarcodes")
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sale");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Refund", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId");
+
+                    b.HasOne("SMS.Domain.Entities.User", "ProcessedByUser")
+                        .WithMany()
+                        .HasForeignKey("ProcessedByUserId");
+
+                    b.HasOne("SMS.Domain.Entities.Sale", "Sale")
+                        .WithMany()
+                        .HasForeignKey("SaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+
+                    b.Navigation("ProcessedByUser");
+
+                    b.Navigation("Sale");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.RefundItem", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Refund", "Refund")
+                        .WithMany("Items")
+                        .HasForeignKey("RefundId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.SaleItem", "SaleItem")
+                        .WithMany()
+                        .HasForeignKey("SaleItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProductVariant");
+
+                    b.Navigation("Refund");
+
+                    b.Navigation("SaleItem");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Sale", b =>
@@ -1062,9 +1929,9 @@ namespace SMS.Infrastructure.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.SaleItem", b =>
                 {
-                    b.HasOne("SMS.Domain.Entities.Product", "Product")
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
                         .WithMany()
-                        .HasForeignKey("ProductId")
+                        .HasForeignKey("ProductVariantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1074,7 +1941,7 @@ namespace SMS.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Product");
+                    b.Navigation("ProductVariant");
 
                     b.Navigation("Sale");
                 });
@@ -1100,7 +1967,7 @@ namespace SMS.Infrastructure.Migrations
             modelBuilder.Entity("SMS.Domain.Entities.ShopifyProduct", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.Product", "LocalProduct")
-                        .WithMany("ShopifyProducts")
+                        .WithMany()
                         .HasForeignKey("LocalProductId")
                         .OnDelete(DeleteBehavior.SetNull);
 
@@ -1109,20 +1976,20 @@ namespace SMS.Infrastructure.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.StockItem", b =>
                 {
-                    b.HasOne("SMS.Domain.Entities.Product", "Product")
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
                         .WithOne("StockItem")
-                        .HasForeignKey("SMS.Domain.Entities.StockItem", "ProductId")
+                        .HasForeignKey("SMS.Domain.Entities.StockItem", "ProductVariantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Product");
+                    b.Navigation("ProductVariant");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.StockMovement", b =>
                 {
-                    b.HasOne("SMS.Domain.Entities.Product", "Product")
+                    b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
                         .WithMany()
-                        .HasForeignKey("ProductId")
+                        .HasForeignKey("ProductVariantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1131,7 +1998,7 @@ namespace SMS.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Product");
+                    b.Navigation("ProductVariant");
 
                     b.Navigation("User");
                 });
@@ -1147,7 +2014,14 @@ namespace SMS.Infrastructure.Migrations
                 {
                     b.Navigation("LoyaltyTransactions");
 
+                    b.Navigation("OnlineOrders");
+
                     b.Navigation("Sales");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Color", b =>
+                {
+                    b.Navigation("Variants");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Fournisseur", b =>
@@ -1162,22 +2036,43 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("Payments");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.OnlineOrder", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Product", b =>
                 {
-                    b.Navigation("ShopifyProducts");
+                    b.Navigation("Variants");
+                });
 
-                    b.Navigation("StockItem")
-                        .IsRequired();
+            modelBuilder.Entity("SMS.Domain.Entities.ProductVariant", b =>
+                {
+                    b.Navigation("StockItem");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Refund", b =>
+                {
+                    b.Navigation("ExchangeItems");
+
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Sale", b =>
                 {
                     b.Navigation("Items");
+
+                    b.Navigation("ReceiptBarcodes");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.ShopifyOrder", b =>
                 {
                     b.Navigation("LineItems");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Size", b =>
+                {
+                    b.Navigation("Variants");
                 });
 #pragma warning restore 612, 618
         }

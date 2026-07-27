@@ -130,7 +130,16 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     if (!app.Environment.IsEnvironment("Testing"))
     {
-        await db.Database.EnsureCreatedAsync();
+        // Was EnsureCreatedAsync() with 14 unapplied EF migrations sitting unused in the repo -
+        // no upgrade path existed for the live database and schema changes were all hand-written
+        // SQL. The live DB has since been stamped with an InitialBaseline migration matching its
+        // actual schema (verified via a full column/type/nullability diff against a prod restore),
+        // so MigrateAsync is now safe: it is a no-op today and applies real migrations going forward.
+        var autoMigrate = builder.Configuration.GetValue("Database:AutoMigrate", true);
+        if (autoMigrate)
+        {
+            await db.Database.MigrateAsync();
+        }
         await SeedData.InitializeAsync(db);
     }
 }
