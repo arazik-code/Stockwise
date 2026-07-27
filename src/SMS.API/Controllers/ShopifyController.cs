@@ -41,6 +41,28 @@ public class ShopifyController : ControllerBase
         return Ok(status);
     }
 
+    // StockManager can also trigger this - they're the ones who actually work the conflict
+    // queue day to day, unlike the rest of this controller which is Shopify-config territory.
+    [HttpPost("orders/rematch")]
+    [Authorize(Roles = "Admin,StockManager")]
+    public async Task<IActionResult> RematchConflictedOrders(CancellationToken ct)
+    {
+        var result = await _syncService.RematchConflictedOrdersAsync(ct);
+        return Ok(result);
+    }
+
+    // One-off recovery for orders created before line items were preserved on conflict - they
+    // exist with zero OnlineOrderItems. Re-fetches from Shopify's order history and rebuilds them,
+    // then runs the same rematch pass.
+    [HttpPost("orders/backfill")]
+    [Authorize(Roles = "Admin,StockManager")]
+    public async Task<IActionResult> BackfillMissingLineItems(CancellationToken ct)
+    {
+        var backfill = await _syncService.BackfillMissingLineItemsAsync(ct);
+        var rematch = await _syncService.RematchConflictedOrdersAsync(ct);
+        return Ok(new { backfill, rematch });
+    }
+
     [HttpGet("locations")]
     public async Task<IActionResult> GetLocations(CancellationToken ct)
     {

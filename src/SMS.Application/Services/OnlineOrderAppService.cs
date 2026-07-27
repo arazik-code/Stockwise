@@ -373,9 +373,13 @@ public class OnlineOrderAppService : IOnlineOrderService
 
     private async Task CommitReservationToDeductionAsync(OnlineOrder order, CancellationToken ct)
     {
-        foreach (var item in order.Items)
+        // Filtered by ProductVariantId now that unmapped conflict-recovery lines can exist with
+        // no variant at all (QuantityReserved is always 0 for those, so this was already
+        // effectively safe by construction, but filter explicitly rather than relying on that).
+        foreach (var item in order.Items.Where(i => i.ProductVariantId.HasValue))
         {
-            var stockItem = await _unitOfWork.Stock.GetByVariantIdAsync(item.ProductVariantId, ct);
+            var variantId = item.ProductVariantId!.Value;
+            var stockItem = await _unitOfWork.Stock.GetByVariantIdAsync(variantId, ct);
             if (stockItem is null) continue;
 
             var qty = item.QuantityReserved;
@@ -388,7 +392,7 @@ public class OnlineOrderAppService : IOnlineOrderService
 
             await _unitOfWork.Stock.AddMovementAsync(new StockMovement
             {
-                ProductVariantId = item.ProductVariantId,
+                ProductVariantId = variantId,
                 Type = StockMovementType.OnlineSale,
                 QuantityChange = -qty,
                 QuantityAfter = stockItem.QuantityOnHand,
@@ -396,9 +400,9 @@ public class OnlineOrderAppService : IOnlineOrderService
                 UserId = order.CreatedByUserId
             }, ct);
 
-            await _notifier.NotifyStockChangedAsync(item.ProductVariantId, stockItem.QuantityOnHand, ct);
+            await _notifier.NotifyStockChangedAsync(variantId, stockItem.QuantityOnHand, ct);
             if (stockItem.QuantityOnHand <= stockItem.ReorderLevel)
-                await _notifier.NotifyLowStockAsync(item.ProductVariantId, item.ProductNameSnapshot, stockItem.QuantityOnHand, ct);
+                await _notifier.NotifyLowStockAsync(variantId, item.ProductNameSnapshot, stockItem.QuantityOnHand, ct);
         }
 
         order.StockReserved = false;
@@ -406,9 +410,9 @@ public class OnlineOrderAppService : IOnlineOrderService
 
     private async Task ReleaseReservationAsync(OnlineOrder order, CancellationToken ct)
     {
-        foreach (var item in order.Items.Where(i => i.QuantityReserved > 0))
+        foreach (var item in order.Items.Where(i => i.QuantityReserved > 0 && i.ProductVariantId.HasValue))
         {
-            var stockItem = await _unitOfWork.Stock.GetByVariantIdAsync(item.ProductVariantId, ct);
+            var stockItem = await _unitOfWork.Stock.GetByVariantIdAsync(item.ProductVariantId!.Value, ct);
             if (stockItem is null) continue;
 
             stockItem.QuantityReserved = Math.Max(0, stockItem.QuantityReserved - item.QuantityReserved);
@@ -421,9 +425,10 @@ public class OnlineOrderAppService : IOnlineOrderService
 
     private async Task RestockOrderAsync(OnlineOrder order, CancellationToken ct)
     {
-        foreach (var item in order.Items.Where(i => i.QuantityFulfilled > 0))
+        foreach (var item in order.Items.Where(i => i.QuantityFulfilled > 0 && i.ProductVariantId.HasValue))
         {
-            var stockItem = await _unitOfWork.Stock.GetByVariantIdAsync(item.ProductVariantId, ct);
+            var variantId = item.ProductVariantId!.Value;
+            var stockItem = await _unitOfWork.Stock.GetByVariantIdAsync(variantId, ct);
             if (stockItem is null) continue;
 
             var qty = item.QuantityFulfilled;
@@ -432,14 +437,14 @@ public class OnlineOrderAppService : IOnlineOrderService
 
             await _unitOfWork.Stock.AddMovementAsync(new StockMovement
             {
-                ProductVariantId = item.ProductVariantId,
+                ProductVariantId = variantId,
                 Type = StockMovementType.Return,
                 QuantityChange = qty,
                 QuantityAfter = stockItem.QuantityOnHand,
                 Reference = $"Online-Refund-{order.OrderNumber}"
             }, ct);
 
-            await _notifier.NotifyStockChangedAsync(item.ProductVariantId, stockItem.QuantityOnHand, ct);
+            await _notifier.NotifyStockChangedAsync(variantId, stockItem.QuantityOnHand, ct);
             item.QuantityFulfilled = 0;
         }
     }
@@ -578,6 +583,9 @@ public class OnlineOrderAppService : IOnlineOrderService
         {
             Id = i.Id,
             ProductVariantId = i.ProductVariantId,
+            ShopifyProductId = i.ShopifyProductId,
+            ShopifyVariantId = i.ShopifyVariantId,
+            ShopifySku = i.ShopifySku,
             ProductName = i.ProductNameSnapshot,
             Sku = i.SkuSnapshot,
             ColorName = i.ProductVariant?.Color?.Name,

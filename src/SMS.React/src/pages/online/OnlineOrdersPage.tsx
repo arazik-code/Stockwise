@@ -49,6 +49,8 @@ const STATUS_META: Record<OnlineOrderStatus, { label: string; className: string 
   Cancelled: { label: 'Annulée', className: 'bg-slate-100 text-slate-500 border border-slate-200' },
   Refunded: { label: 'Remboursée', className: 'bg-rose-50 text-rose-700 border border-rose-200' },
   InventoryConflict: { label: 'Conflit de stock', className: 'bg-red-50 text-red-700 border border-red-200' },
+  Returned: { label: 'Retournée', className: 'bg-orange-50 text-orange-700 border border-orange-200' },
+  Refused: { label: 'Refusée', className: 'bg-red-50 text-red-800 border border-red-300' },
 }
 
 const NEXT_STATUS: Partial<Record<OnlineOrderStatus, OnlineOrderStatus>> = {

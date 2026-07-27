@@ -46,15 +46,39 @@ public static class WebhookEndpoints
                     VariantId = li.VariantId,
                     Title = li.Title,
                     Quantity = li.Quantity,
-                    Price = ShopifySyncAppService.ParseShopifyDecimal(li.Price)
+                    Price = ShopifySyncAppService.ParseShopifyDecimal(li.Price),
+                    Sku = string.IsNullOrWhiteSpace(li.Sku) ? null : li.Sku
                 }).ToList();
+
+                // Previously this webhook passed no phone/city/address/customerId at all - unlike
+                // the polling path (ShopifySyncAppService.SyncRecentOrdersAsync), which parses all
+                // four. Webhook-ingested orders therefore couldn't be shipped via OzonExpress
+                // (requires phone+city) and never linked to a Shopify client. Also fixed: when
+                // Customer is null, `Customer?.FirstName + " " + Customer?.LastName` evaluated to
+                // a single space (not null), so downstream "is the name blank" checks saw a
+                // non-empty string.
+                var addr = payload.ShippingAddress ?? payload.BillingAddress;
+                var customerName = new[]
+                {
+                    addr?.Name,
+                    string.Join(" ", new[] { addr?.FirstName, addr?.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
+                    string.Join(" ", new[] { payload.Customer?.FirstName, payload.Customer?.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))),
+                }.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
+                var customerPhone = new[] { addr?.Phone, payload.Customer?.Phone, payload.Phone }
+                    .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
+                var addressLine = string.Join(", ", new[] { addr?.Address1, addr?.Address2 }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
                 await syncService.ProcessOrderCreatedAsync(
                     payload.Id, payload.OrderNumber, payload.FinancialStatus,
                     payload.FulfillmentStatus,
                     ShopifySyncAppService.ParseShopifyDecimal(payload.TotalPrice),
-                    payload.Currency, payload.Email, payload.Customer?.FirstName + " " + payload.Customer?.LastName,
-                    lineItems, DateTimeOffset.Parse(payload.CreatedAt).UtcDateTime);
+                    payload.Currency, payload.Email,
+                    string.IsNullOrWhiteSpace(customerName) ? null : customerName.Trim(),
+                    lineItems, DateTimeOffset.Parse(payload.CreatedAt).UtcDateTime,
+                    customerPhone: string.IsNullOrWhiteSpace(customerPhone) ? null : customerPhone.Trim(),
+                    city: string.IsNullOrWhiteSpace(addr?.City) ? null : addr!.City!.Trim(),
+                    addressLine: string.IsNullOrWhiteSpace(addressLine) ? null : addressLine,
+                    shopifyCustomerId: payload.Customer?.Id);
 
                 logger.LogInformation("Processed orders-create webhook for order {OrderId}", payload.Id);
                 return Results.Ok();
@@ -139,16 +163,32 @@ public class ShopifyOrderWebhookPayload
     public string TotalPrice { get; set; } = "0";
     public string Currency { get; set; } = "USD";
     public string? Email { get; set; }
+    public string? Phone { get; set; }
     public ShopifyCustomer? Customer { get; set; }
+    public ShopifyOrderAddressPayload? ShippingAddress { get; set; }
+    public ShopifyOrderAddressPayload? BillingAddress { get; set; }
     public List<ShopifyLineItemPayload> LineItems { get; set; } = [];
     public string CreatedAt { get; set; } = string.Empty;
 }
 
 public class ShopifyCustomer
 {
+    public long Id { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Email { get; set; }
+    public string? Phone { get; set; }
+}
+
+public class ShopifyOrderAddressPayload
+{
+    public string? Name { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Phone { get; set; }
+    public string? Address1 { get; set; }
+    public string? Address2 { get; set; }
+    public string? City { get; set; }
 }
 
 public class ShopifyLineItemPayload
@@ -158,6 +198,7 @@ public class ShopifyLineItemPayload
     public string Title { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public string Price { get; set; } = "0";
+    public string? Sku { get; set; }
 }
 
 public class ShopifyProductWebhookPayload

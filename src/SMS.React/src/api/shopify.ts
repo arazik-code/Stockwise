@@ -54,7 +54,21 @@ export interface ShopifyCatalogImportResult {
   sizesCreated: number
   categoriesCreated: number
   barcodesGenerated: number
+  conflictedOrdersResolved: number
   configured: boolean
+}
+
+export interface OrderRematchResult {
+  conflictedOrders: number
+  ordersResolved: number
+  itemsMatched: number
+  itemsStillUnresolved: number
+}
+
+export interface OrderBackfillResult {
+  ordersNeedingBackfill: number
+  ordersRebuilt: number
+  ordersNotFoundOnShopify: number
 }
 
 export const shopifyApi = {
@@ -69,4 +83,7 @@ export const shopifyApi = {
   deleteProductMapping: (id: number) => api.delete(`/shopify-products/${id}`),
   importProducts: () => api.post<ShopifyImportResult>('/shopify-products/import', {}, { timeout: 120000 }).then((r) => r.data),
   importCatalog: () => api.post<ShopifyCatalogImportResult>('/shopify-products/import-catalog', {}, { timeout: 300000 }).then((r) => r.data),
+  rematchConflicts: () => api.post<OrderRematchResult>('/shopify/orders/rematch', {}, { timeout: 60000 }).then((r) => r.data),
+  backfillConflicts: () =>
+    api.post<{ backfill: OrderBackfillResult; rematch: OrderRematchResult }>('/shopify/orders/backfill', {}, { timeout: 300000 }).then((r) => r.data),
 }

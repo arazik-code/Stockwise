@@ -6,8 +6,18 @@ public class OnlineOrderItem
     public int OnlineOrderId { get; set; }
     public OnlineOrder OnlineOrder { get; set; } = null!;
 
-    public int ProductVariantId { get; set; }
-    public ProductVariant ProductVariant { get; set; } = null!;
+    // Nullable: a line can arrive from Shopify with no local catalog match (InventoryConflict).
+    // Previously such lines were discarded entirely - their product name was dumped into the
+    // order's free-text Notes and the OnlineOrderItem row was never created at all, so a
+    // conflicted order had zero line items and was unrecoverable from the UI. Now every line is
+    // preserved; ShopifyProductId/ShopifyVariantId/raw snapshot are kept so a rematch job can
+    // resolve it later once the product exists locally, without needing to re-fetch from Shopify.
+    public int? ProductVariantId { get; set; }
+    public ProductVariant? ProductVariant { get; set; }
+
+    public long? ShopifyProductId { get; set; }
+    public long? ShopifyVariantId { get; set; }
+    public string? ShopifySku { get; set; }
 
     public string ProductNameSnapshot { get; set; } = string.Empty;
     public string SkuSnapshot { get; set; } = string.Empty;

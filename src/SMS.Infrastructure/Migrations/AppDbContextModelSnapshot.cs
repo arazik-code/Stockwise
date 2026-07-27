@@ -673,7 +673,7 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<int>("ProductVariantId")
+                    b.Property<int?>("ProductVariantId")
                         .HasColumnType("integer");
 
                     b.Property<int>("Quantity")
@@ -684,6 +684,16 @@ namespace SMS.Infrastructure.Migrations
 
                     b.Property<int>("QuantityReserved")
                         .HasColumnType("integer");
+
+                    b.Property<long?>("ShopifyProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ShopifySku")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<long?>("ShopifyVariantId")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SkuSnapshot")
                         .IsRequired()
@@ -699,6 +709,8 @@ namespace SMS.Infrastructure.Migrations
                     b.HasIndex("OnlineOrderId");
 
                     b.HasIndex("ProductVariantId");
+
+                    b.HasIndex("ShopifyVariantId");
 
                     b.ToTable("OnlineOrderItems");
                 });
@@ -1822,8 +1834,7 @@ namespace SMS.Infrastructure.Migrations
                     b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
                         .WithMany()
                         .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("OnlineOrder");
 

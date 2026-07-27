@@ -28,7 +28,7 @@ public record ShopifyOrderAddress(
     string? Name = null, string? FirstName = null, string? LastName = null, string? Phone = null,
     string? Address1 = null, string? Address2 = null, string? City = null, string? Province = null, string? Zip = null);
 // product_id and variant_id are null on custom line items and orders referencing deleted products.
-public record ShopifyLineItemData(long? ProductId, long? VariantId, string Title, int Quantity, string Price);
+public record ShopifyLineItemData(long? ProductId, long? VariantId, string Title, int Quantity, string Price, string? Sku = null);
 
 public record ShopifyLocationListResponse(List<ShopifyLocationItem> Locations);
 public record ShopifyLocationItem(long Id, string Name, string? City, bool Active);

@@ -14,6 +14,22 @@ public interface IShopifySyncService
     Task SyncInventoryLevelsAsync(CancellationToken ct = default);
     Task<ShopifySyncStatusDto> GetSyncStatusAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ShopifyLocationDto>> GetLocationsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Retries matching every unmapped line item on InventoryConflict orders against the current
+    /// catalog (by ShopifyVariantId, then SKU), and clears an order out of InventoryConflict once
+    /// every line resolves and stock is sufficient. Safe to call repeatedly - already-resolved
+    /// items are simply not revisited.
+    /// </summary>
+    Task<OrderRematchResultDto> RematchConflictedOrdersAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// One-off recovery for orders created before line items were preserved on conflict: those
+    /// rows exist with zero OnlineOrderItems and only a free-text summary in Notes. Re-fetches
+    /// each order's line items from Shopify (which retains order history indefinitely) and
+    /// rebuilds them, then runs RematchConflictedOrdersAsync so any now-resolvable ones clear.
+    /// </summary>
+    Task<OrderBackfillResultDto> BackfillMissingLineItemsAsync(CancellationToken ct = default);
 }
 
 public class ShopifyLocationDto
@@ -31,4 +47,5 @@ public class ShopifyLineItemDto
     public string Title { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal Price { get; set; }
+    public string? Sku { get; set; }
 }

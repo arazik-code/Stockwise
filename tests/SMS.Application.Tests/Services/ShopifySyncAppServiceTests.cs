@@ -153,4 +153,154 @@ public class ShopifySyncAppServiceTests
 
         _onlineOrderServiceMock.Verify(s => s.CancelAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task ProcessOrderCreatedAsync_TrulyUnmappedLine_PreservesItemInsteadOfDiscardingIt()
+    {
+        // The bug this fixes: a Shopify line with no local catalog match at all used to be
+        // discarded entirely - only its title went into a free-text Notes string, and no
+        // OnlineOrderItem row was ever created. The order ended up with zero line items and was
+        // unrecoverable from the UI. Now the line is kept, unmapped, with enough Shopify identity
+        // (ShopifyProductId/ShopifyVariantId/Sku) to be resolved later by RematchConflictedOrdersAsync.
+        _unitOfWorkMock.Setup(u => u.FindAsync(
+                It.IsAny<Expression<Func<ShopifyProduct, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        _unitOfWorkMock.Setup(u => u.FindAsync(
+                It.IsAny<Expression<Func<ProductVariant, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        _orderRepoMock.Setup(r => r.GetByShopifyOrderIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((OnlineOrder?)null);
+        _orderRepoMock.Setup(r => r.GenerateOrderNumberAsync(OnlineOrderChannel.Shopify, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("SHP-20260723-003");
+
+        OnlineOrder? added = null;
+        _orderRepoMock.Setup(r => r.AddAsync(It.IsAny<OnlineOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<OnlineOrder, CancellationToken>((o, _) => added = o)
+            .Returns(Task.CompletedTask);
+
+        var lineItems = new List<ShopifyLineItemDto>
+        {
+            new() { ProductId = 888, VariantId = 999, Title = "Basket En Cuir Beige - Taza", Quantity = 1, Price = 439m, Sku = "SHP-999" }
+        };
+
+        await _service.ProcessOrderCreatedAsync(999, "#1003", "pending", "unfulfilled", 439m, "MAD",
+            null, "Jane Doe", lineItems, DateTime.UtcNow);
+
+        Assert.NotNull(added);
+        Assert.Equal(OrderStatus.InventoryConflict, added!.Status);
+        Assert.Single(added.Items); // previously: zero items
+        var item = added.Items.First();
+        Assert.Null(item.ProductVariantId);
+        Assert.Equal(888, item.ShopifyProductId);
+        Assert.Equal(999, item.ShopifyVariantId);
+        Assert.Equal("SHP-999", item.ShopifySku);
+        Assert.Equal("Basket En Cuir Beige - Taza", item.ProductNameSnapshot);
+        Assert.Contains("Basket En Cuir Beige - Taza", added.Notes);
+    }
+
+    [Fact]
+    public async Task RematchConflictedOrdersAsync_ResolvesByShopifyVariantId_AndClearsConflict()
+    {
+        var variant = new ProductVariant { Id = 5, ProductId = 5, Sku = "SKU-5", ShopifyVariantId = 999, Product = new Product { Id = 5, Name = "Basket Taza" } };
+        var stock = new StockItem { ProductVariantId = 5, QuantityOnHand = 10, QuantityReserved = 0, ReorderLevel = 2 };
+
+        var conflictedOrder = new OnlineOrder
+        {
+            Id = 4,
+            OrderNumber = "SHP-20260723-003",
+            Status = OrderStatus.InventoryConflict,
+            Items =
+            [
+                new OnlineOrderItem { ProductVariantId = null, ShopifyProductId = 888, ShopifyVariantId = 999, Quantity = 1, ProductNameSnapshot = "Basket Taza" }
+            ]
+        };
+
+        _orderRepoMock.Setup(r => r.GetConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([conflictedOrder]);
+        _unitOfWorkMock.Setup(u => u.FindAsync(
+                It.IsAny<Expression<Func<ProductVariant, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([variant]);
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(5, It.IsAny<CancellationToken>())).ReturnsAsync(stock);
+        _onlineOrderServiceMock.Setup(s => s.UpdateStatusAsync(
+                4, OrderStatus.Pending, OrderStatusChangeSource.System, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SMS.Application.DTOs.Online.OnlineOrderDto());
+
+        var result = await _service.RematchConflictedOrdersAsync();
+
+        Assert.Equal(1, result.OrdersResolved);
+        Assert.Equal(1, result.ItemsMatched);
+        Assert.Equal(0, result.ItemsStillUnresolved);
+        Assert.Equal(5, conflictedOrder.Items.First().ProductVariantId);
+        Assert.True(conflictedOrder.StockReserved);
+        Assert.Equal(1, stock.QuantityReserved);
+        _onlineOrderServiceMock.Verify(s => s.UpdateStatusAsync(
+            4, OrderStatus.Pending, OrderStatusChangeSource.System, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RematchConflictedOrdersAsync_AllItemsAlreadyResolved_StillClearsConflict()
+    {
+        // Regression test for a real bug found during live verification: an order whose items
+        // were ALL already resolved (e.g. by BackfillMissingLineItemsAsync matching them directly)
+        // was skipped entirely by the "any unresolved items?" early-continue, so it stayed stuck
+        // in InventoryConflict forever even though it had nothing left to resolve.
+        var stock = new StockItem { ProductVariantId = 5, QuantityOnHand = 10, QuantityReserved = 0, ReorderLevel = 2 };
+        var order = new OnlineOrder
+        {
+            Id = 4,
+            Status = OrderStatus.InventoryConflict,
+            Items = [new OnlineOrderItem { ProductVariantId = 5, Quantity = 1, ProductNameSnapshot = "Basket Taza" }]
+        };
+
+        _orderRepoMock.Setup(r => r.GetConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([order]);
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(5, It.IsAny<CancellationToken>())).ReturnsAsync(stock);
+        _onlineOrderServiceMock.Setup(s => s.UpdateStatusAsync(
+                4, OrderStatus.Pending, OrderStatusChangeSource.System, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SMS.Application.DTOs.Online.OnlineOrderDto());
+
+        var result = await _service.RematchConflictedOrdersAsync();
+
+        Assert.Equal(1, result.OrdersResolved);
+        Assert.Equal(0, result.ItemsMatched); // nothing needed matching - it was already resolved
+        Assert.True(order.StockReserved);
+        _onlineOrderServiceMock.Verify(s => s.UpdateStatusAsync(
+            4, OrderStatus.Pending, OrderStatusChangeSource.System, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RematchConflictedOrdersAsync_ZeroItems_SkipsUntilBackfilled()
+    {
+        var order = new OnlineOrder { Id = 4, Status = OrderStatus.InventoryConflict, Items = [] };
+        _orderRepoMock.Setup(r => r.GetConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([order]);
+
+        var result = await _service.RematchConflictedOrdersAsync();
+
+        Assert.Equal(0, result.OrdersResolved);
+        _onlineOrderServiceMock.Verify(s => s.UpdateStatusAsync(
+            It.IsAny<int>(), It.IsAny<OrderStatus>(), It.IsAny<OrderStatusChangeSource>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RematchConflictedOrdersAsync_NoMatch_LeavesOrderInConflict()
+    {
+        var conflictedOrder = new OnlineOrder
+        {
+            Id = 4,
+            Status = OrderStatus.InventoryConflict,
+            Items = [new OnlineOrderItem { ProductVariantId = null, ShopifyVariantId = 999, Quantity = 1 }]
+        };
+
+        _orderRepoMock.Setup(r => r.GetConflictsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([conflictedOrder]);
+        _unitOfWorkMock.Setup(u => u.FindAsync(
+                It.IsAny<Expression<Func<ProductVariant, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var result = await _service.RematchConflictedOrdersAsync();
+
+        Assert.Equal(0, result.OrdersResolved);
+        Assert.Equal(0, result.ItemsMatched);
+        Assert.Equal(1, result.ItemsStillUnresolved);
+        Assert.Equal(OrderStatus.InventoryConflict, conflictedOrder.Status);
+        _onlineOrderServiceMock.Verify(s => s.UpdateStatusAsync(
+            It.IsAny<int>(), It.IsAny<OrderStatus>(), It.IsAny<OrderStatusChangeSource>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

@@ -48,7 +48,12 @@ public class OnlineOrderDto
 public class OnlineOrderItemDto
 {
     public int Id { get; set; }
-    public int ProductVariantId { get; set; }
+    // Null when this line has no local catalog match yet (InventoryConflict). See
+    // ShopifyProductId/ShopifyVariantId/ShopifySku for what's needed to resolve it.
+    public int? ProductVariantId { get; set; }
+    public long? ShopifyProductId { get; set; }
+    public long? ShopifyVariantId { get; set; }
+    public string? ShopifySku { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public string Sku { get; set; } = string.Empty;
     public string? ColorName { get; set; }

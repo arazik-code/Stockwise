@@ -49,5 +49,6 @@ public class ShopifyCatalogImportResultDto
     public int SizesCreated { get; set; }
     public int CategoriesCreated { get; set; }
     public int BarcodesGenerated { get; set; }
+    public int ConflictedOrdersResolved { get; set; }
     public bool Configured { get; set; } = true;
 }

@@ -11,13 +11,19 @@ export type OnlineOrderStatus =
   | 'Cancelled'
   | 'Refunded'
   | 'InventoryConflict'
+  | 'Returned'
+  | 'Refused'
 
 export type OnlinePaymentStatus = 'Unpaid' | 'Paid' | 'Refunded'
 export type OnlinePaymentMethod = 'COD' | 'Manual' | 'BankTransfer' | 'ShopifyCheckout'
 
 export interface OnlineOrderItem {
   id: number
-  productVariantId: number
+  // Undefined when this line has no local catalog match yet (InventoryConflict order).
+  productVariantId?: number
+  shopifyProductId?: number
+  shopifyVariantId?: number
+  shopifySku?: string
   productName: string
   sku: string
   colorName?: string

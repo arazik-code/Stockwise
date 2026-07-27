@@ -69,10 +69,15 @@ public class ShopifySyncAppService : IShopifySyncService
             var allSufficient = unmapped.Count == 0 &&
                 mapped.All(r => r.stock is not null && r.stock.QuantityAvailable >= r.lineItem.Quantity);
 
+            // Every line is kept, mapped or not - this used to discard unmapped lines entirely
+            // (their title went into a free-text Notes string and the row was never created), so
+            // a conflicted order ended up with zero OnlineOrderItems and was unrecoverable from
+            // the UI. Now the raw Shopify ids/sku are kept on the row so a rematch pass can
+            // resolve it later without needing to re-fetch anything from Shopify.
             var orderItems = new List<OnlineOrderItem>();
-            foreach (var (lineItem, variant, stock) in mapped)
+            foreach (var (lineItem, variant, stock) in resolvedItems)
             {
-                var reserve = allSufficient && stock is not null;
+                var reserve = allSufficient && variant is not null && stock is not null;
                 if (reserve)
                 {
                     stock!.QuantityReserved += lineItem.Quantity;
@@ -81,9 +86,12 @@ public class ShopifySyncAppService : IShopifySyncService
 
                 orderItems.Add(new OnlineOrderItem
                 {
-                    ProductVariantId = variant!.Id,
-                    ProductNameSnapshot = variant.Product?.Name ?? lineItem.Title,
-                    SkuSnapshot = variant.Sku,
+                    ProductVariantId = variant?.Id,
+                    ShopifyProductId = variant is null ? lineItem.ProductId : null,
+                    ShopifyVariantId = variant is null ? lineItem.VariantId : null,
+                    ShopifySku = variant is null ? lineItem.Sku : null,
+                    ProductNameSnapshot = variant?.Product?.Name ?? lineItem.Title,
+                    SkuSnapshot = variant?.Sku ?? lineItem.Sku ?? string.Empty,
                     Quantity = lineItem.Quantity,
                     UnitPrice = lineItem.Price,
                     DiscountAmount = 0,
@@ -185,7 +193,8 @@ public class ShopifySyncAppService : IShopifySyncService
                     VariantId = li.VariantId ?? 0,
                     Title = li.Title,
                     Quantity = li.Quantity,
-                    Price = ParseShopifyDecimal(li.Price)
+                    Price = ParseShopifyDecimal(li.Price),
+                    Sku = string.IsNullOrWhiteSpace(li.Sku) ? null : li.Sku
                 }).ToList();
 
                 // Prefer the shipping address (where goods go), then billing, then the customer record.
@@ -292,6 +301,153 @@ public class ShopifySyncAppService : IShopifySyncService
             PendingProducts = 0,
             IsSyncing = false
         };
+    }
+
+    public async Task<OrderRematchResultDto> RematchConflictedOrdersAsync(CancellationToken ct = default)
+    {
+        var conflicted = await _unitOfWork.OnlineOrders.GetConflictsAsync(ct);
+        int ordersResolved = 0, itemsMatched = 0, itemsStillUnresolved = 0;
+
+        foreach (var order in conflicted)
+        {
+            // A conflicted order with literally zero items has never had its lines rebuilt at all
+            // (needs BackfillMissingLineItemsAsync first) - distinct from an order whose items are
+            // already fully mapped, which must still fall through to the stock/clear check below.
+            if (order.Items.Count == 0) continue;
+
+            var unresolvedItems = order.Items.Where(i => i.ProductVariantId is null).ToList();
+            foreach (var item in unresolvedItems)
+            {
+                var variant = await MatchUnresolvedItemAsync(item, ct);
+                if (variant is not null)
+                {
+                    item.ProductVariantId = variant.Id;
+                    item.SkuSnapshot = variant.Sku;
+                    itemsMatched++;
+                }
+            }
+
+            if (order.Items.Any(i => i.ProductVariantId is null))
+            {
+                itemsStillUnresolved += order.Items.Count(i => i.ProductVariantId is null);
+                await _unitOfWork.SaveChangesAsync(ct); // keep any partial progress on this order
+                continue;
+            }
+
+            // Every item on this order now has a local match - either matched just now, or already
+            // resolved by an earlier backfill/rematch pass. Either way, still worth checking whether
+            // it can finally clear out of InventoryConflict.
+
+            // Every line now has a local match - check stock and reserve, same rule
+            // ProcessOrderCreatedAsync uses for a fresh order.
+            var stockByItem = new List<(OnlineOrderItem Item, StockItem Stock)>();
+            var sufficient = true;
+            foreach (var item in order.Items)
+            {
+                var stock = await _unitOfWork.Stock.GetByVariantIdAsync(item.ProductVariantId!.Value, ct);
+                if (stock is null || stock.QuantityAvailable < item.Quantity) { sufficient = false; break; }
+                stockByItem.Add((item, stock));
+            }
+
+            if (!sufficient)
+            {
+                order.Notes = "Catalogue rapproché, mais stock insuffisant pour honorer cette commande";
+                await _unitOfWork.SaveChangesAsync(ct);
+                continue;
+            }
+
+            foreach (var (item, stock) in stockByItem)
+            {
+                stock.QuantityReserved += item.Quantity;
+                stock.LastUpdatedAt = DateTime.UtcNow;
+                item.QuantityReserved = item.Quantity;
+            }
+            order.StockReserved = true;
+            order.Notes = null;
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            await _onlineOrderService.UpdateStatusAsync(
+                order.Id, OrderStatus.Pending, OrderStatusChangeSource.System,
+                "Rapprochement automatique du catalogue", ct);
+            ordersResolved++;
+        }
+
+        return new OrderRematchResultDto(conflicted.Count, ordersResolved, itemsMatched, itemsStillUnresolved);
+    }
+
+    public async Task<OrderBackfillResultDto> BackfillMissingLineItemsAsync(CancellationToken ct = default)
+    {
+        if (_shopifyClient is null) return new OrderBackfillResultDto(0, 0, 0);
+
+        var brokenOrders = (await _unitOfWork.OnlineOrders.GetConflictsAsync(ct))
+            .Where(o => o.Items.Count == 0 && o.ShopifyOrderId.HasValue)
+            .ToList();
+        if (brokenOrders.Count == 0) return new OrderBackfillResultDto(0, 0, 0);
+
+        _logger.LogInformation("Backfilling line items for {Count} conflicted orders with zero items", brokenOrders.Count);
+
+        var wantedIds = brokenOrders.Select(o => o.ShopifyOrderId!.Value).ToHashSet();
+        var allShopifyOrders = await _shopifyClient.GetAllOrdersAsync(ct);
+        var byId = allShopifyOrders.Where(o => wantedIds.Contains(o.Id)).ToDictionary(o => o.Id);
+
+        int rebuilt = 0, notFound = 0;
+        foreach (var order in brokenOrders)
+        {
+            if (!byId.TryGetValue(order.ShopifyOrderId!.Value, out var shopifyOrder))
+            {
+                notFound++;
+                continue;
+            }
+
+            foreach (var li in shopifyOrder.LineItems)
+            {
+                var variant = await FindLocalVariantByShopifyId(li.ProductId ?? 0, li.VariantId ?? 0, ct);
+                var price = ParseShopifyDecimal(li.Price);
+
+                order.Items.Add(new OnlineOrderItem
+                {
+                    ProductVariantId = variant?.Id,
+                    ShopifyProductId = variant is null ? li.ProductId : null,
+                    ShopifyVariantId = variant is null ? li.VariantId : null,
+                    ShopifySku = variant is null ? li.Sku : null,
+                    ProductNameSnapshot = variant?.Product?.Name ?? li.Title,
+                    SkuSnapshot = variant?.Sku ?? li.Sku ?? string.Empty,
+                    Quantity = li.Quantity,
+                    UnitPrice = price,
+                    DiscountAmount = 0,
+                    LineTotal = price * li.Quantity,
+                    QuantityReserved = 0,
+                    QuantityFulfilled = 0
+                });
+            }
+            rebuilt++;
+        }
+
+        await _unitOfWork.SaveChangesAsync(ct);
+        _logger.LogInformation("Backfill complete: {Rebuilt} rebuilt, {NotFound} no longer found on Shopify", rebuilt, notFound);
+
+        return new OrderBackfillResultDto(brokenOrders.Count, rebuilt, notFound);
+    }
+
+    // Tier 1: exact ShopifyVariantId match (highest confidence - the full-catalog import stamps
+    // this onto the exact local variant). Tier 2: exact SKU match. Anything weaker (fuzzy title)
+    // is deliberately not attempted here - a wrong auto-match on a COD order is worse than leaving
+    // it for manual review.
+    private async Task<ProductVariant?> MatchUnresolvedItemAsync(OnlineOrderItem item, CancellationToken ct)
+    {
+        if (item.ShopifyVariantId is long svid)
+        {
+            var byVariantId = (await _unitOfWork.FindAsync<ProductVariant>(v => v.ShopifyVariantId == svid, ct)).FirstOrDefault();
+            if (byVariantId is not null) return byVariantId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.ShopifySku))
+        {
+            var bySku = (await _unitOfWork.FindAsync<ProductVariant>(v => v.Sku == item.ShopifySku, ct)).FirstOrDefault();
+            if (bySku is not null) return bySku;
+        }
+
+        return null;
     }
 
     public async Task<IReadOnlyList<ShopifyLocationDto>> GetLocationsAsync(CancellationToken ct = default)

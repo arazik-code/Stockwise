@@ -20,6 +20,8 @@ export default function OnlineSyncPage() {
   const [status, setStatus] = useState<ShopifySyncStatus | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [rematching, setRematching] = useState(false)
+  const [backfilling, setBackfilling] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,6 +54,40 @@ export default function OnlineSyncPage() {
       load()
     } catch {
       showToast('Erreur', 'error')
+    }
+  }
+
+  const handleRematch = async () => {
+    setRematching(true)
+    try {
+      const result = await shopifyApi.rematchConflicts()
+      if (result.ordersResolved > 0) {
+        showToast(`${result.ordersResolved} commande(s) résolue(s) sur ${result.conflictedOrders}`, 'success')
+      } else {
+        showToast('Aucune commande supplémentaire résolue pour le moment', 'info')
+      }
+      load()
+    } catch {
+      showToast('Échec du rapprochement', 'error')
+    } finally {
+      setRematching(false)
+    }
+  }
+
+  const handleBackfill = async () => {
+    if (!confirm("Récupérer les articles manquants depuis Shopify pour les commandes en conflit sans aucun article ? Cette opération peut prendre quelques minutes.")) return
+    setBackfilling(true)
+    try {
+      const result = await shopifyApi.backfillConflicts()
+      showToast(
+        `${result.backfill.ordersRebuilt} commande(s) reconstruite(s), ${result.rematch.ordersResolved} résolue(s)`,
+        'success'
+      )
+      load()
+    } catch {
+      showToast('Échec de la récupération — vérifiez la configuration Shopify', 'error')
+    } finally {
+      setBackfilling(false)
     }
   }
 
@@ -102,8 +138,26 @@ export default function OnlineSyncPage() {
             </div>
           ) : (
             <div className="bg-white border border-red-200 rounded-lg overflow-hidden">
-              <div className="px-4 py-3 bg-red-50 border-b border-red-200">
+              <div className="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
                 <p className="text-sm font-medium text-red-700">{conflicts.length} commande(s) en conflit de stock</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBackfill}
+                    disabled={backfilling}
+                    title="Récupère les articles manquants depuis Shopify pour les commandes sans aucun article"
+                    className="text-xs font-medium px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {backfilling ? 'Récupération…' : 'Récupérer depuis Shopify'}
+                  </button>
+                  <button
+                    onClick={handleRematch}
+                    disabled={rematching}
+                    title="Retente le rapprochement avec le catalogue actuel pour tous les articles non résolus"
+                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {rematching ? 'Rapprochement…' : 'Rapprocher le catalogue'}
+                  </button>
+                </div>
               </div>
               <table className="w-full">
                 <thead>
@@ -112,25 +166,44 @@ export default function OnlineSyncPage() {
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Canal</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
                     <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Articles</th>
                     <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Total</th>
                     <th className="text-center px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {conflicts.map((order) => (
-                    <tr key={order.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-sm font-mono font-medium text-slate-900">{order.orderNumber}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{order.channel}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{order.customerName}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{formatDateTime(order.createdAt)}</td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">{formatCurrency(order.totalAmount)}</td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <button onClick={() => handleCancel(order)} className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50">
-                          Annuler
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {conflicts.map((order) => {
+                    const unmapped = order.items.filter((i) => !i.productVariantId)
+                    return (
+                      <tr key={order.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm font-mono font-medium text-slate-900">{order.orderNumber}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{order.channel}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{order.customerName}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDateTime(order.createdAt)}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {order.items.length === 0 ? (
+                            <span className="text-xs text-red-600 font-medium">Aucun article — utiliser "Récupérer depuis Shopify"</span>
+                          ) : unmapped.length > 0 ? (
+                            <div className="space-y-0.5">
+                              {unmapped.map((i) => (
+                                <div key={i.id} className="text-xs text-amber-700" title={`SKU Shopify: ${i.shopifySku ?? '—'}`}>
+                                  ⚠ {i.productName} (×{i.quantity})
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">{order.items.length} article(s) — stock insuffisant</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">{formatCurrency(order.totalAmount)}</td>
+                        <td className="px-4 py-3 text-sm text-center">
+                          <button onClick={() => handleCancel(order)} className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50">
+                            Annuler
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

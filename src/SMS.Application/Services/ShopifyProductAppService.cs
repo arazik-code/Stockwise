@@ -15,11 +15,13 @@ public class ShopifyProductAppService : IShopifyProductService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IShopifyApiClient? _shopifyClient;
     private readonly ILogger<ShopifyProductAppService> _logger;
+    private readonly IShopifySyncService _syncService;
 
-    public ShopifyProductAppService(IUnitOfWork unitOfWork, ILogger<ShopifyProductAppService> logger, IShopifyApiClient? shopifyClient = null)
+    public ShopifyProductAppService(IUnitOfWork unitOfWork, ILogger<ShopifyProductAppService> logger, IShopifySyncService syncService, IShopifyApiClient? shopifyClient = null)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _syncService = syncService;
         _shopifyClient = shopifyClient;
     }
 
@@ -289,6 +291,12 @@ public class ShopifyProductAppService : IShopifyProductService
 
         // Automatically generate scannable EAN-13 barcodes for any product/variant that still lacks one.
         result.BarcodesGenerated = await GenerateMissingBarcodesAsync(ct);
+
+        // The catalog just grew, so retry any orders that were stuck in InventoryConflict because
+        // their product didn't exist locally yet - this is exactly how the historical stuck orders
+        // happened (catalog imported after the order arrived).
+        var rematch = await _syncService.RematchConflictedOrdersAsync(ct);
+        result.ConflictedOrdersResolved = rematch.OrdersResolved;
 
         return result;
     }
