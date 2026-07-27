@@ -39,6 +39,7 @@ public class AppDbContext : DbContext
     public DbSet<CodLedgerEntry> CodLedgerEntries => Set<CodLedgerEntry>();
     public DbSet<CourierRemittance> CourierRemittances => Set<CourierRemittance>();
     public DbSet<CityAlias> CityAliases => Set<CityAlias>();
+    public DbSet<OrderConfirmationAttempt> OrderConfirmationAttempts => Set<OrderConfirmationAttempt>();
     public DbSet<OzonCity> OzonCities => Set<OzonCity>();
     public DbSet<OzonDeliveryNote> OzonDeliveryNotes => Set<OzonDeliveryNote>();
 

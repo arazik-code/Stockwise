@@ -35,6 +35,7 @@ public class OnlineOrderConfiguration : IEntityTypeConfiguration<OnlineOrder>
         builder.HasIndex(o => o.ShopifyOrderId);
         builder.HasIndex(o => o.SettlementStatus);
         builder.HasIndex(o => o.OzonCityId);
+        builder.HasIndex(o => new { o.ConfirmationStatus, o.NextCallbackAt });
 
         builder.HasOne(o => o.Client)
             .WithMany(c => c.OnlineOrders)

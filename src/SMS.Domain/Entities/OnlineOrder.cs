@@ -44,6 +44,14 @@ public class OnlineOrder
     // is delivered/returned/refused.
     public CodSettlementStatus SettlementStatus { get; set; } = CodSettlementStatus.NotApplicable;
 
+    // Call-center confirmation tracking - previously nothing recorded that anyone ever attempted
+    // to confirm a COD order before shipping it.
+    public ConfirmationStatus ConfirmationStatus { get; set; } = ConfirmationStatus.New;
+    public int AttemptCount { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextCallbackAt { get; set; }
+    public int? AssignedAgentUserId { get; set; }
+
     public int? CreatedByUserId { get; set; }
     public User? CreatedByUser { get; set; }
 
@@ -67,4 +75,14 @@ public enum CodSettlementStatus
     Remitted = 2,        // matched against a courier remittance batch
     Short = 3,           // remittance received but amount didn't match
     Disputed = 4
+}
+
+public enum ConfirmationStatus
+{
+    New = 0,
+    InProgress = 1,
+    Confirmed = 2,
+    Unreachable = 3,
+    Refused = 4,
+    Duplicate = 5
 }

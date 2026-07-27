@@ -671,6 +671,12 @@ namespace SMS.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<int?>("AssignedAgentUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
                     b.Property<string>("CarrierName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -686,6 +692,9 @@ namespace SMS.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<int?>("ClientId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConfirmationStatus")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("ConfirmedAt")
@@ -724,6 +733,9 @@ namespace SMS.Infrastructure.Migrations
                     b.Property<DateTime?>("ExpectedDeliveryDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<decimal>("LoyaltyDiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -733,6 +745,9 @@ namespace SMS.Infrastructure.Migrations
 
                     b.Property<int>("LoyaltyPointsRedeemed")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("NextCallbackAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
@@ -805,6 +820,8 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("Status");
 
+                    b.HasIndex("ConfirmationStatus", "NextCallbackAt");
+
                     b.ToTable("OnlineOrders");
                 });
 
@@ -872,6 +889,46 @@ namespace SMS.Infrastructure.Migrations
                     b.HasIndex("ShopifyVariantId");
 
                     b.ToTable("OnlineOrderItems");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OrderConfirmationAttempt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("AgentUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextCallbackAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("OnlineOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OnlineOrderId", "CreatedAt");
+
+                    b.ToTable("OrderConfirmationAttempts");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.OrderStatusHistory", b =>
@@ -2034,6 +2091,17 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("OnlineOrder");
 
                     b.Navigation("ProductVariant");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OrderConfirmationAttempt", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.OnlineOrder", "OnlineOrder")
+                        .WithMany()
+                        .HasForeignKey("OnlineOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OnlineOrder");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.OrderStatusHistory", b =>
