@@ -34,6 +34,12 @@ public class OnlineOrder
     public long? ShopifyOrderId { get; set; }
     public string? Notes { get; set; }
 
+    // Distinct from PaymentStatus on purpose: PaymentStatus answers "did the customer pay the
+    // courier?", SettlementStatus answers "did the courier pay us?" - conflating the two is
+    // exactly how COD businesses lose track of money. Populated by the COD ledger once a parcel
+    // is delivered/returned/refused.
+    public CodSettlementStatus SettlementStatus { get; set; } = CodSettlementStatus.NotApplicable;
+
     public int? CreatedByUserId { get; set; }
     public User? CreatedByUser { get; set; }
 
@@ -48,4 +54,13 @@ public class OnlineOrder
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<OnlineOrderItem> Items { get; set; } = [];
+}
+
+public enum CodSettlementStatus
+{
+    NotApplicable = 0, // not yet shipped / not a COD order
+    Pending = 1,        // delivered/returned, courier fee known, awaiting remittance
+    Remitted = 2,        // matched against a courier remittance batch
+    Short = 3,           // remittance received but amount didn't match
+    Disputed = 4
 }

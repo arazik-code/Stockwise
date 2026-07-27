@@ -137,6 +137,58 @@ namespace SMS.Infrastructure.Migrations
                     b.ToTable("Clients");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.CodLedgerEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("CourierRemittanceId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OnlineOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OzonParcelId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourierRemittanceId");
+
+                    b.HasIndex("OnlineOrderId");
+
+                    b.HasIndex("OzonParcelId");
+
+                    b.HasIndex("Type");
+
+                    b.ToTable("CodLedgerEntries");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Color", b =>
                 {
                     b.Property<int>("Id")
@@ -196,6 +248,60 @@ namespace SMS.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ColorPreset");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourierRemittance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BankRef")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Carrier")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("DeclaredAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("MatchedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("CourierRemittances");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.ExchangeItem", b =>
@@ -600,6 +706,9 @@ namespace SMS.Infrastructure.Migrations
                     b.Property<int>("PaymentStatus")
                         .HasColumnType("integer");
 
+                    b.Property<int>("SettlementStatus")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("ShippedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -641,6 +750,8 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
+
+                    b.HasIndex("SettlementStatus");
 
                     b.HasIndex("ShopifyOrderId");
 
@@ -1722,6 +1833,31 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("ParentCategory");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.CodLedgerEntry", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.CourierRemittance", "CourierRemittance")
+                        .WithMany("LedgerEntries")
+                        .HasForeignKey("CourierRemittanceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SMS.Domain.Entities.OnlineOrder", "OnlineOrder")
+                        .WithMany()
+                        .HasForeignKey("OnlineOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.OzonParcel", "OzonParcel")
+                        .WithMany()
+                        .HasForeignKey("OzonParcelId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CourierRemittance");
+
+                    b.Navigation("OnlineOrder");
+
+                    b.Navigation("OzonParcel");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.ExchangeItem", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.ProductVariant", "ProductVariant")
@@ -2081,6 +2217,11 @@ namespace SMS.Infrastructure.Migrations
             modelBuilder.Entity("SMS.Domain.Entities.Color", b =>
                 {
                     b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.CourierRemittance", b =>
+                {
+                    b.Navigation("LedgerEntries");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Fournisseur", b =>

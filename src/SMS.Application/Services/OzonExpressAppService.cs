@@ -23,18 +23,21 @@ public class OzonExpressAppService : IOzonExpressService
     private readonly IOzonExpressApiClient? _client;
     private readonly ILogger<OzonExpressAppService> _logger;
     private readonly IOnlineOrderService _onlineOrderService;
+    private readonly ICodLedgerService _codLedgerService;
 
     public OzonExpressAppService(
         IUnitOfWork unitOfWork,
         IOptions<OzonExpressOptions> options,
         ILogger<OzonExpressAppService> logger,
         IOnlineOrderService onlineOrderService,
+        ICodLedgerService codLedgerService,
         IOzonExpressApiClient? client = null)
     {
         _unitOfWork = unitOfWork;
         _options = options.Value;
         _logger = logger;
         _onlineOrderService = onlineOrderService;
+        _codLedgerService = codLedgerService;
         _client = client;
     }
 
@@ -458,12 +461,33 @@ public class OzonExpressAppService : IOzonExpressService
 
         try
         {
+            // UpdateStatusAsync returns the mapped order on a same-status no-op too (so a caller
+            // that only checks "is it null" can't tell a real transition from tracking simply
+            // re-confirming a state it already applied). Checked separately here because posting
+            // MarkPaid/ledger entries on every re-sync would double-count real money.
+            var currentStatus = await _unitOfWork.Set<OnlineOrder>()
+                .Where(o => o.Id == orderId).Select(o => o.Status).FirstOrDefaultAsync(ct);
+            var isNewTransition = currentStatus != target.Value;
+
             var updatedOrder = await _onlineOrderService.UpdateStatusAsync(
                 orderId, target.Value, OrderStatusChangeSource.Courier,
                 $"OzonExpress: {parcel.StatusText ?? parcel.Status.ToString()}", ct);
 
-            if (target == OrderStatus.Delivered && updatedOrder is not null)
+            if (!isNewTransition || updatedOrder is null) return;
+
+            if (target == OrderStatus.Delivered)
+            {
                 await _onlineOrderService.MarkPaidAsync(orderId, parcel.Price, ct);
+                await _codLedgerService.PostDeliveryOutcomeAsync(orderId, parcel.Id, CodLedgerEntryType.CourierFeeDelivered, parcel.Price, parcel.DeliveredPrice, ct);
+            }
+            else if (target == OrderStatus.Returned)
+            {
+                await _codLedgerService.PostDeliveryOutcomeAsync(orderId, parcel.Id, CodLedgerEntryType.CourierFeeReturned, parcel.Price, parcel.ReturnedPrice, ct);
+            }
+            else if (target == OrderStatus.Refused)
+            {
+                await _codLedgerService.PostDeliveryOutcomeAsync(orderId, parcel.Id, CodLedgerEntryType.CourierFeeRefused, parcel.Price, parcel.RefusedPrice, ct);
+            }
         }
         catch (ArgumentException ex)
         {
