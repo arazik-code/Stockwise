@@ -53,7 +53,7 @@ public class OnlineOrdersController : ControllerBase
     [HttpPut("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateOrderStatusRequest request, CancellationToken ct)
     {
-        var order = await _service.UpdateStatusAsync(id, request.Status, ct);
+        var order = await _service.UpdateStatusAsync(id, request.Status, ct: ct);
         return order is null ? NotFound() : Ok(order);
     }
 
@@ -62,7 +62,7 @@ public class OnlineOrdersController : ControllerBase
     [HttpPost("{id:int}/confirm-ship")]
     public async Task<IActionResult> ConfirmAndShip(int id, CancellationToken ct)
     {
-        var order = await _service.UpdateStatusAsync(id, OrderStatus.Confirmed, ct);
+        var order = await _service.UpdateStatusAsync(id, OrderStatus.Confirmed, ct: ct);
         if (order is null) return NotFound();
 
         var parcel = await _ozon.CreateParcelForOrderAsync(id, ct);

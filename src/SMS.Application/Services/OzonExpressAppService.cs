@@ -22,16 +22,19 @@ public class OzonExpressAppService : IOzonExpressService
     private readonly OzonExpressOptions _options;
     private readonly IOzonExpressApiClient? _client;
     private readonly ILogger<OzonExpressAppService> _logger;
+    private readonly IOnlineOrderService _onlineOrderService;
 
     public OzonExpressAppService(
         IUnitOfWork unitOfWork,
         IOptions<OzonExpressOptions> options,
         ILogger<OzonExpressAppService> logger,
+        IOnlineOrderService onlineOrderService,
         IOzonExpressApiClient? client = null)
     {
         _unitOfWork = unitOfWork;
         _options = options.Value;
         _logger = logger;
+        _onlineOrderService = onlineOrderService;
         _client = client;
     }
 
@@ -158,18 +161,30 @@ public class OzonExpressAppService : IOzonExpressService
                 order.TrackingNumber = apiResult.TrackingNumber;
                 if (apiResult.DeliveredPrice is decimal fee) order.DeliveryFee = fee;
                 order.UpdatedAt = DateTime.UtcNow;
-                if (order.Status is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.Confirmed or OrderStatus.Packing)
-                {
-                    // Jumping straight to ReadyToShip skips the Confirmed step's own status handler,
-                    // so stamp ConfirmedAt here too — otherwise the order's timeline shows it shipped
-                    // without ever having been confirmed.
-                    order.ConfirmedAt ??= DateTime.UtcNow;
-                    order.Status = OrderStatus.ReadyToShip;
-                }
             }
         }
 
         await _unitOfWork.SaveChangesAsync(ct);
+
+        // Drive the order to ReadyToShip through the guarded state machine (rather than assigning
+        // order.Status directly, which used to bypass reservation/loyalty logic entirely - the same
+        // class of bug ConfirmedAt had here). Creating a parcel is effectively "we've confirmed this
+        // order ships", so hop through Confirmed first when it hasn't been already.
+        if (request.OnlineOrderId is int shipOrderId)
+        {
+            try
+            {
+                var current = await _unitOfWork.Set<OnlineOrder>().Where(o => o.Id == shipOrderId).Select(o => o.Status).FirstOrDefaultAsync(ct);
+                if (current is OrderStatus.Pending or OrderStatus.Processing or OrderStatus.InventoryConflict)
+                    await _onlineOrderService.UpdateStatusAsync(shipOrderId, OrderStatus.Confirmed, OrderStatusChangeSource.System, "Colis OzonExpress cree", ct);
+                if (current is not OrderStatus.ReadyToShip)
+                    await _onlineOrderService.UpdateStatusAsync(shipOrderId, OrderStatus.ReadyToShip, OrderStatusChangeSource.System, "Colis OzonExpress cree", ct);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Could not advance order {OrderId} to ReadyToShip after parcel creation", shipOrderId);
+            }
+        }
 
         // OzonExpress auto-generates its own official BL PDF once a parcel is grouped into a saved
         // "Bon de Livraison" — create a single-parcel BL immediately so every colis has that real,
@@ -284,6 +299,7 @@ public class OzonExpressAppService : IOzonExpressService
         {
             ApplyTracking(parcel, result);
             await _unitOfWork.SaveChangesAsync(ct);
+            await ApplyOrderStatusFromParcelAsync(parcel, ct);
         }
 
         return new OzonTrackingDto(result.Ok, result.Error, parcel.TrackingNumber, parcel.Status, parcel.StatusText,
@@ -304,14 +320,22 @@ public class OzonExpressAppService : IOzonExpressService
         foreach (var chunk in active.Chunk(50))
         {
             var map = await _client.TrackBulkAsync(chunk.Select(p => p.TrackingNumber), ct);
+            var changedParcels = new List<OzonParcel>();
             foreach (var parcel in chunk)
             {
                 if (!map.TryGetValue(parcel.TrackingNumber, out var res) || !res.Ok) continue;
                 var before = parcel.Status;
                 ApplyTracking(parcel, res);
-                if (parcel.Status != before) updated++;
+                if (parcel.Status != before) { updated++; changedParcels.Add(parcel); }
             }
             await _unitOfWork.SaveChangesAsync(ct);
+
+            // Write-back only for parcels whose status actually changed this round - this is the
+            // step that used to be entirely missing: tracking updated the parcel but never touched
+            // the order, so orders never reached Delivered and nothing downstream (loyalty, payment
+            // settlement, DeliveredAt) ever fired.
+            foreach (var parcel in changedParcels)
+                await ApplyOrderStatusFromParcelAsync(parcel, ct);
         }
 
         return new OzonSyncTrackingResultDto(active.Count, updated);
@@ -409,6 +433,45 @@ public class OzonExpressAppService : IOzonExpressService
         parcel.LastTrackingRaw = result.Raw;
         parcel.LastSyncedAt = DateTime.UtcNow;
         parcel.UpdatedAt = DateTime.UtcNow;
+    }
+
+    // The missing link: courier tracking used to update OzonParcel.Status and stop there - the
+    // OnlineOrder itself was never touched, so an order could sit at ReadyToShip forever even
+    // after the courier's own system showed it delivered weeks ago. Nothing downstream (loyalty
+    // award, DeliveredAt timestamp, payment settlement) ever fired as a result.
+    private async Task ApplyOrderStatusFromParcelAsync(OzonParcel parcel, CancellationToken ct)
+    {
+        if (parcel.OnlineOrderId is not int orderId) return;
+
+        OrderStatus? target = parcel.Status switch
+        {
+            OzonParcelStatus.PickedUp or OzonParcelStatus.AtHub or OzonParcelStatus.InTransit or OzonParcelStatus.OutForDelivery => OrderStatus.Shipped,
+            OzonParcelStatus.Delivered => OrderStatus.Delivered,
+            OzonParcelStatus.Returned => OrderStatus.Returned,
+            OzonParcelStatus.Refused => OrderStatus.Refused,
+            // New/Unknown: nothing to reflect yet. Cancelled: a courier-side cancellation is not
+            // the same thing as the customer cancelling - flag it for manual review via the log
+            // rather than silently cancelling a live order out from under the business.
+            _ => null
+        };
+        if (target is null) return;
+
+        try
+        {
+            var updatedOrder = await _onlineOrderService.UpdateStatusAsync(
+                orderId, target.Value, OrderStatusChangeSource.Courier,
+                $"OzonExpress: {parcel.StatusText ?? parcel.Status.ToString()}", ct);
+
+            if (target == OrderStatus.Delivered && updatedOrder is not null)
+                await _onlineOrderService.MarkPaidAsync(orderId, parcel.Price, ct);
+        }
+        catch (ArgumentException ex)
+        {
+            // Illegal transition for this order's current state (e.g. it was already manually
+            // moved past this point) - log and continue rather than aborting the whole sync batch
+            // over one order.
+            _logger.LogWarning(ex, "Skipped courier status write-back for order {OrderId}: {Message}", orderId, ex.Message);
+        }
     }
 
     private async Task<OzonParcelDto?> MapAsync(int id, CancellationToken ct)

@@ -34,6 +34,7 @@ public class AppDbContext : DbContext
     public DbSet<ReceiptBarcode> ReceiptBarcodes => Set<ReceiptBarcode>();
     public DbSet<OnlineOrder> OnlineOrders => Set<OnlineOrder>();
     public DbSet<OnlineOrderItem> OnlineOrderItems => Set<OnlineOrderItem>();
+    public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
     public DbSet<OzonParcel> OzonParcels => Set<OzonParcel>();
     public DbSet<OzonCity> OzonCities => Set<OzonCity>();
     public DbSet<OzonDeliveryNote> OzonDeliveryNotes => Set<OzonDeliveryNote>();

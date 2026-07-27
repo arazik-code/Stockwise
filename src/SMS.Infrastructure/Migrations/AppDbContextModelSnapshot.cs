@@ -703,6 +703,43 @@ namespace SMS.Infrastructure.Migrations
                     b.ToTable("OnlineOrderItems");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.OrderStatusHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FromStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OnlineOrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ToStatus")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OnlineOrderId", "CreatedAt");
+
+                    b.ToTable("OrderStatusHistories");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.OzonCity", b =>
                 {
                     b.Property<int>("Id")
@@ -1791,6 +1828,17 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("OnlineOrder");
 
                     b.Navigation("ProductVariant");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.OrderStatusHistory", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.OnlineOrder", "OnlineOrder")
+                        .WithMany()
+                        .HasForeignKey("OnlineOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OnlineOrder");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.OzonParcel", b =>

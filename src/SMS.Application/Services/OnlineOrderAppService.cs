@@ -204,12 +204,45 @@ public class OnlineOrderAppService : IOnlineOrderService
         return order is null ? null : MapToDto(order);
     }
 
-    public async Task<OnlineOrderDto?> UpdateStatusAsync(int id, OrderStatus status, CancellationToken ct = default)
+    // Which statuses may legally transition to which. UpdateStatusAsync previously accepted any
+    // status from any other (PUT {id}/status took the raw enum with no validation), so a client
+    // could set Delivered -> Pending or similar nonsense with no guard at all. Processing is kept
+    // alongside Pending as an equivalent "not yet actioned" state since the legacy Shopify path
+    // still sets it. Same-status re-application is always a no-op, not an error.
+    private static readonly Dictionary<OrderStatus, OrderStatus[]> LegalTransitions = new()
+    {
+        [OrderStatus.Pending] = [OrderStatus.Processing, OrderStatus.Confirmed, OrderStatus.Cancelled, OrderStatus.InventoryConflict],
+        [OrderStatus.Processing] = [OrderStatus.Pending, OrderStatus.Confirmed, OrderStatus.Cancelled, OrderStatus.InventoryConflict],
+        [OrderStatus.InventoryConflict] = [OrderStatus.Pending, OrderStatus.Confirmed, OrderStatus.Cancelled],
+        // Shipped is reachable directly from Confirmed/Packing too, not just via ReadyToShip -
+        // orders shipped through a manual carrier (AssignShippingAsync) don't necessarily pass
+        // through the OzonExpress-flow-specific ReadyToShip step.
+        [OrderStatus.Confirmed] = [OrderStatus.Packing, OrderStatus.ReadyToShip, OrderStatus.Shipped, OrderStatus.Cancelled],
+        [OrderStatus.Packing] = [OrderStatus.ReadyToShip, OrderStatus.Shipped, OrderStatus.Cancelled],
+        [OrderStatus.ReadyToShip] = [OrderStatus.Shipped, OrderStatus.Cancelled],
+        [OrderStatus.Shipped] = [OrderStatus.Delivered, OrderStatus.Returned, OrderStatus.Refused, OrderStatus.Cancelled],
+        [OrderStatus.Delivered] = [OrderStatus.Refunded],
+        // A returned/refused parcel can be re-attempted (back to Pending) or written off.
+        [OrderStatus.Returned] = [OrderStatus.Pending, OrderStatus.Cancelled],
+        [OrderStatus.Refused] = [OrderStatus.Pending, OrderStatus.Cancelled],
+        [OrderStatus.Cancelled] = [],
+        [OrderStatus.Refunded] = [],
+    };
+
+    public async Task<OnlineOrderDto?> UpdateStatusAsync(int id, OrderStatus status, OrderStatusChangeSource source = OrderStatusChangeSource.Manual, string? reason = null, CancellationToken ct = default)
     {
         var order = await _unitOfWork.OnlineOrders.GetByIdAsync(id, ct);
         if (order is null) return null;
 
         var previousStatus = order.Status;
+        if (previousStatus == status) return MapToDto(order);
+
+        if (!LegalTransitions.TryGetValue(previousStatus, out var allowed) || !allowed.Contains(status))
+        {
+            throw new ArgumentException(
+                $"Transition illegale : {previousStatus} -> {status} (commande #{order.OrderNumber})");
+        }
+
         order.Status = status;
         order.UpdatedAt = DateTime.UtcNow;
 
@@ -234,19 +267,41 @@ public class OnlineOrderAppService : IOnlineOrderService
             case OrderStatus.Cancelled:
                 if (order.StockReserved)
                     await ReleaseReservationAsync(order, ct);
+                else if (order.Items.Any(i => i.QuantityFulfilled > 0))
+                    await RestockOrderAsync(order, ct);
+                break;
+
+            case OrderStatus.Returned:
+            case OrderStatus.Refused:
+                // Stock was deducted at Shipped time (StockReserved is false by then); a failed
+                // delivery means those units physically came back to the shop.
+                if (!order.StockReserved)
+                    await RestockOrderAsync(order, ct);
                 break;
 
             case OrderStatus.Refunded:
-                if (!order.StockReserved)
+                // Was `if (!order.StockReserved)` only - refunding an order that was never shipped
+                // (StockReserved still true) fell through this switch doing nothing, so the
+                // reservation was never released and that stock stayed locked forever.
+                if (order.StockReserved)
+                    await ReleaseReservationAsync(order, ct);
+                else
                     await RestockOrderAsync(order, ct);
                 break;
         }
 
         _unitOfWork.OnlineOrders.Update(order);
+        await _unitOfWork.AddAsync(new OrderStatusHistory
+        {
+            OnlineOrderId = order.Id,
+            FromStatus = previousStatus,
+            ToStatus = status,
+            Source = source,
+            Reason = reason
+        }, ct);
         await _unitOfWork.SaveChangesAsync(ct);
 
-        if (status != previousStatus)
-            await _notifier.NotifyOrderStatusChangedAsync(order.Id, status.ToString(), ct);
+        await _notifier.NotifyOrderStatusChangedAsync(order.Id, status.ToString(), ct);
 
         return MapToDto(order);
     }
@@ -257,14 +312,25 @@ public class OnlineOrderAppService : IOnlineOrderService
         if (order is null) return false;
         if (order.Status is OrderStatus.Cancelled or OrderStatus.Delivered or OrderStatus.Refunded) return false;
 
+        var previousStatus = order.Status;
         if (order.StockReserved)
             await ReleaseReservationAsync(order, ct);
+        else if (order.Items.Any(i => i.QuantityFulfilled > 0))
+            await RestockOrderAsync(order, ct);
 
         order.Status = OrderStatus.Cancelled;
         order.Notes = string.IsNullOrWhiteSpace(reason) ? order.Notes : $"{order.Notes}\nAnnulée: {reason}".Trim();
         order.UpdatedAt = DateTime.UtcNow;
 
         _unitOfWork.OnlineOrders.Update(order);
+        await _unitOfWork.AddAsync(new OrderStatusHistory
+        {
+            OnlineOrderId = order.Id,
+            FromStatus = previousStatus,
+            ToStatus = order.Status,
+            Source = OrderStatusChangeSource.Manual,
+            Reason = reason
+        }, ct);
         await _unitOfWork.SaveChangesAsync(ct);
         await _notifier.NotifyOrderStatusChangedAsync(order.Id, order.Status.ToString(), ct);
         return true;

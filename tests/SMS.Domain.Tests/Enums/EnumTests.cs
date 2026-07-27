@@ -75,7 +75,7 @@ public class EnumTests
     public void OrderStatus_AllValues_AreDefined()
     {
         var values = Enum.GetValues<OrderStatus>();
-        Assert.Equal(10, values.Length);
+        Assert.Equal(12, values.Length); // +Returned, +Refused - courier delivery-failure outcomes
     }
 
     [Fact]

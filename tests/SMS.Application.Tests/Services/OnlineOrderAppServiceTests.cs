@@ -207,4 +207,94 @@ public class OnlineOrderAppServiceTests
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task UpdateStatusAsync_IllegalTransition_Throws()
+    {
+        var order = new OnlineOrder { Id = 1, Status = OrderStatus.Delivered, Items = [] };
+        _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        // Delivered -> Pending is exactly the kind of nonsense PUT {id}/status used to accept
+        // with no validation at all.
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.UpdateStatusAsync(1, OrderStatus.Pending));
+        Assert.Equal(OrderStatus.Delivered, order.Status); // must not have been mutated
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_SameStatus_IsNoOpAndDoesNotThrow()
+    {
+        var order = new OnlineOrder { Id = 1, Status = OrderStatus.Confirmed, Items = [] };
+        _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        var result = await _service.UpdateStatusAsync(1, OrderStatus.Confirmed);
+
+        Assert.NotNull(result);
+        _orderRepoMock.Verify(r => r.Update(It.IsAny<OnlineOrder>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_ToRefunded_WhenStillReserved_ReleasesReservationInsteadOfNoOp()
+    {
+        // Bug: `if (!order.StockReserved) RestockOrderAsync(...)` meant refunding an order that
+        // was never shipped (StockReserved still true) did nothing at all - the reservation was
+        // never released and that stock stayed locked forever.
+        var stockItem = MakeStockItem(1, onHand: 20, reserved: 3);
+        var order = new OnlineOrder
+        {
+            Id = 1,
+            Status = OrderStatus.Delivered,
+            StockReserved = true,
+            Items = [new OnlineOrderItem { ProductVariantId = 1, QuantityReserved = 3 }]
+        };
+
+        _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(stockItem);
+
+        await _service.UpdateStatusAsync(1, OrderStatus.Refunded);
+
+        Assert.Equal(0, stockItem.QuantityReserved);
+        Assert.False(order.StockReserved);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_ToReturned_RestocksFulfilledItems()
+    {
+        var stockItem = MakeStockItem(1, onHand: 17);
+        var order = new OnlineOrder
+        {
+            Id = 1,
+            Status = OrderStatus.Shipped,
+            StockReserved = false,
+            Items = [new OnlineOrderItem { ProductVariantId = 1, QuantityFulfilled = 3 }]
+        };
+
+        _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(stockItem);
+
+        var result = await _service.UpdateStatusAsync(1, OrderStatus.Returned);
+
+        Assert.NotNull(result);
+        Assert.Equal(20, stockItem.QuantityOnHand);
+        Assert.Equal(OrderStatus.Returned, order.Status);
+    }
+
+    [Fact]
+    public async Task UpdateStatusAsync_CourierSource_IsRecordedOnHistory()
+    {
+        var order = new OnlineOrder { Id = 1, Status = OrderStatus.Shipped, StockReserved = false, Items = [] };
+        _orderRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        OrderStatusHistory? captured = null;
+        _unitOfWorkMock.Setup(u => u.AddAsync(It.IsAny<OrderStatusHistory>(), It.IsAny<CancellationToken>()))
+            .Callback<OrderStatusHistory, CancellationToken>((h, _) => captured = h)
+            .Returns(Task.CompletedTask);
+
+        await _service.UpdateStatusAsync(1, OrderStatus.Delivered, OrderStatusChangeSource.Courier, "OzonExpress: Livre");
+
+        Assert.NotNull(captured);
+        Assert.Equal(OrderStatusChangeSource.Courier, captured!.Source);
+        Assert.Equal(OrderStatus.Shipped, captured.FromStatus);
+        Assert.Equal(OrderStatus.Delivered, captured.ToStatus);
+        Assert.Equal("OzonExpress: Livre", captured.Reason);
+    }
 }
