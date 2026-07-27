@@ -1,0 +1,91 @@
+import { create } from 'zustand'
+import type { ProductVariant } from '../types/product'
+
+export interface CartItem {
+  productVariantId: number
+  productId: number
+  name: string
+  sku: string
+  colorName: string
+  sizeValue: string
+  unitPrice: number
+  quantity: number
+  lineTotal: number
+  isLiquidation: boolean
+}
+
+interface CartState {
+  items: CartItem[]
+  taxRate: number
+  addItem: (variant: ProductVariant, productName: string) => void
+  removeItem: (productVariantId: number) => void
+  updateQuantity: (productVariantId: number, quantity: number) => void
+  clearCart: () => void
+  setTaxRate: (rate: number) => void
+  subtotal: () => number
+  tax: () => number
+  total: () => number
+  hasLiquidationItems: () => boolean
+}
+
+export const useCartStore = create<CartState>((set, get) => ({
+  items: [],
+  taxRate: 0.1,
+
+  addItem: (variant, productName) =>
+    set((state) => {
+      const existing = state.items.find((i) => i.productVariantId === variant.id)
+      if (existing) {
+        return {
+          items: state.items.map((i) =>
+            i.productVariantId === variant.id
+              ? { ...i, quantity: i.quantity + 1, lineTotal: (i.quantity + 1) * i.unitPrice }
+              : i
+          ),
+        }
+      }
+      return {
+        items: [
+          ...state.items,
+          {
+            productVariantId: variant.id,
+            productId: variant.productId,
+            name: productName,
+            sku: variant.sku,
+            colorName: variant.colorName,
+            sizeValue: variant.sizeValue,
+            unitPrice: variant.price,
+            quantity: 1,
+            lineTotal: variant.price,
+            isLiquidation: variant.isLiquidation,
+          },
+        ],
+      }
+    }),
+
+  removeItem: (productVariantId) =>
+    set((state) => ({ items: state.items.filter((i) => i.productVariantId !== productVariantId) })),
+
+  updateQuantity: (productVariantId, quantity) =>
+    set((state) => ({
+      items: state.items.map((i) =>
+        i.productVariantId === productVariantId
+          ? { ...i, quantity, lineTotal: quantity * i.unitPrice }
+          : i
+      ),
+    })),
+
+  clearCart: () => set({ items: [] }),
+  setTaxRate: (rate) => set({ taxRate: rate }),
+
+  subtotal: () => get().items.reduce((sum, i) => sum + i.lineTotal, 0),
+  tax: () => {
+    const subtotal = get().items.reduce((sum, i) => sum + i.lineTotal, 0)
+    return subtotal * get().taxRate
+  },
+  total: () => {
+    const subtotal = get().items.reduce((sum, i) => sum + i.lineTotal, 0)
+    return subtotal * (1 + get().taxRate)
+  },
+  hasLiquidationItems: () => get().items.some((i) => i.isLiquidation),
+}))

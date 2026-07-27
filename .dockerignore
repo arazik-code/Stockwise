@@ -1,0 +1,10 @@
+**/node_modules
+**/bin
+**/obj
+**/.git
+**/.vs
+**/.vscode
+**/wwwroot/uploads
+**/*.md
+**/.planning
+**/tests

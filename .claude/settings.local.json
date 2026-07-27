@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "PowerShell(head *)",
+      "Bash(xargs grep -l \"Producer\")",
+      "Bash(xargs grep -l \"IInvoiceService\\\\|InvoicesController\")",
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "Bash(xargs basename -a)",
+      "Bash(xargs grep \"interface I\")",
+      "Bash(dotnet tool *)",
+      "Bash(dotnet ef *)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)",
+      "Bash(npx tsc *)",
+      "Bash(grep -rn '\\\\${.*toFixed\\(2\\)}\\\\|\"\\\\$[0-9]' src/pages src/components)",
+      "Bash(npx vite *)",
+      "Bash(docker compose *)",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "mcp__plugin_ecc_chrome-devtools__new_page",
+      "mcp__plugin_ecc_chrome-devtools__take_screenshot",
+      "mcp__plugin_ecc_chrome-devtools__take_snapshot",
+      "mcp__plugin_ecc_chrome-devtools__fill",
+      "mcp__plugin_ecc_chrome-devtools__click",
+      "mcp__plugin_ecc_chrome-devtools__navigate_page",
+      "mcp__plugin_ecc_chrome-devtools__list_console_messages",
+      "mcp__plugin_ecc_chrome-devtools__press_key"
+    ]
+  }
+}
