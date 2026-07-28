@@ -12,6 +12,13 @@ public interface IShopifyApiClient
     /// local mapping table has no row for it - e.g. a variant linked by hand after the last import.
     /// </summary>
     Task<ShopifyVariantItem?> GetVariantAsync(long shopifyVariantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads current Shopify stock for up to 50 inventory items in a single call. Used to compare
+    /// before writing, so a full reconciliation costs ~60 reads instead of ~2,949 writes.
+    /// </summary>
+    Task<IReadOnlyList<ShopifyInventoryLevelItem>> GetInventoryLevelsAsync(
+        IReadOnlyList<long> inventoryItemIds, long locationId, CancellationToken ct = default);
     Task<List<ShopifyProductItem>> GetAllProductsAsync(CancellationToken ct = default);
     Task<ShopifyOrderListResponse?> GetOrdersAsync(string status = "any", int limit = 50, DateTime? createdAtMin = null, string? pageInfo = null, CancellationToken ct = default);
     Task<bool> RegisterWebhookAsync(string topic, string callbackUrl, CancellationToken ct = default);

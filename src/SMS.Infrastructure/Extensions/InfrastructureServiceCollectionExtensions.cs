@@ -63,11 +63,23 @@ public static class InfrastructureServiceCollectionExtensions
             services.AddHttpClient<IShopifyApiClient, ShopifyApiClient>(client =>
             {
                 client.BaseAddress = new Uri($"https://{shopifyOptions.ShopDomain}");
+                // Without this the default is 100s, so one stuck call could block a stock push for
+                // over a minute with no feedback anywhere. Shopify normally answers in well under a second.
+                client.Timeout = TimeSpan.FromSeconds(20);
             }).AddHttpMessageHandler<ShopifyAuthHandler>();
 
             services.AddHostedService<ShopifyPollingService>();
             services.AddHostedService<ShopifyWebhookRetryService>();
-            services.AddHostedService<InventorySyncService>();
+
+            // InventorySyncService (the full-catalog reconciliation) is deliberately NOT started
+            // automatically any more. It walked all ~2,949 variants on every single app launch at
+            // Shopify's ~2 req/s ceiling - roughly 25 minutes of continuous traffic that saturated
+            // the rate limit and starved the real-time push a POS sale depends on. Reconciliation
+            // is now on-demand via the "Synchroniser vers Shopify" button, which only pushes the
+            // variants whose quantity actually differs.
+            services.AddSingleton<ShopifyBulkSyncService>();
+            services.AddSingleton<IShopifyBulkSync>(sp => sp.GetRequiredService<ShopifyBulkSyncService>());
+            services.AddHostedService(sp => sp.GetRequiredService<ShopifyBulkSyncService>());
         }
 
         // OzonExpress courier integration — registered only when credentials are present so the

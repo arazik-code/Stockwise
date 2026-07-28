@@ -114,6 +114,17 @@ public class ShopifyApiClient : IShopifyApiClient
         return response?.Variant;
     }
 
+    public async Task<IReadOnlyList<ShopifyInventoryLevelItem>> GetInventoryLevelsAsync(
+        IReadOnlyList<long> inventoryItemIds, long locationId, CancellationToken ct = default)
+    {
+        if (inventoryItemIds.Count == 0) return [];
+
+        var ids = string.Join(",", inventoryItemIds.Take(50));
+        var url = $"/admin/api/{_options.ApiVersion}/inventory_levels.json?inventory_item_ids={ids}&location_ids={locationId}&limit=250";
+        var response = await GetOrLogAsync<ShopifyInventoryLevelsResponse>(url, ct);
+        return response?.InventoryLevels ?? [];
+    }
+
     public async Task<ShopifyLocationListResponse?> GetLocationsAsync(CancellationToken ct = default)
     {
         var url = $"/admin/api/{_options.ApiVersion}/locations.json";

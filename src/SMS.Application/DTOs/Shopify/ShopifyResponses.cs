@@ -14,6 +14,9 @@ public record ShopifyVariantItem(
 
 public record ShopifyVariantResponse(ShopifyVariantItem Variant);
 
+public record ShopifyInventoryLevelsResponse(List<ShopifyInventoryLevelItem> InventoryLevels);
+public record ShopifyInventoryLevelItem(long InventoryItemId, long LocationId, int Available);
+
 public record ShopifyImageItem(long Id, string Src, int Position);
 public record ShopifyOptionItem(string Name, int Position, List<string> Values);
 

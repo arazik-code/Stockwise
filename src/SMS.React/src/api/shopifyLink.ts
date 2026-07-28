@@ -42,6 +42,26 @@ export interface AutoLinkResult {
   details: string[]
 }
 
+export interface BulkSyncProgress {
+  isRunning: boolean
+  phase: string
+  totalLinked: number
+  compared: number
+  differing: number
+  pushed: number
+  failed: number
+  startedAt?: string
+  finishedAt?: string
+  lastError?: string
+  recent: string[]
+}
+
+export const shopifySyncApi = {
+  syncAll: () =>
+    api.post<{ started: boolean; message: string; progress: BulkSyncProgress }>('/Shopify/inventory/sync-all').then((r) => r.data),
+  status: () => api.get<BulkSyncProgress>('/Shopify/inventory/sync-status').then((r) => r.data),
+}
+
 export const shopifyLinkApi = {
   getUnlinked: () => api.get<UnlinkedVariant[]>('/shopify-link/unlinked').then((r) => r.data),
   search: (q: string, limit = 50) =>

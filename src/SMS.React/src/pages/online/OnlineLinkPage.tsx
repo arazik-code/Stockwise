@@ -3,8 +3,10 @@ import Header from '../../components/layout/Header'
 import { showToast } from '../../components/shared/Toast'
 import {
   shopifyLinkApi,
+  shopifySyncApi,
   type UnlinkedVariant,
   type ShopifyVariantCandidate,
+  type BulkSyncProgress,
 } from '../../api/shopifyLink'
 
 export default function OnlineLinkPage() {
@@ -15,6 +17,7 @@ export default function OnlineLinkPage() {
   const [candidatesLoading, setCandidatesLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sync, setSync] = useState<BulkSyncProgress | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -28,6 +31,30 @@ export default function OnlineLinkPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Poll while a reconciliation is running so the user sees it move rather than guessing.
+  useEffect(() => {
+    let alive = true
+    const tick = async () => {
+      try {
+        const s = await shopifySyncApi.status()
+        if (alive) setSync(s)
+      } catch { /* transient - keep the last known progress */ }
+    }
+    tick()
+    const id = setInterval(tick, 2000)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
+
+  const startSync = async () => {
+    try {
+      const res = await shopifySyncApi.syncAll()
+      setSync(res.progress)
+      showToast(res.message, res.started ? 'success' : 'info')
+    } catch {
+      showToast('Impossible de lancer la synchronisation', 'error')
+    }
+  }
 
   const openVariant = async (v: UnlinkedVariant) => {
     setSelected(v)
@@ -94,17 +121,93 @@ export default function OnlineLinkPage() {
       <Header
         title="Liaison Shopify"
         actions={
-          <button
-            onClick={doAutoLink}
-            disabled={busy || loading}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-          >
-            Liaison automatique (code-barres / SKU)
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={doAutoLink}
+              disabled={busy || loading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              Liaison automatique
+            </button>
+            <button
+              onClick={startSync}
+              disabled={sync?.isRunning}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+            >
+              {sync?.isRunning ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  Synchronisation...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Synchroniser vers Shopify
+                </>
+              )}
+            </button>
+          </div>
         }
       />
 
       <div className="p-6 flex-1 overflow-auto">
+        {sync && (sync.isRunning || sync.finishedAt) && (
+          <div className="mb-4 bg-white border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-slate-900">
+                Synchronisation du stock vers Shopify
+              </p>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                sync.isRunning ? 'bg-blue-50 text-blue-700'
+                  : sync.failed > 0 ? 'bg-amber-50 text-amber-700'
+                  : 'bg-emerald-50 text-emerald-700'
+              }`}>
+                {sync.phase}
+              </span>
+            </div>
+
+            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${sync.totalLinked > 0 ? Math.min(100, (sync.compared / sync.totalLinked) * 100) : 0}%` }}
+              />
+            </div>
+
+            <div className="grid grid-cols-4 gap-3 text-center">
+              <div>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">Comparees</p>
+                <p className="text-sm font-semibold text-slate-900 tabular-nums">{sync.compared}/{sync.totalLinked}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">Differentes</p>
+                <p className="text-sm font-semibold text-amber-600 tabular-nums">{sync.differing}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">Mises a jour</p>
+                <p className="text-sm font-semibold text-emerald-600 tabular-nums">{sync.pushed}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide">Echecs</p>
+                <p className="text-sm font-semibold text-red-600 tabular-nums">{sync.failed}</p>
+              </div>
+            </div>
+
+            {sync.lastError && (
+              <p className="mt-2 text-xs text-red-600">{sync.lastError}</p>
+            )}
+
+            {sync.recent.length > 0 && (
+              <div className="mt-3 max-h-32 overflow-y-auto border-t border-slate-100 pt-2 space-y-0.5">
+                {sync.recent.map((line, i) => (
+                  <p key={i} className="text-[11px] text-slate-500 font-mono">{line}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
           Seules les variantes liees a une variante Shopify voient leur stock synchronise avec la
           boutique. Les variantes ci-dessous sont vendues en magasin mais <strong>ne mettent pas a

@@ -13,15 +13,47 @@ public class ShopifyController : ControllerBase
     private readonly IShopifySyncService _syncService;
     private readonly IOnlineOrderService _onlineOrderService;
     private readonly IShopifyInventoryPusher _inventoryPusher;
+    private readonly IShopifyBulkSync? _bulkSync;
 
     public ShopifyController(
         IShopifySyncService syncService,
         IOnlineOrderService onlineOrderService,
-        IShopifyInventoryPusher inventoryPusher)
+        IShopifyInventoryPusher inventoryPusher,
+        IShopifyBulkSync? bulkSync = null)
     {
         _syncService = syncService;
         _onlineOrderService = onlineOrderService;
         _inventoryPusher = inventoryPusher;
+        _bulkSync = bulkSync;
+    }
+
+    /// <summary>Pushes local stock to Shopify for every linked variant whose quantity differs.</summary>
+    [HttpPost("inventory/sync-all")]
+    [Authorize(Roles = "Admin,StockManager")]
+    public IActionResult SyncAll()
+    {
+        if (_bulkSync is null)
+            return BadRequest(new { message = "Shopify n'est pas configure." });
+
+        var started = _bulkSync.TryStart();
+        return Ok(new
+        {
+            started,
+            message = started
+                ? "Synchronisation lancee."
+                : "Une synchronisation est deja en cours.",
+            progress = _bulkSync.GetProgress()
+        });
+    }
+
+    [HttpGet("inventory/sync-status")]
+    [Authorize(Roles = "Admin,StockManager")]
+    public IActionResult SyncStatus()
+    {
+        if (_bulkSync is null)
+            return Ok(new ShopifyBulkSyncProgress { Phase = "Shopify non configure" });
+
+        return Ok(_bulkSync.GetProgress());
     }
 
     /// <summary>
