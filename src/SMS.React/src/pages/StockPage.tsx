@@ -17,6 +17,8 @@ export default function StockPage() {
   const [showMovements, setShowMovements] = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 50
   const tableSelection = useTableSelection<StockItem & { id: number }>()
 
   const loadStock = useCallback(async () => {
@@ -40,6 +42,16 @@ export default function StockPage() {
       i => i.productName.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q) || (i as any).barcode?.toLowerCase().includes(q)
     )
   }, [itemsWithId, search])
+
+  // Rendering all ~2,957 rows at once is what actually froze this page - the fetch itself is
+  // fast, the DOM explosion isn't. Paginate the render only; the full filtered set is still
+  // used for select-all/export/etc.
+  useEffect(() => { setPage(1) }, [search, showLowOnly])
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
+  const pagedItems = useMemo(
+    () => filteredItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredItems, page]
+  )
 
   // Keyboard shortcuts — native listener with capture to beat the browser
   useEffect(() => {
@@ -205,7 +217,7 @@ export default function StockPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredItems.map((item) => (
+                {pagedItems.map((item) => (
                   <tr key={item.productVariantId} className={`transition-colors ${tableSelection.isSelected(item.id) ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
                     <td className="px-4 py-3">
                       <input
@@ -258,6 +270,27 @@ export default function StockPage() {
                 ))}
               </tbody>
             </table>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+              <p className="text-xs text-slate-400">
+                {filteredItems.length} article(s) - page {page}/{totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Precedent
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Suivant
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

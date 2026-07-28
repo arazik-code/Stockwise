@@ -23,6 +23,7 @@ public class InvoiceRepository : IInvoiceRepository
 
     public async Task<IReadOnlyList<Invoice>> GetAllAsync(CancellationToken ct = default)
         => await _context.Invoices
+            .AsNoTracking()
             .Include(i => i.Fournisseur)
             .Include(i => i.LineItems)
             .Include(i => i.Payments)
@@ -31,6 +32,7 @@ public class InvoiceRepository : IInvoiceRepository
 
     public async Task<IReadOnlyList<Invoice>> GetByFournisseurAsync(int fournisseurId, CancellationToken ct = default)
         => await _context.Invoices
+            .AsNoTracking()
             .Include(i => i.Fournisseur)
             .Include(i => i.LineItems)
             .Include(i => i.Payments)
@@ -42,6 +44,7 @@ public class InvoiceRepository : IInvoiceRepository
     {
         var today = DateTime.UtcNow;
         return await _context.Invoices
+            .AsNoTracking()
             .Include(i => i.Fournisseur)
             .Include(i => i.LineItems)
             .Include(i => i.Payments)

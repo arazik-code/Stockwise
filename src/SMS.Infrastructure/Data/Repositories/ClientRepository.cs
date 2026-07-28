@@ -27,7 +27,7 @@ public class ClientRepository : IClientRepository
         => await _context.Clients.FirstOrDefaultAsync(c => c.Email == email, ct);
 
     public async Task<IReadOnlyList<Client>> GetAllAsync(CancellationToken ct = default)
-        => await _context.Clients.OrderByDescending(c => c.LastVisitAt).ToListAsync(ct);
+        => await _context.Clients.AsNoTracking().OrderByDescending(c => c.LastVisitAt).ToListAsync(ct);
 
     public async Task AddAsync(Client client, CancellationToken ct = default)
         => await _context.Clients.AddAsync(client, ct);

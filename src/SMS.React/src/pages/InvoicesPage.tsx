@@ -117,21 +117,18 @@ export default function InvoicesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [inv, four, prod, colors, sizes, sum, template] = await Promise.all([
+      // Products/colors/sizes used to load here too - the full catalog (~1MB, every variant)
+      // just to show the invoice list, before the create/edit form was ever opened. Deferred to
+      // ensureFormDataLoaded(), called only when that form actually opens.
+      const [inv, four, sum, template] = await Promise.all([
         invoicesApi.getAll(),
         fournisseursApi.getAll(),
-        productsApi.getAll(),
-        colorsApi.getAll(),
-        sizesApi.getAll(),
         invoicesApi.getSummary(),
         settingsApi.getInvoiceTemplate().catch(() => null),
       ])
       setInvoices(inv)
       setFilteredInvoices(inv)
       setFournisseurs(four)
-      setProducts(prod)
-      setAllColors(colors)
-      setAllSizes(sizes)
       setSummary(sum)
       setInvoiceTemplate(template)
     } finally {
@@ -140,6 +137,26 @@ export default function InvoicesPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const formDataLoadedRef = useRef(false)
+  const [loadingFormData, setLoadingFormData] = useState(false)
+  const ensureFormDataLoaded = useCallback(async () => {
+    if (formDataLoadedRef.current) return
+    setLoadingFormData(true)
+    try {
+      const [prod, colors, sizes] = await Promise.all([
+        productsApi.getAll(),
+        colorsApi.getAll(),
+        sizesApi.getAll(),
+      ])
+      setProducts(prod)
+      setAllColors(colors)
+      setAllSizes(sizes)
+      formDataLoadedRef.current = true
+    } finally {
+      setLoadingFormData(false)
+    }
+  }, [])
 
   const importDropdownRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -171,7 +188,8 @@ export default function InvoicesPage() {
     setFilteredInvoices(result)
   }, [invoices, searchQuery, filterStatus, filterFournisseur])
 
-  const openCreate = () => {
+  const openCreate = async () => {
+    await ensureFormDataLoaded()
     setEditingInvoice(null)
     const today = todayStr()
     setForm({
@@ -189,7 +207,8 @@ export default function InvoicesPage() {
     setShowCreate(true)
   }
 
-  const openEdit = (inv: Invoice) => {
+  const openEdit = async (inv: Invoice) => {
+    await ensureFormDataLoaded()
     setEditingInvoice(inv)
     setForm({
       fournisseurId: inv.fournisseurId,
@@ -579,7 +598,8 @@ export default function InvoicesPage() {
         actions={
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            disabled={loadingFormData}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -23,6 +23,12 @@ public class OnlineOrderRepository : IOnlineOrderRepository
             .Include(o => o.Items).ThenInclude(i => i.ProductVariant).ThenInclude(v => v.Size)
             .Include(o => o.Items).ThenInclude(i => i.ProductVariant).ThenInclude(v => v.StockItem);
 
+    // GetByIdAsync is used by update flows (e.g. status transitions) that mutate and save the
+    // loaded order - it needs tracking. The plural list methods below are pure display (this is
+    // the single biggest payload measured in the app, ~1.8MB uncompressed), so they get their
+    // own untracked query instead of sharing Query.
+    private IQueryable<OnlineOrder> QueryNoTracking => Query.AsNoTracking();
+
     public async Task<OnlineOrder?> GetByIdAsync(int id, CancellationToken ct = default)
         => await Query.FirstOrDefaultAsync(o => o.Id == id, ct);
 
@@ -39,7 +45,7 @@ public class OnlineOrderRepository : IOnlineOrderRepository
         DateTime? to = null,
         CancellationToken ct = default)
     {
-        var query = Query;
+        var query = QueryNoTracking;
 
         if (channel.HasValue) query = query.Where(o => o.Channel == channel.Value);
         if (status.HasValue) query = query.Where(o => o.Status == status.Value);
@@ -50,13 +56,13 @@ public class OnlineOrderRepository : IOnlineOrderRepository
     }
 
     public async Task<IReadOnlyList<OnlineOrder>> GetConflictsAsync(CancellationToken ct = default)
-        => await Query
+        => await QueryNoTracking
             .Where(o => o.Status == OrderStatus.InventoryConflict)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<OnlineOrder>> GetByClientIdAsync(int clientId, CancellationToken ct = default)
-        => await Query
+        => await QueryNoTracking
             .Where(o => o.ClientId == clientId)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);

@@ -30,6 +30,7 @@ public class StockRepository : IStockRepository
 
     public async Task<IReadOnlyList<StockItem>> GetAllWithVariantAsync(CancellationToken ct = default)
         => await _context.StockItems
+            .AsNoTracking()
             .Include(s => s.ProductVariant)
                 .ThenInclude(v => v.Product)
             .Include(s => s.ProductVariant)
@@ -41,6 +42,7 @@ public class StockRepository : IStockRepository
 
     public async Task<IReadOnlyList<StockItem>> GetLowStockAsync(CancellationToken ct = default)
         => await _context.StockItems
+            .AsNoTracking()
             .Include(s => s.ProductVariant)
                 .ThenInclude(v => v.Product)
             .Include(s => s.ProductVariant)
@@ -55,6 +57,7 @@ public class StockRepository : IStockRepository
         int? productVariantId, DateTime? from, DateTime? to, CancellationToken ct = default)
     {
         var query = _context.StockMovements
+            .AsNoTracking()
             .Include(m => m.ProductVariant)
                 .ThenInclude(v => v.Product)
             .Include(m => m.ProductVariant)

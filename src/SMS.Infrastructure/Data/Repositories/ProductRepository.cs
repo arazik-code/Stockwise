@@ -36,6 +36,7 @@ public class ProductRepository : Repository<Product>, IProductRepository
     {
         var lowerQuery = query.ToLower();
         return await _dbSet
+            .AsNoTracking()
             .Include(p => p.Variants)
                 .ThenInclude(v => v.Color)
             .Include(p => p.Variants)
@@ -54,6 +55,7 @@ public class ProductRepository : Repository<Product>, IProductRepository
 
     public async Task<IReadOnlyList<Product>> GetByCategoryAsync(int categoryId, CancellationToken ct = default)
         => await _dbSet
+            .AsNoTracking()
             .Include(p => p.Variants)
                 .ThenInclude(v => v.Color)
             .Include(p => p.Variants)
@@ -67,6 +69,7 @@ public class ProductRepository : Repository<Product>, IProductRepository
 
     public async Task<IReadOnlyList<Product>> GetByFournisseurAsync(int fournisseurId, CancellationToken ct = default)
         => await _dbSet
+            .AsNoTracking()
             .Include(p => p.Variants)
                 .ThenInclude(v => v.Color)
             .Include(p => p.Variants)
@@ -80,6 +83,7 @@ public class ProductRepository : Repository<Product>, IProductRepository
 
     public override async Task<IReadOnlyList<Product>> GetAllAsync(CancellationToken ct = default)
         => await _dbSet
+            .AsNoTracking()
             .Include(p => p.Variants)
                 .ThenInclude(v => v.Color)
             .Include(p => p.Variants)

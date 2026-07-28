@@ -135,6 +135,18 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddProblemDetails();
 
+// Every list endpoint here was measured shipping 400KB-1.8MB of uncompressed JSON on every
+// page load (stock, products, online-orders, clients) - this alone cuts that by ~80-90% with
+// zero API/frontend changes, since every client here already accepts gzip/br by default.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    options.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes
+        .Concat(["application/json"]);
+});
+
 builder.Services.AddCors(options =>
 {
     // Was hardcoded to a specific developer's LAN IP (192.168.1.105). Now driven by
@@ -186,14 +198,28 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseResponseCompression();
+
 app.UseCors("ReactSpa");
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        ctx.Context.Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
-        ctx.Context.Response.Headers.Append("Pragma", "no-cache");
-        ctx.Context.Response.Headers.Append("Expires", "0");
+        // Vite content-hashes everything under assets/ (a new hash on every rebuild), so those
+        // files are safe to cache forever - only index.html itself needs to stay no-cache, since
+        // it's what points at the current hashed filenames. This used to be a blanket no-store on
+        // everything, so the ~1MB bundle re-downloaded on every single app launch.
+        var isHashedAsset = ctx.File.Name != "index.html" && ctx.Context.Request.Path.StartsWithSegments("/assets");
+        if (isHashedAsset)
+        {
+            ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=31536000, immutable");
+        }
+        else
+        {
+            ctx.Context.Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
+            ctx.Context.Response.Headers.Append("Pragma", "no-cache");
+            ctx.Context.Response.Headers.Append("Expires", "0");
+        }
     }
 });
 app.UseAuthentication();

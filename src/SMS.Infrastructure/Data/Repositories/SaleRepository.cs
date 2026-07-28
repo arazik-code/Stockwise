@@ -11,6 +11,7 @@ public class SaleRepository : Repository<Sale>, ISaleRepository
 
     public async Task<IReadOnlyList<Sale>> GetByDateRangeAsync(DateTime from, DateTime to, CancellationToken ct = default)
         => await _dbSet
+            .AsNoTracking()
             .Include(s => s.Items)
             .ThenInclude(si => si.ProductVariant)
             .ThenInclude(pv => pv.Product)
@@ -29,6 +30,7 @@ public class SaleRepository : Repository<Sale>, ISaleRepository
 
     public async Task<IReadOnlyList<Sale>> GetByChannelAsync(SaleChannel channel, CancellationToken ct = default)
         => await _dbSet
+            .AsNoTracking()
             .Include(s => s.Items)
             .ThenInclude(si => si.ProductVariant)
             .ThenInclude(pv => pv.Product)
@@ -70,6 +72,7 @@ public class SaleRepository : Repository<Sale>, ISaleRepository
 
     public override async Task<IReadOnlyList<Sale>> GetAllAsync(CancellationToken ct = default)
         => await _dbSet
+            .AsNoTracking()
             .Include(s => s.Items)
             .ThenInclude(i => i.ProductVariant)
             .ThenInclude(pv => pv.Product)
