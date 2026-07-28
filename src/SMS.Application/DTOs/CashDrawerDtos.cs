@@ -12,4 +12,9 @@ public record CashDrawerMovementDto(
     string UserFullName,
     DateTime CreatedAt);
 
-public record CashDrawerSummaryDto(decimal Balance, IReadOnlyList<CashDrawerMovementDto> Recent);
+public record CashDrawerSummaryDto(
+    decimal Balance,
+    decimal CashSalesTotal,
+    decimal CashRefundsTotal,
+    decimal ManualNet,
+    IReadOnlyList<CashDrawerMovementDto> Recent);

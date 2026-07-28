@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SMS.Application.DTOs;
 using SMS.Application.Interfaces;
 using SMS.Domain.Entities;
+using SMS.Domain.Enums;
 using SMS.Domain.Interfaces;
 
 namespace SMS.Application.Services;
@@ -38,9 +39,22 @@ public class CashDrawerService : ICashDrawerService
 
     public async Task<CashDrawerSummaryDto> GetSummaryAsync(int recentCount = 8, CancellationToken ct = default)
     {
-        var all = await _unitOfWork.Set<CashDrawerMovement>().ToListAsync(ct);
+        // The register balance is real cash accounting, not just the manual log: cash sales put
+        // money in, cash refunds/exchange payouts take it out, and deposits/withdrawals are the
+        // manual movements logged here. Only manual movements used to be counted, so taking cash
+        // out never actually moved the number - this is what ties it to real sales activity.
+        var cashSalesTotal = await _unitOfWork.Set<Sale>()
+            .Where(s => s.PaymentMethod == PaymentMethod.Cash)
+            .SumAsync(s => s.TotalAmount, ct);
 
-        var balance = all.Sum(m => m.Type == CashDrawerMovementType.Deposit ? m.Amount : -m.Amount);
+        var cashRefundsTotal = await _unitOfWork.Set<Refund>()
+            .Where(r => r.Status == "Completed" && r.Sale != null && r.Sale.PaymentMethod == PaymentMethod.Cash)
+            .SumAsync(r => r.PriceDifference, ct);
+
+        var manualMovements = await _unitOfWork.Set<CashDrawerMovement>().ToListAsync(ct);
+        var manualNet = manualMovements.Sum(m => m.Type == CashDrawerMovementType.Deposit ? m.Amount : -m.Amount);
+
+        var balance = cashSalesTotal + cashRefundsTotal + manualNet;
 
         var recent = await _unitOfWork.Set<CashDrawerMovement>()
             .Include(m => m.User)
@@ -50,6 +64,9 @@ public class CashDrawerService : ICashDrawerService
 
         return new CashDrawerSummaryDto(
             balance,
+            cashSalesTotal,
+            cashRefundsTotal,
+            manualNet,
             recent.Select(m => MapToDto(m, m.User?.FullName ?? "—")).ToList());
     }
 

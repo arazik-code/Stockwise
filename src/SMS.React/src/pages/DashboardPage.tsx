@@ -8,6 +8,7 @@ import { salesApi } from '../api/sales'
 import { clientsApi } from '../api/clients'
 import { fournisseursApi } from '../api/fournisseurs'
 import { formatCurrency, formatDateTime } from '../utils/format'
+import { useCashOnHand } from '../hooks/useCashOnHand'
 import type { DashboardData } from '../types/report'
 import type { StockItem } from '../types/stock'
 import type { Sale } from '../types/sale'
@@ -50,6 +51,7 @@ export default function DashboardPage() {
   const [clientCount, setClientCount] = useState(0)
   const [fournisseurCount, setFournisseurCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const cashOnHand = useCashOnHand()
 
   useEffect(() => {
     Promise.all([
@@ -128,7 +130,25 @@ export default function DashboardPage() {
         <div className="max-w-[1400px] mx-auto p-6 space-y-6">
 
           {/* ── KPI GRID ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 ${cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>
+            {cashOnHand.isAdmin && (
+              <div className="bg-gradient-to-br from-slate-900 to-slate-700 rounded-xl p-4 text-white hover:shadow-sm transition-shadow">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                    <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 10v2m9-8a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-[11px] font-medium text-slate-300 uppercase tracking-wider">Solde caisse</p>
+                {cashOnHand.loading ? (
+                  <div className="h-6 w-20 bg-white/10 rounded animate-pulse mt-1.5" />
+                ) : (
+                  <p className="text-xl font-bold mt-1 tabular-nums">{formatCurrency(cashOnHand.balance ?? 0)}</p>
+                )}
+                <p className="text-[11px] text-slate-400 mt-1 truncate">Especes en caisse</p>
+              </div>
+            )}
             <KPICard
               label={t('dashboard.todaySales')}
               value={`${data?.todaySales ?? 0}`}

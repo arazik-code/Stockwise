@@ -13,6 +13,9 @@ export interface CashDrawerMovement {
 
 export interface CashDrawerSummary {
   balance: number
+  cashSalesTotal: number
+  cashRefundsTotal: number
+  manualNet: number
   recent: CashDrawerMovement[]
 }
 

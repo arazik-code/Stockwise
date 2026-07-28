@@ -92,13 +92,20 @@ export default function CashDrawerModal({ onClose }: CashDrawerModalProps) {
           </div>
 
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-[11px] uppercase tracking-wide text-slate-300">Solde suivi</span>
+            <span className="text-[11px] uppercase tracking-wide text-slate-300">Solde caisse</span>
             {loading ? (
               <div className="h-5 w-20 bg-white/10 rounded animate-pulse" />
             ) : (
               <span className="text-xl font-bold tabular-nums">{formatCurrency(summary?.balance ?? 0)}</span>
             )}
           </div>
+          {!loading && summary && (
+            <p className="text-[11px] text-slate-400 mt-1">
+              Ventes especes {formatCurrency(summary.cashSalesTotal)}
+              {summary.cashRefundsTotal !== 0 && <> · Retours {formatCurrency(summary.cashRefundsTotal)}</>}
+              {summary.manualNet !== 0 && <> · Mouvements manuels {formatCurrency(summary.manualNet)}</>}
+            </p>
+          )}
         </div>
 
         <div className="p-6">

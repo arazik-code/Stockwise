@@ -6,6 +6,7 @@ import { salesApi } from '../api/sales'
 import { fournisseursApi } from '../api/fournisseurs'
 import { formatCurrency, formatDate } from '../utils/format'
 import { useTableSelection } from '../hooks/useTableSelection'
+import { useCashOnHand } from '../hooks/useCashOnHand'
 import { showToast } from '../components/shared/Toast'
 import type { Sale, SalesReport } from '../types/sale'
 import type { Fournisseur } from '../types/fournisseur'
@@ -64,6 +65,7 @@ export default function SalesPage() {
   const [fournisseurId, setFournisseurId] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState<string>('')
   const tableSelection = useTableSelection<Sale>()
+  const cashOnHand = useCashOnHand()
 
   useEffect(() => {
     fournisseursApi.getAll().then(setFournisseurs).catch(() => {})
@@ -213,13 +215,23 @@ export default function SalesPage() {
 
             {/* ── Summary Cards ────────────────────────── */}
             {report && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+              <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 ${cashOnHand.isAdmin ? 'lg:grid-cols-7' : 'lg:grid-cols-6'}`}>
                 <StatCard label={t('sales.summary.totalRevenue')} value={formatCurrency(report.totalRevenue)} color="blue" />
                 <StatCard label={t('sales.summary.totalSales')} value={report.totalSales.toString()} color="emerald" />
                 <StatCard label={t('sales.summary.avgOrder')} value={formatCurrency(report.averageOrderValue)} color="violet" />
                 <StatCard label={t('sales.summary.itemsSold')} value={report.totalItemsSold.toString()} color="amber" />
                 <StatCard label={t('sales.summary.totalProfit')} value={formatCurrency(report.totalProfit)} color="green" />
                 <StatCard label={t('sales.summary.totalDiscount')} value={formatCurrency(report.totalDiscount)} color="red" />
+                {cashOnHand.isAdmin && (
+                  <div className="rounded-lg border border-slate-700 bg-gradient-to-br from-slate-900 to-slate-700 p-4 text-white">
+                    <p className="text-xs font-medium text-slate-300 mb-1">Solde caisse</p>
+                    {cashOnHand.loading ? (
+                      <div className="h-5 w-16 bg-white/10 rounded animate-pulse" />
+                    ) : (
+                      <p className="text-lg font-bold tabular-nums">{formatCurrency(cashOnHand.balance ?? 0)}</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
