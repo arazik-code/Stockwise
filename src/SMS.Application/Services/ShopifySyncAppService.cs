@@ -257,30 +257,37 @@ public class ShopifySyncAppService : IShopifySyncService
 
         _logger.LogInformation("Syncing inventory levels with Shopify...");
 
+        if (!long.TryParse(_shopifyOptions.LocationId, out var locationId))
+        {
+            _logger.LogWarning("Shopify LocationId not configured, skipping inventory push");
+            return;
+        }
+
+        List<ShopifyProductItem> products;
         try
         {
-            var products = await _shopifyClient.GetProductsAsync(limit: 50, ct: ct);
-            if (products?.Products is null) return;
+            // Was limit:50 - meaning this reconciliation only ever looked at the same first 50
+            // of 517 Shopify products, forever. GetAllProductsAsync pages through the full catalog.
+            products = await _shopifyClient.GetAllProductsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch Shopify catalog for inventory sync");
+            return;
+        }
 
-            if (!long.TryParse(_shopifyOptions.LocationId, out var locationId))
+        var pushed = 0;
+        foreach (var shopifyProduct in products)
+        {
+            foreach (var variant in shopifyProduct.Variants)
             {
-                _logger.LogWarning("Shopify LocationId not configured, skipping inventory push");
-                return;
-            }
-
-            foreach (var shopifyProduct in products.Products)
-            {
-                foreach (var variant in shopifyProduct.Variants)
+                try
                 {
-                    var localProducts = await _unitOfWork.FindAsync<ShopifyProduct>(
-                        sp => sp.ShopifyProductId == shopifyProduct.Id && sp.ShopifyVariantId == variant.Id,
-                        ct);
-
-                    var localProduct = localProducts.FirstOrDefault();
-                    if (localProduct?.LocalProductId is null) continue;
-
+                    // Match directly on ProductVariant.ShopifyVariantId - going through
+                    // ShopifyProduct.LocalProductId never worked, since that column is never populated
+                    // (product/variant matching always goes through ShopifyVariantId instead).
                     var variants = await _unitOfWork.FindAsync<ProductVariant>(
-                        v => v.ProductId == localProduct.LocalProductId.Value, ct);
+                        v => v.ShopifyVariantId == variant.Id, ct);
                     var productVariant = variants.FirstOrDefault();
                     if (productVariant is null) continue;
 
@@ -289,16 +296,19 @@ public class ShopifySyncAppService : IShopifySyncService
                     {
                         await _shopifyClient.UpdateInventoryLevelAsync(
                             variant.InventoryItemId, locationId, stockItem.QuantityOnHand, ct);
+                        pushed++;
                     }
                 }
+                catch (Exception ex)
+                {
+                    // One variant failing (rate limit, transient error) must not abort the rest of
+                    // the reconciliation pass - it used to be all-or-nothing via the outer try/catch.
+                    _logger.LogError(ex, "Failed to sync inventory for Shopify variant {VariantId}", variant.Id);
+                }
             }
+        }
 
-            _logger.LogInformation("Inventory sync with Shopify completed");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to sync inventory levels with Shopify");
-        }
+        _logger.LogInformation("Inventory sync with Shopify completed - pushed {Count} levels", pushed);
     }
 
     public async Task<ShopifySyncStatusDto> GetSyncStatusAsync(CancellationToken ct = default)

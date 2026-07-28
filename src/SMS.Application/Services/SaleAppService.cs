@@ -420,12 +420,17 @@ public class SaleAppService : ISaleService
         {
             try
             {
+                if (variant.ShopifyVariantId is not long shopifyVariantId || shopifyVariantId == 0) continue;
+
+                // Match via ProductVariant.ShopifyVariantId, not ShopifyProduct.LocalProductId - the
+                // latter is never populated (product/variant matching for Shopify sync always goes
+                // through ShopifyVariantId), so matching on it silently dropped every push.
                 var shopifyProducts = await _unitOfWork.FindAsync<Domain.Entities.ShopifyProduct>(
-                    sp => sp.LocalProductId == variant.ProductId && sp.ShopifyVariantId != 0,
+                    sp => sp.ShopifyVariantId == shopifyVariantId,
                     ct);
 
                 var shopifyProduct = shopifyProducts.FirstOrDefault();
-                if (shopifyProduct is null) continue;
+                if (shopifyProduct is null || shopifyProduct.ShopifyInventoryItemId == 0) continue;
 
                 await _shopifyClient.UpdateInventoryLevelAsync(
                     shopifyProduct.ShopifyInventoryItemId, locationId, stock.QuantityOnHand, ct);
