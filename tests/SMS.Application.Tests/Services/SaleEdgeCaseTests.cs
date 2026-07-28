@@ -6,6 +6,7 @@ using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Domain.Exceptions;
 using SMS.Domain.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SMS.Application.DTOs.Shopify;
@@ -32,7 +33,7 @@ public class SaleEdgeCaseTests
 
         var shopifyOptions = Options.Create(new ShopifyOptions());
         var loyaltyOptions = Options.Create(new LoyaltySettings());
-        _service = new SaleAppService(_unitOfWorkMock.Object, _notifierMock.Object, shopifyOptions, loyaltyOptions, new Mock<ILogger<SaleAppService>>().Object);
+        _service = new SaleAppService(_unitOfWorkMock.Object, _notifierMock.Object, shopifyOptions, loyaltyOptions, new Mock<ILogger<SaleAppService>>().Object, new Mock<IServiceScopeFactory>().Object);
     }
 
     private StockItem CreateStock(int variantId, int qty, int reorderLevel = 10, decimal price = 50m)

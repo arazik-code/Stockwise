@@ -35,25 +35,44 @@ public class ShopifyApiClient : IShopifyApiClient
         long inventoryItemId, long locationId, int available,
         CancellationToken ct = default)
     {
-        try
+        var url = $"/admin/api/{_options.ApiVersion}/inventory_levels/set.json";
+        var payload = new
         {
-            var url = $"/admin/api/{_options.ApiVersion}/inventory_levels/set.json";
-            var payload = new
-            {
-                location_id = locationId,
-                inventory_item_id = inventoryItemId,
-                available
-            };
+            location_id = locationId,
+            inventory_item_id = inventoryItemId,
+            available
+        };
 
-            var response = await _http.PostAsJsonAsync(url, payload, ct);
-            response.EnsureSuccessStatusCode();
-            return true;
-        }
-        catch (Exception ex)
+        const int maxAttempts = 4;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            _logger.LogError(ex, "Failed to update inventory level for item {InventoryItemId}", inventoryItemId);
-            return false;
+            try
+            {
+                var response = await _http.PostAsJsonAsync(url, payload, ct);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && attempt < maxAttempts)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2);
+                    _logger.LogWarning("Shopify rate limit hit updating inventory item {InventoryItemId}, retrying in {Delay}s (attempt {Attempt}/{Max})",
+                        inventoryItemId, retryAfter.TotalSeconds, attempt, maxAttempts);
+                    await Task.Delay(retryAfter, ct);
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (attempt >= maxAttempts)
+                {
+                    _logger.LogError(ex, "Failed to update inventory level for item {InventoryItemId}", inventoryItemId);
+                    return false;
+                }
+            }
         }
+
+        return false;
     }
 
     public async Task<ShopifyProductListResponse?> GetProductsAsync(

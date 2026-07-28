@@ -297,6 +297,11 @@ public class ShopifySyncAppService : IShopifySyncService
                         await _shopifyClient.UpdateInventoryLevelAsync(
                             variant.InventoryItemId, locationId, stockItem.QuantityOnHand, ct);
                         pushed++;
+
+                        // Shopify's REST admin API sustains ~2 req/sec - firing the whole catalog
+                        // back to back blew through that instantly and turned into a wall of 429s
+                        // (confirmed live: ~300 requests in under 3 seconds, nearly all rejected).
+                        await Task.Delay(500, ct);
                     }
                 }
                 catch (Exception ex)
