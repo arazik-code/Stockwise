@@ -10,7 +10,9 @@ import ProductVariantsModal from '../components/pos/ProductVariantsModal'
 import ClientLookup from '../components/loyalty/ClientLookup'
 import ClientRegistration from '../components/loyalty/ClientRegistration'
 import LoyaltyDisplay from '../components/loyalty/LoyaltyDisplay'
+import CashDrawerModal from '../components/pos/CashDrawerModal'
 import { useCartStore } from '../store/cartStore'
+import { useAuthStore } from '../store/authStore'
 import { useProducts } from '../hooks/useProducts'
 import { useSignalR } from '../hooks/useSignalR'
 import { productsApi } from '../api/products'
@@ -23,10 +25,12 @@ import type { Product, ProductVariant } from '../types/product'
 export default function PosPage() {
   const { t } = useTranslation()
   const { products, variants, loading, loadProducts, searchProducts } = useProducts()
+  const isAdmin = useAuthStore((s) => s.user?.role === 'Admin')
   const [showCheckout, setShowCheckout] = useState(false)
   const [showExchange, setShowExchange] = useState(false)
   const [showClientLookup, setShowClientLookup] = useState(false)
   const [showRegistration, setShowRegistration] = useState(false)
+  const [showCashDrawer, setShowCashDrawer] = useState(false)
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
   const [registrationPhone, setRegistrationPhone] = useState('')
   const [loyaltyClient, setLoyaltyClient] = useState<Client | null>(null)
@@ -69,6 +73,19 @@ export default function PosPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // The product-variants modal owns the keyboard while it's open (it has its own Escape handler)
       if (scannedProduct) return
+
+      // Hidden admin shortcut - works even while a scanner/search input is focused, since a
+      // cashier could be mid-scan when the owner needs to record a cash movement. Silently does
+      // nothing for non-admins - not just disabled, genuinely invisible.
+      if (isAdmin && e.ctrlKey && e.key.toLowerCase() === 'g' && !showCashDrawer) {
+        e.preventDefault()
+        e.stopPropagation()
+        setShowCashDrawer(true)
+        return
+      }
+
+      // The cash-drawer modal owns the keyboard while it's open (it has its own Escape/Enter handling)
+      if (showCashDrawer) return
 
       // Don't trigger when typing in inputs (but allow Escape to blur)
       const tag = (e.target as HTMLElement)?.tagName
@@ -124,7 +141,7 @@ export default function PosPage() {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [loyaltyClient, loyaltyEnabled, itemCount, showCheckout, showExchange, showClientLookup, showRegistration, scannedProduct, clearCart])
+  }, [loyaltyClient, loyaltyEnabled, itemCount, showCheckout, showExchange, showClientLookup, showRegistration, showCashDrawer, scannedProduct, isAdmin, clearCart])
 
   const { loyaltyDiscount, pointsToRedeem } = useMemo(() => {
     if (!loyaltyClient || !loyaltyEnabled || isLiquidationCart || !loyaltySettings.enabled) {
@@ -337,6 +354,8 @@ export default function PosPage() {
           onSelectVariant={handleSelectScannedVariant}
         />
       )}
+
+      {showCashDrawer && <CashDrawerModal onClose={() => setShowCashDrawer(false)} />}
     </div>
   )
 }

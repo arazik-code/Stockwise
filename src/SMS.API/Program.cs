@@ -37,6 +37,7 @@ builder.Services.AddScoped<IOzonExpressService, OzonExpressAppService>();
 builder.Services.AddScoped<ICodLedgerService, CodLedgerAppService>();
 builder.Services.AddScoped<ICityResolverService, CityResolverService>();
 builder.Services.AddScoped<IOrderConfirmationService, OrderConfirmationAppService>();
+builder.Services.AddScoped<ICashDrawerService, CashDrawerService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ThermalPrinterService>();
 builder.Services.AddScoped<ReportPdfService>();

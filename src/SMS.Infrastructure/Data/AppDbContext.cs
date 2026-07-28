@@ -42,6 +42,7 @@ public class AppDbContext : DbContext
     public DbSet<OrderConfirmationAttempt> OrderConfirmationAttempts => Set<OrderConfirmationAttempt>();
     public DbSet<OzonCity> OzonCities => Set<OzonCity>();
     public DbSet<OzonDeliveryNote> OzonDeliveryNotes => Set<OzonDeliveryNote>();
+    public DbSet<CashDrawerMovement> CashDrawerMovements => Set<CashDrawerMovement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
