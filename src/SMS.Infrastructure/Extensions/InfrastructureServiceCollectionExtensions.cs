@@ -43,6 +43,12 @@ public static class InfrastructureServiceCollectionExtensions
         var shopifySection = configuration.GetSection("Shopify");
         services.Configure<ShopifyOptions>(shopifySection);
 
+        // Registered unconditionally: SaleAppService always enqueues on a sale, and the worker
+        // itself reports (loudly) when Shopify isn't configured rather than the sale path having
+        // to know or care.
+        services.AddSingleton<IInventoryPushQueue, InventoryPushQueue>();
+        services.AddHostedService<InventoryPushService>();
+
         var shopifyOptions = shopifySection.Get<ShopifyOptions>();
         var hasCredentials = shopifyOptions is not null &&
             (!string.IsNullOrEmpty(shopifyOptions.AccessToken) ||

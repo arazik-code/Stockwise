@@ -27,6 +27,7 @@ import OnlineDeliveryPage from './pages/online/OnlineDeliveryPage'
 import OnlineFinancePage from './pages/online/OnlineFinancePage'
 import OnlineConfirmationPage from './pages/online/OnlineConfirmationPage'
 import OnlineSyncPage from './pages/online/OnlineSyncPage'
+import OnlineLinkPage from './pages/online/OnlineLinkPage'
 import OnlineSettingsPage from './pages/online/OnlineSettingsPage'
 
 export default function App() {
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="/online/finance" element={<OnlineFinancePage />} />
               <Route path="/online/confirmation" element={<OnlineConfirmationPage />} />
               <Route path="/online/sync" element={<OnlineSyncPage />} />
+              <Route path="/online/link" element={<OnlineLinkPage />} />
               <Route path="/online/settings" element={<OnlineSettingsPage />} />
             </Route>
           </Route>

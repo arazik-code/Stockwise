@@ -107,6 +107,13 @@ public class ShopifyApiClient : IShopifyApiClient
         return await GetOrLogAsync<ShopifyOrderListResponse>(url, ct);
     }
 
+    public async Task<ShopifyVariantItem?> GetVariantAsync(long shopifyVariantId, CancellationToken ct = default)
+    {
+        var url = $"/admin/api/{_options.ApiVersion}/variants/{shopifyVariantId}.json";
+        var response = await GetOrLogAsync<ShopifyVariantResponse>(url, ct);
+        return response?.Variant;
+    }
+
     public async Task<ShopifyLocationListResponse?> GetLocationsAsync(CancellationToken ct = default)
     {
         var url = $"/admin/api/{_options.ApiVersion}/locations.json";

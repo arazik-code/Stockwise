@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 
-const ONLINE_ROUTES = ['/online', '/online/orders', '/online/confirmation', '/online/products', '/online/clients', '/online/crm', '/online/delivery', '/online/finance', '/online/sync']
+const ONLINE_ROUTES = ['/online', '/online/orders', '/online/confirmation', '/online/products', '/online/clients', '/online/crm', '/online/delivery', '/online/finance', '/online/sync', '/online/link']
 
 const ROLE_ROUTES: Record<string, string[]> = {
   Admin: ['/', '/pos', '/products', '/fournisseurs', '/invoices', '/stock', '/sales', '/reports', '/settings', '/printer', '/refunds', '/clients', '/invoice-designer', '/receipt-designer', ...ONLINE_ROUTES, '/online/settings'],

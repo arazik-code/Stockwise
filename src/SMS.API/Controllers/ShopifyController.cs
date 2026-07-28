@@ -12,11 +12,38 @@ public class ShopifyController : ControllerBase
 {
     private readonly IShopifySyncService _syncService;
     private readonly IOnlineOrderService _onlineOrderService;
+    private readonly IShopifyInventoryPusher _inventoryPusher;
 
-    public ShopifyController(IShopifySyncService syncService, IOnlineOrderService onlineOrderService)
+    public ShopifyController(
+        IShopifySyncService syncService,
+        IOnlineOrderService onlineOrderService,
+        IShopifyInventoryPusher inventoryPusher)
     {
         _syncService = syncService;
         _onlineOrderService = onlineOrderService;
+        _inventoryPusher = inventoryPusher;
+    }
+
+    /// <summary>
+    /// Pushes one variant's current stock to Shopify synchronously and reports exactly what
+    /// happened. Exists because this path used to fail silently - now it is directly testable
+    /// from the UI instead of only being observable by comparing Shopify by hand afterwards.
+    /// </summary>
+    [HttpPost("inventory/push/{productVariantId:int}")]
+    [Authorize(Roles = "Admin,StockManager")]
+    public async Task<IActionResult> PushInventory(int productVariantId, CancellationToken ct)
+    {
+        var result = await _inventoryPusher.PushVariantAsync(productVariantId, ct);
+        return Ok(new
+        {
+            result.ProductVariantId,
+            result.Success,
+            Outcome = result.Outcome.ToString(),
+            result.Message,
+            result.ShopifyVariantId,
+            result.InventoryItemId,
+            result.QuantityPushed
+        });
     }
 
     [HttpGet("orders")]

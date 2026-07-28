@@ -38,6 +38,8 @@ builder.Services.AddScoped<ICodLedgerService, CodLedgerAppService>();
 builder.Services.AddScoped<ICityResolverService, CityResolverService>();
 builder.Services.AddScoped<IOrderConfirmationService, OrderConfirmationAppService>();
 builder.Services.AddScoped<ICashDrawerService, CashDrawerService>();
+builder.Services.AddScoped<IShopifyInventoryPusher, ShopifyInventoryPusher>();
+builder.Services.AddScoped<IShopifyLinkService, ShopifyLinkService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ThermalPrinterService>();
 builder.Services.AddScoped<ReportPdfService>();

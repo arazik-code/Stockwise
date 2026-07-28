@@ -1311,7 +1311,9 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("ColorId");
 
-                    b.HasIndex("ShopifyVariantId");
+                    b.HasIndex("ShopifyVariantId")
+                        .IsUnique()
+                        .HasFilter("\"ShopifyVariantId\" IS NOT NULL");
 
                     b.HasIndex("SizeId");
 

@@ -12,6 +12,8 @@ public record ShopifyVariantItem(
     string? Barcode = null, string? Option1 = null, string? Option2 = null, string? Option3 = null,
     int? InventoryQuantity = null, long? ImageId = null);
 
+public record ShopifyVariantResponse(ShopifyVariantItem Variant);
+
 public record ShopifyImageItem(long Id, string Src, int Position);
 public record ShopifyOptionItem(string Name, int Position, List<string> Values);
 

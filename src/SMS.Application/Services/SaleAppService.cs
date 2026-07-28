@@ -20,7 +20,7 @@ public class SaleAppService : ISaleService
     private readonly ShopifyOptions _shopifyOptions;
     private readonly ILogger<SaleAppService> _logger;
     private readonly LoyaltySettings _loyaltySettings;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IInventoryPushQueue _pushQueue;
 
     public SaleAppService(
         IUnitOfWork unitOfWork,
@@ -28,7 +28,7 @@ public class SaleAppService : ISaleService
         IOptions<ShopifyOptions> shopifyOptions,
         IOptions<LoyaltySettings> loyaltySettings,
         ILogger<SaleAppService> logger,
-        IServiceScopeFactory scopeFactory,
+        IInventoryPushQueue pushQueue,
         IShopifyApiClient? shopifyClient = null)
     {
         _unitOfWork = unitOfWork;
@@ -36,7 +36,7 @@ public class SaleAppService : ISaleService
         _shopifyOptions = shopifyOptions.Value;
         _loyaltySettings = loyaltySettings.Value;
         _logger = logger;
-        _scopeFactory = scopeFactory;
+        _pushQueue = pushQueue;
         _shopifyClient = shopifyClient;
     }
 
@@ -209,13 +209,13 @@ public class SaleAppService : ISaleService
                 }
             }
 
-            // Fire-and-forget, deliberately not passed this request's ct or _unitOfWork: this keeps
-            // running after the HTTP response is sent and the request's DI scope (and its DbContext)
-            // is disposed, so it needs its own scope and can't depend on anything request-scoped.
-            var shopifyPushBatch = stockUpdates
-                .Select(u => (u.Variant.ShopifyVariantId, u.Stock.QuantityOnHand))
-                .ToList();
-            _ = PushInventoryToShopifyAsync(shopifyPushBatch);
+            // Hand off to the background worker. Synchronous, cannot fail, cannot be cancelled by
+            // this request finishing - unlike the previous fire-and-forget task, which captured this
+            // request's DbContext/CancellationToken and therefore died silently on every sale.
+            foreach (var (productVariantId, _, _, _) in stockUpdates)
+            {
+                _pushQueue.Enqueue(productVariantId);
+            }
 
             return MapToDto(sale);
         }
@@ -413,51 +413,6 @@ public class SaleAppService : ISaleService
         };
 
         return report;
-    }
-
-    private async Task PushInventoryToShopifyAsync(List<(long? ShopifyVariantId, int QuantityOnHand)> updates)
-    {
-        if (_shopifyClient is null) return;
-
-        if (!long.TryParse(_shopifyOptions.LocationId, out var locationId))
-        {
-            _logger.LogDebug("Shopify LocationId not configured, skipping inventory push");
-            return;
-        }
-
-        // This runs after the HTTP response is already sent, so the request's DbContext (and
-        // possibly its CancellationToken) are gone - resolve everything fresh from its own scope.
-        // A sale used to silently never reach Shopify because this used to reuse the request's
-        // now-disposed IUnitOfWork, throwing ObjectDisposedException with nothing ever logged
-        // (the request that owned the logger's Activity/scope had already completed).
-        using var scope = _scopeFactory.CreateScope();
-        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var shopifyClient = scope.ServiceProvider.GetRequiredService<IShopifyApiClient>();
-
-        foreach (var (shopifyVariantId, quantityOnHand) in updates)
-        {
-            if (shopifyVariantId is not long svid || svid == 0) continue;
-
-            try
-            {
-                // Match via ProductVariant.ShopifyVariantId, not ShopifyProduct.LocalProductId - the
-                // latter is never populated (product/variant matching for Shopify sync always goes
-                // through ShopifyVariantId), so matching on it silently dropped every push.
-                var shopifyProducts = await unitOfWork.FindAsync<Domain.Entities.ShopifyProduct>(
-                    sp => sp.ShopifyVariantId == svid,
-                    CancellationToken.None);
-
-                var shopifyProduct = shopifyProducts.FirstOrDefault();
-                if (shopifyProduct is null || shopifyProduct.ShopifyInventoryItemId == 0) continue;
-
-                await shopifyClient.UpdateInventoryLevelAsync(
-                    shopifyProduct.ShopifyInventoryItemId, locationId, quantityOnHand, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to push inventory to Shopify for ShopifyVariantId {ShopifyVariantId}", svid);
-            }
-        }
     }
 
     private static SaleDto MapToDto(Sale s) => new()

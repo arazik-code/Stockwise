@@ -33,7 +33,7 @@ public class SaleAppServiceTests
 
         var shopifyOptions = Options.Create(new ShopifyOptions());
         var loyaltyOptions = Options.Create(new LoyaltySettings());
-        _service = new SaleAppService(_unitOfWorkMock.Object, _notifierMock.Object, shopifyOptions, loyaltyOptions, new Mock<ILogger<SaleAppService>>().Object, new Mock<IServiceScopeFactory>().Object);
+        _service = new SaleAppService(_unitOfWorkMock.Object, _notifierMock.Object, shopifyOptions, loyaltyOptions, new Mock<ILogger<SaleAppService>>().Object, new Mock<IInventoryPushQueue>().Object);
     }
 
     [Fact]

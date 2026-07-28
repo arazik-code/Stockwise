@@ -17,7 +17,12 @@ public class ProductVariantConfiguration : IEntityTypeConfiguration<ProductVaria
         builder.HasIndex(v => v.Sku).IsUnique();
         builder.HasIndex(v => v.Barcode);
         builder.HasIndex(v => new { v.ProductId, v.ColorId, v.SizeId }).IsUnique();
-        builder.HasIndex(v => v.ShopifyVariantId);
+        // Unique, but only over rows that actually carry a link - a partial index so the ~19 local-only
+        // variants (all NULL) don't collide with each other. Two local variants pointing at the same
+        // Shopify variant would have them overwrite each other's stock on the storefront at random.
+        builder.HasIndex(v => v.ShopifyVariantId)
+            .IsUnique()
+            .HasFilter("\"ShopifyVariantId\" IS NOT NULL");
 
         builder.HasOne(v => v.Product)
             .WithMany(p => p.Variants)
