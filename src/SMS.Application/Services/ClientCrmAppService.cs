@@ -105,8 +105,12 @@ public class ClientCrmAppService : IClientCrmService
             .ToListAsync(ct);
 
         var onlineProductRows = await _unitOfWork.Set<OnlineOrderItem>()
-            .Where(i => !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
-            .GroupBy(i => i.ProductVariant.ProductId)
+            // ProductVariantId is nullable (an item's variant can be deleted/unlinked after the order
+            // was placed) - excluding those here keeps the LEFT JOIN into ProductVariant an effective
+            // INNER JOIN, since projecting a non-nullable dependent property through a null navigation
+            // otherwise throws "Nullable object must have a value" while EF materializes the row.
+            .Where(i => i.ProductVariantId != null && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
+            .GroupBy(i => i.ProductVariant!.ProductId)
             .Select(g => new { ProductId = g.Key, Units = g.Sum(i => i.Quantity), Revenue = g.Sum(i => i.LineTotal) })
             .ToListAsync(ct);
 
@@ -134,20 +138,21 @@ public class ClientCrmAppService : IClientCrmService
         // Units + revenue + distinct buyers per category.
         var saleCatRows = await _unitOfWork.Set<SaleItem>()
             .Where(si => si.Sale.ClientId != null)
-            .Select(si => new { Category = si.ProductVariant.Product.Category.Name, si.Quantity, si.LineTotal, ClientId = si.Sale.ClientId!.Value })
+            .Select(si => new { Category = si.ProductVariant.Product.Category.Name, si.Quantity, si.LineTotal, ClientId = si.Sale.ClientId })
             .ToListAsync(ct);
 
         var onlineCatRows = await _unitOfWork.Set<OnlineOrderItem>()
-            .Where(i => i.OnlineOrder.ClientId != null && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
-            .Select(i => new { Category = i.ProductVariant.Product.Category.Name, i.Quantity, i.LineTotal, ClientId = i.OnlineOrder.ClientId!.Value })
+            .Where(i => i.ProductVariantId != null && i.OnlineOrder.ClientId != null && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
+            .Select(i => new { Category = i.ProductVariant!.Product.Category.Name, i.Quantity, i.LineTotal, ClientId = i.OnlineOrder.ClientId })
             .ToListAsync(ct);
 
         var catAgg = new Dictionary<string, (int Units, decimal Revenue, HashSet<int> Buyers)>();
         foreach (var r in saleCatRows.Concat(onlineCatRows))
         {
+            if (r.ClientId is null) continue;
             if (!catAgg.TryGetValue(r.Category, out var cur))
                 cur = (0, 0m, []);
-            cur.Buyers.Add(r.ClientId);
+            cur.Buyers.Add(r.ClientId.Value);
             catAgg[r.Category] = (cur.Units + r.Quantity, cur.Revenue + r.LineTotal, cur.Buyers);
         }
 
@@ -202,13 +207,14 @@ public class ClientCrmAppService : IClientCrmService
         if (onlyClientId.HasValue) saleQuery = saleQuery.Where(s => s.ClientId == onlyClientId.Value);
 
         var saleAgg = await saleQuery
-            .GroupBy(s => s.ClientId!.Value)
+            .GroupBy(s => s.ClientId)
             .Select(g => new { ClientId = g.Key, Spent = g.Sum(s => s.TotalAmount), Orders = g.Count(), Last = g.Max(s => s.CreatedAt) })
+            .Where(g => g.ClientId != null)
             .ToListAsync(ct);
 
         foreach (var row in saleAgg)
         {
-            if (!aggregates.TryGetValue(row.ClientId, out var agg)) continue;
+            if (row.ClientId is null || !aggregates.TryGetValue(row.ClientId.Value, out var agg)) continue;
             agg.TotalSpent += row.Spent;
             agg.OrderCount += row.Orders;
             if (agg.LastOrderAt is null || row.Last > agg.LastOrderAt) agg.LastOrderAt = row.Last;
@@ -218,14 +224,18 @@ public class ClientCrmAppService : IClientCrmService
             .Where(o => o.ClientId != null && !ExcludedOnlineStatuses.Contains(o.Status));
         if (onlyClientId.HasValue) onlineQuery = onlineQuery.Where(o => o.ClientId == onlyClientId.Value);
 
+        // Group by the nullable key directly rather than forcing `.Value` inside the translated query -
+        // EF's SQL translation doesn't reliably keep a `!= null` filter and a `!.Value` projection of the
+        // same nullable column in sync for every row shape, which was throwing "Nullable object must have
+        // a value" for real orders and turning this whole endpoint into a 500. Unwrap safely in C# instead.
         var onlineAgg = await onlineQuery
-            .GroupBy(o => o.ClientId!.Value)
+            .GroupBy(o => o.ClientId)
             .Select(g => new { ClientId = g.Key, Spent = g.Sum(o => o.TotalAmount), Orders = g.Count(), Last = g.Max(o => o.CreatedAt) })
             .ToListAsync(ct);
 
         foreach (var row in onlineAgg)
         {
-            if (!aggregates.TryGetValue(row.ClientId, out var agg)) continue;
+            if (row.ClientId is null || !aggregates.TryGetValue(row.ClientId.Value, out var agg)) continue;
             agg.TotalSpent += row.Spent;
             agg.OrderCount += row.Orders;
             if (agg.LastOrderAt is null || row.Last > agg.LastOrderAt) agg.LastOrderAt = row.Last;
@@ -237,7 +247,7 @@ public class ClientCrmAppService : IClientCrmService
         var saleCategoryRows = await saleCategoryQuery
             .Select(si => new
             {
-                ClientId = si.Sale.ClientId!.Value,
+                ClientId = si.Sale.ClientId,
                 CategoryName = si.ProductVariant.Product.Category.Name,
                 si.ProductVariant.ProductId,
                 si.LineTotal,
@@ -247,21 +257,21 @@ public class ClientCrmAppService : IClientCrmService
 
         foreach (var row in saleCategoryRows)
         {
-            if (!aggregates.TryGetValue(row.ClientId, out var agg)) continue;
+            if (row.ClientId is null || !aggregates.TryGetValue(row.ClientId.Value, out var agg)) continue;
             agg.PurchasedProductIds.Add(row.ProductId);
             var current = agg.CategoryTotals.GetValueOrDefault(row.CategoryName);
             agg.CategoryTotals[row.CategoryName] = (current.Amount + row.LineTotal, current.Units + row.Quantity);
         }
 
         var onlineCategoryQuery = _unitOfWork.Set<OnlineOrderItem>()
-            .Where(i => i.OnlineOrder.ClientId != null && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status));
+            .Where(i => i.ProductVariantId != null && i.OnlineOrder.ClientId != null && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status));
         if (onlyClientId.HasValue) onlineCategoryQuery = onlineCategoryQuery.Where(i => i.OnlineOrder.ClientId == onlyClientId.Value);
 
         var onlineCategoryRows = await onlineCategoryQuery
             .Select(i => new
             {
-                ClientId = i.OnlineOrder.ClientId!.Value,
-                CategoryName = i.ProductVariant.Product.Category.Name,
+                ClientId = i.OnlineOrder.ClientId,
+                CategoryName = i.ProductVariant!.Product.Category.Name,
                 i.ProductVariant.ProductId,
                 i.LineTotal,
                 i.Quantity
@@ -270,7 +280,7 @@ public class ClientCrmAppService : IClientCrmService
 
         foreach (var row in onlineCategoryRows)
         {
-            if (!aggregates.TryGetValue(row.ClientId, out var agg)) continue;
+            if (row.ClientId is null || !aggregates.TryGetValue(row.ClientId.Value, out var agg)) continue;
             agg.PurchasedProductIds.Add(row.ProductId);
             var current = agg.CategoryTotals.GetValueOrDefault(row.CategoryName);
             agg.CategoryTotals[row.CategoryName] = (current.Amount + row.LineTotal, current.Units + row.Quantity);
@@ -341,10 +351,10 @@ public class ClientCrmAppService : IClientCrmService
             .ToListAsync(ct);
 
         var onlineHistory = await _unitOfWork.Set<OnlineOrderItem>()
-            .Where(i => i.OnlineOrder.ClientId == clientId && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
+            .Where(i => i.ProductVariantId != null && i.OnlineOrder.ClientId == clientId && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
             .Select(i => new ClientPurchaseHistoryItemDto(
                 i.OnlineOrder.CreatedAt, "En ligne", i.OnlineOrder.OrderNumber,
-                i.ProductVariant.Product.Name, i.ProductVariant.Sku,
+                i.ProductVariant!.Product.Name, i.ProductVariant.Sku,
                 i.ProductVariant.Color.Name, i.ProductVariant.Size.Value,
                 i.Quantity, i.UnitPrice, i.LineTotal))
             .ToListAsync(ct);
@@ -378,8 +388,8 @@ public class ClientCrmAppService : IClientCrmService
             .ToListAsync(ct);
 
         var onlineUnitsSoldByProduct = await _unitOfWork.Set<OnlineOrderItem>()
-            .Where(i => candidateIds.Contains(i.ProductVariant.ProductId) && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
-            .GroupBy(i => i.ProductVariant.ProductId)
+            .Where(i => i.ProductVariantId != null && candidateIds.Contains(i.ProductVariant!.ProductId) && !ExcludedOnlineStatuses.Contains(i.OnlineOrder.Status))
+            .GroupBy(i => i.ProductVariant!.ProductId)
             .Select(g => new { ProductId = g.Key, Units = g.Sum(i => i.Quantity) })
             .ToListAsync(ct);
 
