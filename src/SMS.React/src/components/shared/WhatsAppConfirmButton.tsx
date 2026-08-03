@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { openWhatsApp, hasWhatsApp, buildOrderConfirmationMessage, type WhatsAppLang } from '../../utils/whatsapp'
+import { useState, useEffect } from 'react'
+import { openWhatsApp, hasWhatsApp, renderWhatsAppTemplate } from '../../utils/whatsapp'
+import { whatsappTemplatesApi, type WhatsAppTemplate } from '../../api/whatsappTemplates'
 import { showToast } from './Toast'
 import type { OnlineOrder } from '../../types/onlineOrder'
 
@@ -9,24 +10,40 @@ export const WhatsAppIcon = ({ className = 'w-4 h-4' }: { className?: string }) 
   </svg>
 )
 
-function sendOrderConfirmation(order: OnlineOrder, lang: WhatsAppLang) {
-  const ok = openWhatsApp(order.customerPhone, buildOrderConfirmationMessage({
+function sendWithTemplate(order: OnlineOrder, template: WhatsAppTemplate) {
+  const message = renderWhatsAppTemplate(template.body, {
     orderNumber: order.orderNumber,
     customerName: order.customerName,
     items: order.items.map((i) => ({ productName: i.productName, sizeValue: i.sizeValue, colorName: i.colorName, quantity: i.quantity })),
     total: order.totalAmount,
     city: order.city,
     addressLine: order.addressLine,
-  }, lang))
+  })
+  const ok = openWhatsApp(order.customerPhone, message)
   if (!ok) showToast('Aucun numéro de téléphone valide pour ce client', 'error')
 }
 
-/** Green WhatsApp button that opens a small language picker (Français / Darija) before launching the chat. */
+/**
+ * Green WhatsApp button offering every saved template (see /online/whatsapp-templates) before
+ * launching the chat. Templates are user-editable and saveable - this used to be two hardcoded
+ * FR/Darija messages baked into the frontend with no way to change the wording.
+ */
 export function WhatsAppConfirmMenu({ order, compact = false }: { order: OnlineOrder; compact?: boolean }) {
   const [open, setOpen] = useState(false)
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!open || loaded) return
+    whatsappTemplatesApi.getAll()
+      .then(setTemplates)
+      .catch(() => showToast('Impossible de charger les modèles WhatsApp', 'error'))
+      .finally(() => setLoaded(true))
+  }, [open, loaded])
+
   if (!hasWhatsApp(order.customerPhone)) return null
 
-  const pick = (lang: WhatsAppLang) => { setOpen(false); sendOrderConfirmation(order, lang) }
+  const pick = (template: WhatsAppTemplate) => { setOpen(false); sendWithTemplate(order, template) }
 
   return (
     <div className="relative inline-block">
@@ -49,9 +66,24 @@ export function WhatsAppConfirmMenu({ order, compact = false }: { order: OnlineO
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
-          <div className="absolute right-0 z-20 mt-1 w-40 bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden">
-            <button onClick={(e) => { e.stopPropagation(); pick('darija') }} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 text-slate-700">🇲🇦 Darija</button>
-            <button onClick={(e) => { e.stopPropagation(); pick('fr') }} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 text-slate-700">🇫🇷 Français</button>
+          <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden">
+            {!loaded ? (
+              <div className="px-3 py-3 text-xs text-slate-400 text-center">Chargement...</div>
+            ) : templates.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-slate-400 text-center">Aucun modèle enregistré</div>
+            ) : (
+              templates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={(e) => { e.stopPropagation(); pick(t) }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 text-slate-700 truncate"
+                  title={t.name}
+                >
+                  {t.isDefault && <span className="text-amber-500 mr-1">★</span>}
+                  {t.name}
+                </button>
+              ))
+            )}
           </div>
         </>
       )}

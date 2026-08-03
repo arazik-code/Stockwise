@@ -1,3 +1,5 @@
+import { printHtml } from './printBridge'
+
 export interface PackingSlipData {
   orderNumber: string
   channel: string
@@ -104,8 +106,5 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#000;line-heig
 
 export function printPackingSlip(data: PackingSlipData): void {
   const html = buildHtml(data)
-  const w = window.open('', '_blank', 'width=800,height=700')
-  if (!w) return
-  w.document.write(html)
-  w.document.close()
+  printHtml(html)
 }

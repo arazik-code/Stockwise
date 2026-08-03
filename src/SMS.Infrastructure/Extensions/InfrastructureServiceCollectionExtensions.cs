@@ -86,6 +86,13 @@ public static class InfrastructureServiceCollectionExtensions
         // rest of the app works without it (and the service treats a null client as "not configured").
         var ozonSection = configuration.GetSection("OzonExpress");
         services.Configure<OzonExpressOptions>(ozonSection);
+
+        // Registered unconditionally, same as the Shopify inventory queue: OzonExpressAppService
+        // always takes a dependency on this, and the worker itself is a no-op (empty queue) when
+        // Ozon isn't configured.
+        services.AddSingleton<IOzonBlQueue, OzonBlQueue>();
+        services.AddHostedService<OzonAutoBlService>();
+
         var ozonOptions = ozonSection.Get<OzonExpressOptions>();
         if (ozonOptions is not null && !string.IsNullOrWhiteSpace(ozonOptions.CustomerId) && !string.IsNullOrWhiteSpace(ozonOptions.ApiKey))
         {

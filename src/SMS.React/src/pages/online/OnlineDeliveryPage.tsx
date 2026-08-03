@@ -5,7 +5,7 @@ import { showToast } from '../../components/shared/Toast'
 import CreateOzonParcelModal from '../../components/ozon/CreateOzonParcelModal'
 import OzonTrackingModal from '../../components/ozon/OzonTrackingModal'
 import {
-  ozonApi, OZON_STATUS_META, ozonDeliveryNotePdfUrl,
+  ozonApi, OZON_STATUS_META, ozonDeliveryNoteLabel10x10Url,
   type OzonDashboard, type OzonParcel, type OzonParcelStatus,
   type OzonDeliveryNote, type OzonConfigStatus,
 } from '../../api/ozon'
@@ -271,8 +271,8 @@ export default function OnlineDeliveryPage() {
                               <td className="px-3 py-2.5 text-sm text-slate-500 whitespace-nowrap">{formatDateTime(p.createdAt)}</td>
                               <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                                 {p.deliveryNoteRef ? (
-                                  <a href={ozonDeliveryNotePdfUrl(p.deliveryNoteRef)} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-emerald-600 hover:text-emerald-800" title="Bon de Livraison OzonExpress (PDF)">
-                                    🖨 PDF
+                                  <a href={ozonDeliveryNoteLabel10x10Url(p.deliveryNoteRef)} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-emerald-600 hover:text-emerald-800" title="Étiquette OzonExpress (code-barres + QR, à coller sur le colis)">
+                                    🖨 Étiquette
                                   </a>
                                 ) : (
                                   <span className="text-xs text-slate-300">—</span>

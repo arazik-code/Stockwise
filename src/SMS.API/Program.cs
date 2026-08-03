@@ -40,6 +40,7 @@ builder.Services.AddScoped<IOrderConfirmationService, OrderConfirmationAppServic
 builder.Services.AddScoped<ICashDrawerService, CashDrawerService>();
 builder.Services.AddScoped<IShopifyInventoryPusher, ShopifyInventoryPusher>();
 builder.Services.AddScoped<IShopifyLinkService, ShopifyLinkService>();
+builder.Services.AddScoped<IWhatsAppTemplateService, WhatsAppTemplateAppService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ThermalPrinterService>();
 builder.Services.AddScoped<ReportPdfService>();
@@ -53,7 +54,9 @@ builder.Services.Configure<ReceiptTemplateSettings>(builder.Configuration.GetSec
 
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductValidator>();
 
-var jwtSecret = builder.Configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("Jwt:SecretKey is not configured");
+var jwtSecret = builder.Configuration["Jwt:SecretKey"]
+    ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+    ?? throw new InvalidOperationException("Jwt:SecretKey is not configured. Set it in appsettings.json or via JWT_SECRET_KEY environment variable.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "StockManagementSystem";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "StockManagementSystem";
 
@@ -78,10 +81,6 @@ builder.Services.AddAuthentication(options =>
 });
 builder.Services.AddAuthorization(options =>
 {
-    // Was implicit-anonymous-by-default: any controller/endpoint that forgot [Authorize]
-    // was silently public. AuthController.Register was one such gap and accepted an
-    // anonymous Role in the body - a full unauthenticated admin-mint path. Now the
-    // default is authenticated, and anonymous access is opt-in via [AllowAnonymous].
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
@@ -94,6 +93,18 @@ builder.Services.AddRateLimiter(options =>
         limiterOptions.PermitLimit = 10;
         limiterOptions.Window = TimeSpan.FromMinutes(5);
         limiterOptions.QueueLimit = 0;
+    });
+    options.AddFixedWindowLimiter("api", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 100;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueLimit = 10;
+    });
+    options.AddFixedWindowLimiter("write", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 30;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueLimit = 5;
     });
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
@@ -137,9 +148,6 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddProblemDetails();
 
-// Every list endpoint here was measured shipping 400KB-1.8MB of uncompressed JSON on every
-// page load (stock, products, online-orders, clients) - this alone cuts that by ~80-90% with
-// zero API/frontend changes, since every client here already accepts gzip/br by default.
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -151,9 +159,6 @@ builder.Services.AddResponseCompression(options =>
 
 builder.Services.AddCors(options =>
 {
-    // Was hardcoded to a specific developer's LAN IP (192.168.1.105). Now driven by
-    // Cors:AllowedOrigins in config (see appsettings.example.json), defaulting to
-    // localhost-only - matching the API now binding to 127.0.0.1 by default too.
     var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
     var defaultOrigins = new[]
     {
@@ -178,11 +183,6 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     if (!app.Environment.IsEnvironment("Testing"))
     {
-        // Was EnsureCreatedAsync() with 14 unapplied EF migrations sitting unused in the repo -
-        // no upgrade path existed for the live database and schema changes were all hand-written
-        // SQL. The live DB has since been stamped with an InitialBaseline migration matching its
-        // actual schema (verified via a full column/type/nullability diff against a prod restore),
-        // so MigrateAsync is now safe: it is a no-op today and applies real migrations going forward.
         var autoMigrate = builder.Configuration.GetValue("Database:AutoMigrate", true);
         if (autoMigrate)
         {
@@ -203,14 +203,13 @@ if (app.Environment.IsDevelopment())
 app.UseResponseCompression();
 
 app.UseCors("ReactSpa");
+
+app.UseSecurityHeaders();
+
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        // Vite content-hashes everything under assets/ (a new hash on every rebuild), so those
-        // files are safe to cache forever - only index.html itself needs to stay no-cache, since
-        // it's what points at the current hashed filenames. This used to be a blanket no-store on
-        // everything, so the ~1MB bundle re-downloaded on every single app launch.
         var isHashedAsset = ctx.File.Name != "index.html" && ctx.Context.Request.Path.StartsWithSegments("/assets");
         if (isHashedAsset)
         {
@@ -227,12 +226,10 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
-app.MapControllers();
-app.MapHub<InventoryHub>("/hubs/inventory");
+app.MapControllers().RequireRateLimiting("api");
+app.MapHub<InventoryHub>("/hubs/inventory").RequireAuthorization();
 app.MapWebhookEndpoints();
 app.MapHealthEndpoints();
-// The SPA shell itself must load before a user can log in - without this the new
-// fallback authorization policy would 401 index.html and nothing could ever render.
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();

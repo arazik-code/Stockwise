@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { clientsApi, type Client } from '../../api/clients'
 import { showToast } from '../shared/Toast'
+import { printHtml } from '../../utils/printBridge'
 
 interface ClientRegistrationProps {
   onRegistered: (client: Client) => void
@@ -53,10 +54,7 @@ export default function ClientRegistration({ onRegistered, onCancel, initialPhon
       color: { dark: '#065f46', light: '#ffffff' },
     })
 
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
-
-    printWindow.document.write(`
+    const html = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -107,8 +105,8 @@ export default function ClientRegistration({ onRegistered, onCancel, initialPhon
           <script>window.onload = function() { window.print(); }</script>
         </body>
       </html>
-    `)
-    printWindow.document.close()
+    `
+    printHtml(html)
   }
 
   const handleSendWhatsApp = () => {

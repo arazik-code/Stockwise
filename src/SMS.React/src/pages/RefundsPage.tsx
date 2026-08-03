@@ -6,6 +6,7 @@ import { refundsApi } from '../api/refunds'
 import { salesApi } from '../api/sales'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency } from '../utils/format'
+import { printHtml } from '../utils/printBridge'
 import { useExchangeStore } from '../store/exchangeStore'
 import type { Sale } from '../types/sale'
 import type {
@@ -577,9 +578,6 @@ export default function RefundsPage() {
   // ── Print receipt ──
 
   const handlePrintReceipt = (refund: Refund) => {
-    const win = window.open('', '_blank')
-    if (!win) return
-
     const returnedRows = refund.items
       .map(
         (item) => `
@@ -605,7 +603,7 @@ export default function RefundsPage() {
             .join('')
         : ''
 
-    win.document.write(`
+    const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -677,8 +675,8 @@ export default function RefundsPage() {
         <script>window.onload = function() { window.print(); }</script>
       </body>
       </html>
-    `)
-    win.document.close()
+    `
+    printHtml(html)
   }
 
   // ── Helpers ──

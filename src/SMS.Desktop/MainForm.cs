@@ -136,7 +136,7 @@ public partial class MainForm : Form
         _webView.CoreWebView2.Navigate($"{_baseUrl}?v={DateTime.Now.Ticks}");
     }
 
-    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
         {
@@ -146,7 +146,7 @@ public partial class MainForm : Form
                 var html = ExtractJsonString(json, "html");
                 if (!string.IsNullOrEmpty(html))
                 {
-                    PrintHtmlSilent(html);
+                    await PrintHtmlSilentAsync(html);
                 }
             }
         }
@@ -166,26 +166,56 @@ public partial class MainForm : Form
         return value;
     }
 
-    private void PrintHtmlSilent(string html)
+    // Was: write the HTML to a temp file and open it with the OS default browser, with a comment
+    // saying "user prints from there". That's not silent printing at all - it pops a whole separate
+    // browser window and needs a manual click, which on a busy POS counter reads as "the printer
+    // doesn't work". This uses a second, invisible WebView2 instance and WebView2's own
+    // PrintToDefaultPrinterAsync, which sends straight to the OS default printer with no dialog.
+    private async Task PrintHtmlSilentAsync(string html)
     {
+        Microsoft.Web.WebView2.WinForms.WebView2? printView = null;
         try
         {
-            var tempFile = Path.Combine(Path.GetTempPath(), $"flexshoes_receipt_{Guid.NewGuid():N}.html");
-            File.WriteAllText(tempFile, html);
-
-            // Open with default browser — user prints from there
-            Process.Start(new ProcessStartInfo
+            printView = new Microsoft.Web.WebView2.WinForms.WebView2
             {
-                FileName = tempFile,
-                UseShellExecute = true
-            });
+                Size = new Size(1, 1),
+                Location = new Point(-2000, -2000),
+                Visible = false
+            };
+            Controls.Add(printView);
 
-            Task.Delay(5000).ContinueWith(_ =>
-            {
-                try { File.Delete(tempFile); } catch { }
-            });
+            await printView.EnsureCoreWebView2Async(_webView.CoreWebView2.Environment);
+
+            var navigated = new TaskCompletionSource();
+            printView.CoreWebView2.NavigationCompleted += (_, _) => navigated.TrySetResult();
+            printView.CoreWebView2.NavigateToString(html);
+
+            var completed = await Task.WhenAny(navigated.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (completed != navigated.Task) return; // navigation never settled - bail out rather than print a blank page
+
+            var settings = printView.CoreWebView2.Environment.CreatePrintSettings();
+            settings.ShouldPrintBackgrounds = true;
+            settings.MarginTop = 0;
+            settings.MarginBottom = 0;
+            settings.MarginLeft = 0;
+            settings.MarginRight = 0;
+
+            // Empty PrinterName means "the OS default printer" - no dialog, no user interaction.
+            await printView.CoreWebView2.PrintAsync(settings);
         }
-        catch { }
+        catch
+        {
+            // Printer offline/misconfigured - nothing sensible to surface from a WebMessage handler.
+            // The user already sees the sale/document complete either way; printing is best-effort.
+        }
+        finally
+        {
+            if (printView is not null)
+            {
+                Controls.Remove(printView);
+                printView.Dispose();
+            }
+        }
     }
 
     private void StartApiProcess()

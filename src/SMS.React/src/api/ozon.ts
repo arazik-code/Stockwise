@@ -166,10 +166,20 @@ export const ozonApi = {
     api.get<{ rawCity: string; orderCount: number }[]>('/ozonexpress/cities/unresolved').then((r) => r.data),
 }
 
-// The real, OzonExpress-branded PDF for a given Bon de Livraison reference — this is what actually
-// gets printed/attached to shipments, replacing any home-grown "Bon de Commande" document.
+// The plain BL manifest - a list of parcels for the courier's own records. NOT what goes on the
+// package (no QR code, no per-parcel layout) - use ozonDeliveryNoteLabel10x10Url for that.
 export const ozonDeliveryNotePdfUrl = (deliveryNoteRef: string) =>
   `https://client.ozoneexpress.ma/pdf-delivery-note?dn-ref=${encodeURIComponent(deliveryNoteRef)}`
+
+// The actual per-parcel shipping label OzonExpress generates when a colis is created: barcode/QR
+// code plus receiver/address/COD info, sized to stick directly on the package. This is what the
+// quick "print" actions on Orders/Colis should open - they were pointing at the plain manifest
+// above instead, which has no QR code and isn't meant to go on a parcel at all.
+export const ozonDeliveryNoteLabel10x10Url = (deliveryNoteRef: string) =>
+  `https://client.ozoneexpress.ma/pdf-delivery-note-tickets-4-4?dn-ref=${encodeURIComponent(deliveryNoteRef)}`
+
+export const ozonDeliveryNoteLabelA4Url = (deliveryNoteRef: string) =>
+  `https://client.ozoneexpress.ma/pdf-delivery-note-tickets?dn-ref=${encodeURIComponent(deliveryNoteRef)}`
 
 export const OZON_STATUS_META: Record<OzonParcelStatus, { label: string; className: string; dot: string }> = {
   New: { label: 'Nouveau', className: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },

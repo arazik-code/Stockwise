@@ -43,6 +43,7 @@ public class AppDbContext : DbContext
     public DbSet<OzonCity> OzonCities => Set<OzonCity>();
     public DbSet<OzonDeliveryNote> OzonDeliveryNotes => Set<OzonDeliveryNote>();
     public DbSet<CashDrawerMovement> CashDrawerMovements => Set<CashDrawerMovement>();
+    public DbSet<WhatsAppTemplate> WhatsAppTemplates => Set<WhatsAppTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

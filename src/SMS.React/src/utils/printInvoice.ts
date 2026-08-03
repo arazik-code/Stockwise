@@ -1,4 +1,5 @@
 import type { InvoiceTemplateConfig } from '../api/clients'
+import { printHtml } from './printBridge'
 
 export interface InvoicePrintData {
   invoiceNumber: string
@@ -224,8 +225,5 @@ ${t.shopWebsite?esc(t.shopWebsite):''}
 
 export function printInvoice(template: InvoiceTemplateConfig, data: InvoicePrintData): void {
   const html = buildHtml(template, data)
-  const w = window.open('', '_blank', 'width=900,height=700')
-  if (!w) return
-  w.document.write(html)
-  w.document.close()
+  printHtml(html)
 }

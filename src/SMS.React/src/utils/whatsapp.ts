@@ -97,6 +97,24 @@ export function buildOrderConfirmationMessage(o: OrderMsgInput, lang: WhatsAppLa
     .join('\n')
 }
 
+// Placeholders available in saved WhatsApp templates (see /online/whatsapp-templates). Kept in
+// sync with the seed templates in WhatsAppTemplateAppService - same tokens either way.
+function replaceToken(text: string, token: string, value: string): string {
+  return text.split(token).join(value)
+}
+
+export function renderWhatsAppTemplate(body: string, o: OrderMsgInput): string {
+  const addr = [o.addressLine, o.city].filter(Boolean).join(', ')
+  let result = body
+  result = replaceToken(result, '{clientName}', o.customerName?.trim() || '')
+  result = replaceToken(result, '{orderNumber}', o.orderNumber)
+  result = replaceToken(result, '{items}', itemsLines(o.items))
+  result = replaceToken(result, '{total}', fmtMad(o.total))
+  result = replaceToken(result, '{address}', addr)
+  result = replaceToken(result, '{storeName}', STORE_NAME)
+  return result
+}
+
 /** Build a light greeting message for contacting a client directly. */
 export function buildClientGreeting(name?: string, lang: WhatsAppLang = 'fr'): string {
   const n = name?.trim() || ''

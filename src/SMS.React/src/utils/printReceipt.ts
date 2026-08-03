@@ -1,6 +1,7 @@
 import QRCode from 'qrcode'
 import type { CartItem } from '../store/cartStore'
 import type { ReceiptTemplateConfig } from '../api/clients'
+import { printHtml } from './printBridge'
 
 export interface ReceiptData {
   saleNumber: string
@@ -503,6 +504,7 @@ async function buildReceiptHtml(data: ReceiptData, config: ReceiptTemplateConfig
     ${termsHtml}
     ${receiptQrHtml}
   </div>
+  <script>window.onload = function() { window.print(); }</script>
 </body>
 </html>`
 }
@@ -527,32 +529,7 @@ async function getTemplate(): Promise<ReceiptTemplateConfig> {
 export async function printReceipt(data: ReceiptData, template?: ReceiptTemplateConfig): Promise<void> {
   const config = template || await getTemplate()
   const html = await buildReceiptHtml(data, config)
-
-  const iframe = document.createElement('iframe')
-  iframe.style.position = 'fixed'
-  iframe.style.left = '-9999px'
-  iframe.style.top = '-9999px'
-  iframe.style.width = '80mm'
-  iframe.style.height = '1px'
-  iframe.style.border = 'none'
-  document.body.appendChild(iframe)
-
-  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
-  if (!iframeDoc) {
-    document.body.removeChild(iframe)
-    return
-  }
-
-  iframeDoc.open()
-  iframeDoc.write(html)
-  iframeDoc.close()
-
-  iframe.onload = () => {
-    setTimeout(() => {
-      iframe.contentWindow?.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
-    }, 300)
-  }
+  printHtml(html)
 }
 
 export function buildReceiptData(opts: {
@@ -704,29 +681,5 @@ export function printExchangeReceipt(data: ReceiptData, exchange: ExchangeReceip
 <script>window.onload = function() { window.print(); }</script>
 </body></html>`
 
-  const iframe = document.createElement('iframe')
-  iframe.style.position = 'fixed'
-  iframe.style.left = '-9999px'
-  iframe.style.top = '-9999px'
-  iframe.style.width = '80mm'
-  iframe.style.height = '1px'
-  iframe.style.border = 'none'
-  document.body.appendChild(iframe)
-
-  const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document
-  if (!iframeDoc) {
-    document.body.removeChild(iframe)
-    return
-  }
-
-  iframeDoc.open()
-  iframeDoc.write(html)
-  iframeDoc.close()
-
-  iframe.onload = () => {
-    setTimeout(() => {
-      iframe.contentWindow?.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
-    }, 300)
-  }
+  printHtml(html)
 }

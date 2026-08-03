@@ -20,5 +20,12 @@ public interface IOzonExpressService
     Task<OzonDeliveryNoteResultDto> CreateDeliveryNoteAsync(CreateDeliveryNoteRequest request, CancellationToken ct = default);
     Task<IReadOnlyList<OzonDeliveryNoteDto>> GetDeliveryNotesAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Creates a single-parcel BL for a tracking number that already exists, so its official
+    /// OzonExpress label PDF becomes available. Called from the background queue after parcel
+    /// creation - not part of the parcel-creation request itself.
+    /// </summary>
+    Task<OzonDeliveryNoteResultDto> AutoCreateDeliveryNoteAsync(string trackingNumber, CancellationToken ct = default);
+
     Task<OzonDashboardDto> GetDashboardAsync(CancellationToken ct = default);
 }

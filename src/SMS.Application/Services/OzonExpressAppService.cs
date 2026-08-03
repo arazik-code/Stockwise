@@ -25,6 +25,7 @@ public class OzonExpressAppService : IOzonExpressService
     private readonly IOnlineOrderService _onlineOrderService;
     private readonly ICodLedgerService _codLedgerService;
     private readonly ICityResolverService _cityResolver;
+    private readonly IOzonBlQueue _blQueue;
 
     public OzonExpressAppService(
         IUnitOfWork unitOfWork,
@@ -33,6 +34,7 @@ public class OzonExpressAppService : IOzonExpressService
         IOnlineOrderService onlineOrderService,
         ICodLedgerService codLedgerService,
         ICityResolverService cityResolver,
+        IOzonBlQueue blQueue,
         IOzonExpressApiClient? client = null)
     {
         _unitOfWork = unitOfWork;
@@ -41,6 +43,7 @@ public class OzonExpressAppService : IOzonExpressService
         _onlineOrderService = onlineOrderService;
         _codLedgerService = codLedgerService;
         _cityResolver = cityResolver;
+        _blQueue = blQueue;
         _client = client;
     }
 
@@ -176,12 +179,13 @@ public class OzonExpressAppService : IOzonExpressService
             }
         }
 
-        // OzonExpress auto-generates its own official BL PDF once a parcel is grouped into a saved
-        // "Bon de Livraison" — create a single-parcel BL immediately so every colis has that real,
-        // OzonExpress-branded PDF ready right away, instead of relying on a home-grown document.
-        var (blOk, blError, _) = await CreateAndSaveDeliveryNoteAsync([apiResult.TrackingNumber], ct);
-        if (!blOk)
-            _logger.LogWarning("Parcel {Tracking} created but auto BL/PDF generation failed: {Error}", apiResult.TrackingNumber, blError);
+        // OzonExpress auto-generates its official label PDF once a parcel is grouped into a saved
+        // "Bon de Livraison" — queue a single-parcel BL rather than creating it inline here. This
+        // used to run all 3 extra OzonExpress calls (create-BL, add-parcel-to-BL, a hardcoded
+        // 1.2s wait, save-BL) synchronously inside this same request, which is exactly what made
+        // "create colis" hang: one slow/rate-limited call in that chain blocked the whole action.
+        // Now add-parcel succeeding is enough to return to the user; the label follows in seconds.
+        _blQueue.Enqueue(apiResult.TrackingNumber);
 
         return new OzonParcelResultDto(true, null, await MapAsync(parcel.Id, ct));
     }
@@ -301,6 +305,12 @@ public class OzonExpressAppService : IOzonExpressService
     {
         var codes = request.TrackingNumbers.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().ToList();
         var (ok, error, note) = await CreateAndSaveDeliveryNoteAsync(codes, ct);
+        return ok ? new OzonDeliveryNoteResultDto(true, null, MapNote(note!)) : new OzonDeliveryNoteResultDto(false, error, null);
+    }
+
+    public async Task<OzonDeliveryNoteResultDto> AutoCreateDeliveryNoteAsync(string trackingNumber, CancellationToken ct = default)
+    {
+        var (ok, error, note) = await CreateAndSaveDeliveryNoteAsync([trackingNumber], ct);
         return ok ? new OzonDeliveryNoteResultDto(true, null, MapNote(note!)) : new OzonDeliveryNoteResultDto(false, error, null);
     }
 
