@@ -17,6 +17,14 @@ public class OzonExpressApiClient : IOzonExpressApiClient
     private readonly OzonExpressOptions _options;
     private readonly ILogger<OzonExpressApiClient> _logger;
 
+    // The HttpClient itself is configured with a 60s Timeout (InfrastructureServiceCollectionExtensions),
+    // but that alone was not enough - "Créer colis" was confirmed live to hang past 90s with zero
+    // response and nothing logged, which is only explainable by the connection stalling in a way
+    // HttpClient.Timeout did not reliably preempt. Every call here now also races against its own
+    // explicit deadline via a linked CancellationTokenSource, so a stalled OzonExpress call fails
+    // fast and visibly instead of hanging the request indefinitely.
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(20);
+
     public OzonExpressApiClient(HttpClient http, IOptions<OzonExpressOptions> options, ILogger<OzonExpressApiClient> logger)
     {
         _http = http;
@@ -25,6 +33,17 @@ public class OzonExpressApiClient : IOzonExpressApiClient
     }
 
     private string Base => $"/customers/{_options.CustomerId}/{_options.ApiKey}";
+
+    /// <summary>
+    /// Returns a token that cancels after RequestTimeout OR when the caller's own token cancels,
+    /// whichever comes first - and lets callers tell the two apart via <paramref name="callerToken"/>.IsCancellationRequested.
+    /// </summary>
+    private static CancellationTokenSource TimedToken(CancellationToken callerToken)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(callerToken);
+        cts.CancelAfter(RequestTimeout);
+        return cts;
+    }
 
     public async Task<OzonAddParcelResult> AddParcelAsync(OzonAddParcelRequest request, CancellationToken ct = default)
     {
@@ -49,10 +68,11 @@ public class OzonExpressApiClient : IOzonExpressApiClient
             form.Add(new StringContent(json), "products");
         }
 
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.PostAsync($"{Base}/add-parcel", form, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.PostAsync($"{Base}/add-parcel", form, cts.Token);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
@@ -85,6 +105,13 @@ public class OzonExpressApiClient : IOzonExpressApiClient
                 FindDecimal(data, "RETURNED-PRICE"),
                 FindDecimal(data, "REFUSED-PRICE"));
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Our own deadline fired, not the caller's - this is the case that used to hang the
+            // "Créer colis" action indefinitely with nothing logged anywhere.
+            _logger.LogError("OzonExpress add-parcel timed out after {Timeout}s", RequestTimeout.TotalSeconds);
+            return new OzonAddParcelResult(false, $"OzonExpress n'a pas répondu dans les {RequestTimeout.TotalSeconds:0}s. Réessayez.", null, null, null, null, null, null, null, null, null, null);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OzonExpress add-parcel failed");
@@ -95,10 +122,11 @@ public class OzonExpressApiClient : IOzonExpressApiClient
     public async Task<OzonAddParcelResult> GetParcelInfoAsync(string trackingNumber, CancellationToken ct = default)
     {
         var form = new MultipartFormDataContent { { new StringContent(trackingNumber), "tracking-number" } };
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.PostAsync($"{Base}/parcel-info", form, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.PostAsync($"{Base}/parcel-info", form, cts.Token);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
             var info = root.TryGetProperty("PARCEL-INFO", out var pi) ? pi : root;
@@ -116,6 +144,11 @@ public class OzonExpressApiClient : IOzonExpressApiClient
                 FindDecimal(data, "PRICE"), FindDecimal(data, "DELIVERED-PRICE"),
                 FindDecimal(data, "RETURNED-PRICE"), FindDecimal(data, "REFUSED-PRICE"));
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError("OzonExpress parcel-info timed out after {Timeout}s for {Tracking}", RequestTimeout.TotalSeconds, trackingNumber);
+            return new OzonAddParcelResult(false, $"OzonExpress n'a pas répondu dans les {RequestTimeout.TotalSeconds:0}s.", trackingNumber, null, null, null, null, null, null, null, null, null);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OzonExpress parcel-info failed for {Tracking}", trackingNumber);
@@ -126,11 +159,17 @@ public class OzonExpressApiClient : IOzonExpressApiClient
     public async Task<OzonTrackingResult> TrackAsync(string trackingNumber, CancellationToken ct = default)
     {
         var form = new MultipartFormDataContent { { new StringContent(trackingNumber), "tracking-number" } };
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.PostAsync($"{Base}/tracking", form, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.PostAsync($"{Base}/tracking", form, cts.Token);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             return ParseTracking(trackingNumber, body);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError("OzonExpress tracking timed out after {Timeout}s for {Tracking}", RequestTimeout.TotalSeconds, trackingNumber);
+            return new OzonTrackingResult(false, $"OzonExpress n'a pas répondu dans les {RequestTimeout.TotalSeconds:0}s.", trackingNumber, null, [], null);
         }
         catch (Exception ex)
         {
@@ -145,12 +184,13 @@ public class OzonExpressApiClient : IOzonExpressApiClient
         var results = new Dictionary<string, OzonTrackingResult>();
         if (list.Count == 0) return results;
 
+        using var cts = TimedToken(ct);
         try
         {
             var payload = JsonSerializer.Serialize(new Dictionary<string, object> { ["tracking-number"] = list });
             using var content = new StringContent(payload, Encoding.UTF8, "application/json");
-            using var resp = await _http.PostAsync($"{Base}/tracking", content, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.PostAsync($"{Base}/tracking", content, cts.Token);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
@@ -175,10 +215,11 @@ public class OzonExpressApiClient : IOzonExpressApiClient
     public async Task<List<OzonCityApiDto>> GetCitiesAsync(CancellationToken ct = default)
     {
         var cities = new List<OzonCityApiDto>();
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.GetAsync("/cities", ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.GetAsync("/cities", cts.Token);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             if (!doc.RootElement.TryGetProperty("CITIES", out var citiesObj)) return cities;
 
@@ -196,6 +237,10 @@ public class OzonExpressApiClient : IOzonExpressApiClient
                     FindDecimal(c, "REFUSED-PRICE") ?? 0));
             }
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError("OzonExpress cities fetch timed out after {Timeout}s", RequestTimeout.TotalSeconds);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OzonExpress cities fetch failed");
@@ -205,10 +250,11 @@ public class OzonExpressApiClient : IOzonExpressApiClient
 
     public async Task<OzonDeliveryNoteApiResult> CreateDeliveryNoteAsync(CancellationToken ct = default)
     {
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.PostAsync($"{Base}/add-delivery-note", new MultipartFormDataContent(), ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            using var resp = await _http.PostAsync($"{Base}/add-delivery-note", new MultipartFormDataContent(), cts.Token);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
 
@@ -223,6 +269,11 @@ public class OzonExpressApiClient : IOzonExpressApiClient
                 ? new OzonDeliveryNoteApiResult(false, FindString(addBl, "MESSAGE") ?? "Réf BL absente", null)
                 : new OzonDeliveryNoteApiResult(true, null, reference);
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError("OzonExpress create-delivery-note timed out after {Timeout}s", RequestTimeout.TotalSeconds);
+            return new OzonDeliveryNoteApiResult(false, $"OzonExpress n'a pas répondu dans les {RequestTimeout.TotalSeconds:0}s.", null);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OzonExpress create delivery note failed");
@@ -235,14 +286,20 @@ public class OzonExpressApiClient : IOzonExpressApiClient
         var form = new MultipartFormDataContent { { new StringContent(reference), "Ref" } };
         var i = 0;
         foreach (var tn in trackingNumbers) form.Add(new StringContent(tn), $"Codes[{i++}]");
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.PostAsync($"{Base}/add-parcel-to-delivery-note", form, ct);
+            using var resp = await _http.PostAsync($"{Base}/add-parcel-to-delivery-note", form, cts.Token);
             if (!resp.IsSuccessStatusCode) return false;
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             var block = doc.RootElement.TryGetProperty("ADD-PARCEL-BL", out var b) ? b : doc.RootElement;
             return !string.Equals(FindString(block, "RESULT"), "ERROR", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError("OzonExpress add-parcel-to-delivery-note timed out after {Timeout}s for {Ref}", RequestTimeout.TotalSeconds, reference);
+            return false;
         }
         catch (Exception ex)
         {
@@ -254,14 +311,20 @@ public class OzonExpressApiClient : IOzonExpressApiClient
     public async Task<bool> SaveDeliveryNoteAsync(string reference, CancellationToken ct = default)
     {
         var form = new MultipartFormDataContent { { new StringContent(reference), "Ref" } };
+        using var cts = TimedToken(ct);
         try
         {
-            using var resp = await _http.PostAsync($"{Base}/save-delivery-note", form, ct);
+            using var resp = await _http.PostAsync($"{Base}/save-delivery-note", form, cts.Token);
             if (!resp.IsSuccessStatusCode) return false;
-            var body = await resp.Content.ReadAsStringAsync(ct);
+            var body = await resp.Content.ReadAsStringAsync(cts.Token);
             using var doc = JsonDocument.Parse(body);
             var block = doc.RootElement.TryGetProperty("SAVE-BL", out var b) ? b : doc.RootElement;
             return !string.Equals(FindString(block, "RESULT"), "ERROR", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _logger.LogError("OzonExpress save-delivery-note timed out after {Timeout}s for {Ref}", RequestTimeout.TotalSeconds, reference);
+            return false;
         }
         catch (Exception ex)
         {
