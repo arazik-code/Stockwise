@@ -38,6 +38,7 @@ export default function PosPage() {
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettingsConfig>({
     newClientRate: 5,
     ancientClientRate: 8,
+    premiumClientRate: 12,
     pointsForRedemption: 10,
     dhPerRedemption: 1.00,
     welcomePoints: 50,

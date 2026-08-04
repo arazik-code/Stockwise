@@ -1,3 +1,5 @@
+using SMS.Domain.Enums;
+
 namespace SMS.Application.DTOs.Crm;
 
 public enum ClientSegment
@@ -26,7 +28,10 @@ public record ClientCrmSummaryDto(
     string? City = null,
     string? AddressLine = null,
     decimal? ShopifyTotalSpent = null,
-    int? ShopifyOrdersCount = null);
+    int? ShopifyOrdersCount = null,
+    // Loyalty tier (Nouveau/Bon/Premium) - independent of Segment above, which is a separate,
+    // marketing-oriented signal (see ClientCrmAppService.DetermineSegment doc comment).
+    ClientCategory LoyaltyCategory = ClientCategory.Nouveau);
 
 public record CrmDashboardDto(
     int TotalClients,

@@ -37,11 +37,12 @@ public class ShopifySyncAppServiceTests
         _unitOfWorkMock.Setup(u => u.Clients).Returns(_clientRepoMock.Object);
 
         var options = Options.Create(new ShopifyOptions());
+        var loyaltyOptions = Options.Create(new SMS.Application.DTOs.LoyaltySettings());
         var logger = new Mock<ILogger<ShopifySyncAppService>>();
 
         _service = new ShopifySyncAppService(
             _unitOfWorkMock.Object, _notifierMock.Object, _onlineOrderServiceMock.Object, _cityResolverMock.Object,
-            options, logger.Object, shopifyClient: null);
+            options, loyaltyOptions, logger.Object, new Mock<IClientLoyaltyCategoryService>().Object, shopifyClient: null);
     }
 
     private void SetupMappedVariant(long shopifyProductId, long shopifyVariantId, ProductVariant variant, StockItem stock)

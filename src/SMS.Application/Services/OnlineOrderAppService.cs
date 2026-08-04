@@ -14,12 +14,21 @@ public class OnlineOrderAppService : IOnlineOrderService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IInventoryNotifier _notifier;
     private readonly LoyaltySettings _loyaltySettings;
+    private readonly ILoyaltyRateResolver _loyaltyRateResolver;
+    private readonly IClientLoyaltyCategoryService _categoryService;
 
-    public OnlineOrderAppService(IUnitOfWork unitOfWork, IInventoryNotifier notifier, IOptions<LoyaltySettings> loyaltySettings)
+    public OnlineOrderAppService(
+        IUnitOfWork unitOfWork,
+        IInventoryNotifier notifier,
+        IOptions<LoyaltySettings> loyaltySettings,
+        ILoyaltyRateResolver loyaltyRateResolver,
+        IClientLoyaltyCategoryService categoryService)
     {
         _unitOfWork = unitOfWork;
         _notifier = notifier;
         _loyaltySettings = loyaltySettings.Value;
+        _loyaltyRateResolver = loyaltyRateResolver;
+        _categoryService = categoryService;
     }
 
     public async Task<OnlineOrderDto> CreateManualOrderAsync(CreateManualOrderRequest request, int? userId, CancellationToken ct = default)
@@ -153,6 +162,10 @@ public class OnlineOrderAppService : IOnlineOrderService
             Email = request.CustomerEmail,
             QrCode = $"SMS-{Guid.NewGuid():N}"[..20].ToUpperInvariant(),
             LoyaltyRate = _loyaltySettings.NewClientRate,
+            ManualCategory = null,
+            ComputedCategory = ClientCategory.Nouveau,
+            EffectiveCategory = ClientCategory.Nouveau,
+            CategoryUpdatedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
         await _unitOfWork.Clients.AddAsync(client, ct);
@@ -455,7 +468,8 @@ public class OnlineOrderAppService : IOnlineOrderService
         if (client is null) return;
 
         var netAmount = order.SubTotal - order.DiscountAmount - order.LoyaltyDiscountAmount;
-        var pointsEarned = (int)Math.Floor(netAmount * client.LoyaltyRate / 100);
+        var rate = _loyaltyRateResolver.GetRate(client, _loyaltySettings);
+        var pointsEarned = (int)Math.Floor(netAmount * rate / 100);
         if (pointsEarned <= 0) return;
 
         client.TotalPoints += pointsEarned;
@@ -471,6 +485,8 @@ public class OnlineOrderAppService : IOnlineOrderService
             Description = $"Earned from {order.OrderNumber}",
             BalanceAfter = client.TotalPoints
         });
+
+        await _categoryService.RecategorizeAsync(client, _loyaltySettings, ct);
 
         order.LoyaltyPointsEarned = pointsEarned;
     }

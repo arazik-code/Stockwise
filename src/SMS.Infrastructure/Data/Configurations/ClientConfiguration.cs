@@ -24,6 +24,7 @@ public class ClientConfiguration : IEntityTypeConfiguration<Client>
         builder.HasIndex(c => c.QrCode).IsUnique();
         builder.HasIndex(c => c.ShopifyCustomerId);
         builder.HasIndex(c => c.City);
+        builder.HasIndex(c => c.EffectiveCategory);
 
         builder.HasMany(c => c.LoyaltyTransactions)
             .WithOne(lt => lt.Client)

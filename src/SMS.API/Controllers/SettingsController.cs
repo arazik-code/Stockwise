@@ -40,6 +40,7 @@ public class SettingsController : ControllerBase
         {
             NewClientRate = s.GetValue<int>("NewClientRate"),
             AncientClientRate = s.GetValue<int>("AncientClientRate"),
+            PremiumClientRate = s.GetValue<int>("PremiumClientRate"),
             PointsForRedemption = s.GetValue<int>("PointsForRedemption"),
             DhPerRedemption = s.GetValue<decimal>("DhPerRedemption"),
             WelcomePoints = s.GetValue<int>("WelcomePoints"),
@@ -57,6 +58,7 @@ public class SettingsController : ControllerBase
         {
             ["NewClientRate"] = updated.NewClientRate,
             ["AncientClientRate"] = updated.AncientClientRate,
+            ["PremiumClientRate"] = updated.PremiumClientRate,
             ["PointsForRedemption"] = updated.PointsForRedemption,
             ["DhPerRedemption"] = updated.DhPerRedemption,
             ["WelcomePoints"] = updated.WelcomePoints,

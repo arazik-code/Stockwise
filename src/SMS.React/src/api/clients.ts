@@ -1,5 +1,6 @@
 import api from './client'
 import type { Sale } from '../types/sale'
+import type { ClientCategoryValue } from '../utils/clientCategory'
 
 export interface Client {
   id: number
@@ -14,6 +15,10 @@ export interface Client {
   createdAt: string
   lastVisitAt?: string
   recentTransactions?: LoyaltyTransaction[]
+  effectiveCategory: ClientCategoryValue
+  manualCategory?: ClientCategoryValue | null
+  computedCategory: ClientCategoryValue
+  categoryUpdatedAt?: string
 }
 
 export interface LoyaltyTransaction {
@@ -33,6 +38,7 @@ export interface CreateClientRequest {
 export interface LoyaltySettingsConfig {
   newClientRate: number
   ancientClientRate: number
+  premiumClientRate: number
   pointsForRedemption: number
   dhPerRedemption: number
   welcomePoints: number
@@ -130,8 +136,8 @@ export interface ShopifySettingsUpdate {
 }
 
 export const clientsApi = {
-  getAll: (search?: string) =>
-    api.get<Client[]>('/clients', { params: { search } }).then((r) => r.data),
+  getAll: (search?: string, category?: ClientCategoryValue) =>
+    api.get<Client[]>('/clients', { params: { search, category } }).then((r) => r.data),
   getById: (id: number) => api.get<Client>(`/clients/${id}`).then((r) => r.data),
   getByQrCode: (qrCode: string) => api.get<Client>(`/clients/qr/${qrCode}`).then((r) => r.data),
   getByPhone: (phone: string) => api.get<Client>(`/clients/phone/${phone}`).then((r) => r.data),
@@ -141,6 +147,11 @@ export const clientsApi = {
   adjustPoints: (id: number, points: number, reason?: string) =>
     api.post<Client>(`/clients/${id}/adjust-points`, { points, reason }).then((r) => r.data),
   getSales: (id: number) => api.get<Sale[]>(`/clients/${id}/sales`).then((r) => r.data),
+  // category = null reverts to automatic (clears the manual override).
+  setCategory: (id: number, category: ClientCategoryValue | null, reason?: string) =>
+    api.post<Client>(`/clients/${id}/category`, { category, reason }).then((r) => r.data),
+  recalculateCategories: () =>
+    api.post<{ recalculated: number }>('/clients/recalculate-categories', {}).then((r) => r.data),
 }
 
 export type ClientSegment = 'New' | 'Regular' | 'Vip' | 'AtRisk' | 'Lost'
@@ -163,6 +174,7 @@ export interface ClientCrmSummary {
   addressLine?: string
   shopifyTotalSpent?: number
   shopifyOrdersCount?: number
+  loyaltyCategory: ClientCategoryValue
 }
 
 export interface CrmDashboard {

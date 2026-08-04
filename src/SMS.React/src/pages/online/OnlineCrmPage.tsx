@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Header from '../../components/layout/Header'
 import { crmApi, type CrmAnalytics, type ClientSegment } from '../../api/clients'
+import { CATEGORY_LABELS } from '../../utils/clientCategory'
 import { formatCurrency } from '../../utils/format'
 
 const SEGMENT_LABELS: Record<ClientSegment, string> = {
@@ -193,6 +194,7 @@ export default function OnlineCrmPage() {
                     <th className="py-2 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
                     <th className="py-2 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider">Ville</th>
                     <th className="py-2 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider">Segment</th>
+                    <th className="py-2 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider">Fidélité</th>
                     <th className="py-2 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider text-center">Commandes</th>
                     <th className="py-2 px-2 text-xs font-medium text-slate-500 uppercase tracking-wider text-right">Total</th>
                   </tr>
@@ -204,6 +206,7 @@ export default function OnlineCrmPage() {
                       <td className="py-2 px-2 text-sm font-medium text-slate-900">{c.name}</td>
                       <td className="py-2 px-2 text-sm text-slate-500">{c.city || '—'}</td>
                       <td className="py-2 px-2 text-sm text-slate-600">{SEGMENT_LABELS[c.segment]}</td>
+                      <td className="py-2 px-2 text-sm text-slate-600">{CATEGORY_LABELS[c.loyaltyCategory]}</td>
                       <td className="py-2 px-2 text-sm text-center text-slate-700">{c.orderCount}</td>
                       <td className="py-2 px-2 text-sm text-right font-semibold text-slate-900">{formatCurrency(c.totalSpent)}</td>
                     </tr>

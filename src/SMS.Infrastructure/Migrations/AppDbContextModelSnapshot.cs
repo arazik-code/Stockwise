@@ -141,12 +141,21 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)");
 
+                    b.Property<DateTime?>("CategoryUpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("City")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<int>("ComputedCategory")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EffectiveCategory")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Email")
                         .HasMaxLength(200)
@@ -162,6 +171,9 @@ namespace SMS.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(5);
+
+                    b.Property<int?>("ManualCategory")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -202,6 +214,8 @@ namespace SMS.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("City");
+
+                    b.HasIndex("EffectiveCategory");
 
                     b.HasIndex("QrCode")
                         .IsUnique();

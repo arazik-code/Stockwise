@@ -33,7 +33,7 @@ public class SaleEdgeCaseTests
 
         var shopifyOptions = Options.Create(new ShopifyOptions());
         var loyaltyOptions = Options.Create(new LoyaltySettings());
-        _service = new SaleAppService(_unitOfWorkMock.Object, _notifierMock.Object, shopifyOptions, loyaltyOptions, new Mock<ILogger<SaleAppService>>().Object, new Mock<IInventoryPushQueue>().Object);
+        _service = new SaleAppService(_unitOfWorkMock.Object, _notifierMock.Object, shopifyOptions, loyaltyOptions, new Mock<ILogger<SaleAppService>>().Object, new Mock<IInventoryPushQueue>().Object, new LoyaltyRateResolver(), new Mock<IClientLoyaltyCategoryService>().Object);
     }
 
     private StockItem CreateStock(int variantId, int qty, int reorderLevel = 10, decimal price = 50m)

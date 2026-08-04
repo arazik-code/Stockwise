@@ -21,6 +21,8 @@ public class SaleAppService : ISaleService
     private readonly ILogger<SaleAppService> _logger;
     private readonly LoyaltySettings _loyaltySettings;
     private readonly IInventoryPushQueue _pushQueue;
+    private readonly ILoyaltyRateResolver _loyaltyRateResolver;
+    private readonly IClientLoyaltyCategoryService _categoryService;
 
     public SaleAppService(
         IUnitOfWork unitOfWork,
@@ -29,6 +31,8 @@ public class SaleAppService : ISaleService
         IOptions<LoyaltySettings> loyaltySettings,
         ILogger<SaleAppService> logger,
         IInventoryPushQueue pushQueue,
+        ILoyaltyRateResolver loyaltyRateResolver,
+        IClientLoyaltyCategoryService categoryService,
         IShopifyApiClient? shopifyClient = null)
     {
         _unitOfWork = unitOfWork;
@@ -37,6 +41,8 @@ public class SaleAppService : ISaleService
         _loyaltySettings = loyaltySettings.Value;
         _logger = logger;
         _pushQueue = pushQueue;
+        _loyaltyRateResolver = loyaltyRateResolver;
+        _categoryService = categoryService;
         _shopifyClient = shopifyClient;
     }
 
@@ -121,7 +127,7 @@ public class SaleAppService : ISaleService
             var totalAmount = discountedSubTotal + taxAmount;
             var changeGiven = request.AmountPaid - totalAmount;
 
-            var rate = client?.LoyaltyRate ?? _loyaltySettings.NewClientRate;
+            var rate = client is not null ? _loyaltyRateResolver.GetRate(client, _loyaltySettings) : _loyaltySettings.NewClientRate;
             var pointsEarned = _loyaltySettings.Enabled
                 ? (int)Math.Floor(discountedSubTotal * rate / 100)
                 : 0;
@@ -194,6 +200,7 @@ public class SaleAppService : ISaleService
                     });
                 }
 
+                await _categoryService.RecategorizeAsync(client, _loyaltySettings, ct);
                 await _unitOfWork.SaveChangesAsync(ct);
             }
 

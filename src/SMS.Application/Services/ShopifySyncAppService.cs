@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SMS.Application.DTOs;
 using SMS.Application.DTOs.Shopify;
 using SMS.Application.Interfaces;
 using SMS.Domain.Entities;
@@ -18,6 +19,8 @@ public class ShopifySyncAppService : IShopifySyncService
     private readonly IShopifyApiClient? _shopifyClient;
     private readonly ShopifyOptions _shopifyOptions;
     private readonly ILogger<ShopifySyncAppService> _logger;
+    private readonly IClientLoyaltyCategoryService _categoryService;
+    private readonly LoyaltySettings _loyaltySettings;
 
     public ShopifySyncAppService(
         IUnitOfWork unitOfWork,
@@ -25,7 +28,9 @@ public class ShopifySyncAppService : IShopifySyncService
         IOnlineOrderService onlineOrderService,
         ICityResolverService cityResolver,
         IOptions<ShopifyOptions> shopifyOptions,
+        IOptions<LoyaltySettings> loyaltySettings,
         ILogger<ShopifySyncAppService> logger,
+        IClientLoyaltyCategoryService categoryService,
         IShopifyApiClient? shopifyClient = null)
     {
         _unitOfWork = unitOfWork;
@@ -33,7 +38,9 @@ public class ShopifySyncAppService : IShopifySyncService
         _onlineOrderService = onlineOrderService;
         _cityResolver = cityResolver;
         _shopifyOptions = shopifyOptions.Value;
+        _loyaltySettings = loyaltySettings.Value;
         _logger = logger;
+        _categoryService = categoryService;
         _shopifyClient = shopifyClient;
     }
 
@@ -142,6 +149,15 @@ public class ShopifySyncAppService : IShopifySyncService
 
             await _unitOfWork.OnlineOrders.AddAsync(order, ct);
             await _unitOfWork.SaveChangesAsync(ct);
+
+            if (client is not null)
+            {
+                // Recomputed after the save above so the order-count aggregate this reads sees the
+                // order just added, not the pre-order count.
+                await _categoryService.RecategorizeAsync(client, _loyaltySettings, ct);
+                await _unitOfWork.SaveChangesAsync(ct);
+            }
+
             await _unitOfWork.CommitTransactionAsync(ct);
 
             await _notifier.NotifyNewOnlineOrderAsync(order.Channel.ToString(), order.OrderNumber, order.TotalAmount, ct);
@@ -527,6 +543,10 @@ public class ShopifySyncAppService : IShopifySyncService
                 QrCode = $"SMS-{Guid.NewGuid():N}"[..20].ToUpperInvariant(),
                 ShopifyCustomerId = shopifyCustomerId,
                 LoyaltyRate = 5,
+                ManualCategory = null,
+                ComputedCategory = ClientCategory.Nouveau,
+                EffectiveCategory = ClientCategory.Nouveau,
+                CategoryUpdatedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow
             };
             await _unitOfWork.Clients.AddAsync(client, ct);

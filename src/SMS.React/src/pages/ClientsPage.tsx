@@ -6,6 +6,7 @@ import { clientsApi, settingsApi, type Client, type LoyaltySettingsConfig } from
 import type { Sale } from '../types/sale'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency, formatDate } from '../utils/format'
+import { CATEGORY_BADGE, CATEGORY_LABELS, CATEGORY_ORDER, type ClientCategoryValue } from '../utils/clientCategory'
 
 type TransactionTab = 'purchases' | 'points'
 
@@ -35,24 +36,31 @@ export default function ClientsPage() {
 
   const [showLoyalty, setShowLoyalty] = useState(false)
   const [loyaltyForm, setLoyaltyForm] = useState<LoyaltySettingsConfig>({
-    newClientRate: 5, ancientClientRate: 8, pointsForRedemption: 10, dhPerRedemption: 1, welcomePoints: 50, enabled: true
+    newClientRate: 5, ancientClientRate: 8, premiumClientRate: 12, pointsForRedemption: 10, dhPerRedemption: 1, welcomePoints: 50, enabled: true
   })
+  const [recalculating, setRecalculating] = useState(false)
 
-  const load = useCallback(async (search?: string) => {
+  const [categoryFilter, setCategoryFilter] = useState<ClientCategoryValue | null>(null)
+  const [showCategoryEditor, setShowCategoryEditor] = useState(false)
+  const [categoryChoice, setCategoryChoice] = useState<ClientCategoryValue | null>(null)
+  const [categoryReason, setCategoryReason] = useState('')
+  const [savingCategory, setSavingCategory] = useState(false)
+
+  const load = useCallback(async (search?: string, category?: ClientCategoryValue | null) => {
     setLoading(true)
     try {
-      const data = await clientsApi.getAll(search || undefined)
+      const data = await clientsApi.getAll(search || undefined, category ?? undefined)
       setClients(data)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(searchQuery, categoryFilter) }, [categoryFilter])
 
   useEffect(() => {
     if (searchTimeout) clearTimeout(searchTimeout)
-    const timeout = setTimeout(() => load(searchQuery), 400)
+    const timeout = setTimeout(() => load(searchQuery, categoryFilter), 400)
     setSearchTimeout(timeout)
     return () => clearTimeout(timeout)
   }, [searchQuery])
@@ -75,6 +83,42 @@ export default function ClientsPage() {
       setShowLoyalty(false)
     } catch {
       showToast(t('common.error'), 'error')
+    }
+  }
+
+  const handleRecalculateCategories = async () => {
+    setRecalculating(true)
+    try {
+      await clientsApi.recalculateCategories()
+      showToast(t('loyalty.recalculateSuccess'), 'success')
+      load(searchQuery, categoryFilter)
+    } catch {
+      showToast(t('common.error'), 'error')
+    } finally {
+      setRecalculating(false)
+    }
+  }
+
+  const openCategoryEditor = () => {
+    if (!detail) return
+    setCategoryChoice(detail.manualCategory ?? detail.effectiveCategory)
+    setCategoryReason('')
+    setShowCategoryEditor(true)
+  }
+
+  const handleSaveCategory = async (category: ClientCategoryValue | null) => {
+    if (!detail) return
+    setSavingCategory(true)
+    try {
+      const updated = await clientsApi.setCategory(detail.id, category, categoryReason.trim() || undefined)
+      setDetail(updated)
+      showToast(t('clients.categoryChangeSuccess'), 'success')
+      setShowCategoryEditor(false)
+      load(searchQuery, categoryFilter)
+    } catch {
+      showToast(t('common.error'), 'error')
+    } finally {
+      setSavingCategory(false)
     }
   }
 
@@ -234,6 +278,27 @@ export default function ClientsPage() {
               className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-md p-1">
+            <button
+              onClick={() => setCategoryFilter(null)}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                categoryFilter === null ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {t('clients.categoryAll')}
+            </button>
+            {CATEGORY_ORDER.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                  categoryFilter === cat ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {CATEGORY_LABELS[cat]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
@@ -248,6 +313,7 @@ export default function ClientsPage() {
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">{t('clients.name')}</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">{t('clients.phone')}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">{t('clients.category')}</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">{t('clients.points')}</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">{t('clients.totalSpent')}</th>
                   <th className="text-center px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wider">{t('clients.visits')}</th>
@@ -257,12 +323,17 @@ export default function ClientsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {clients.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-8 text-sm text-slate-400">{t('clients.noClients')}</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-sm text-slate-400">{t('clients.noClients')}</td></tr>
                 )}
                 {clients.map((client) => (
                   <tr key={client.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-slate-900">{client.name}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{client.phone}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${CATEGORY_BADGE[client.effectiveCategory]}`}>
+                        {CATEGORY_LABELS[client.effectiveCategory]}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900">{client.totalPoints}</td>
                     <td className="px-4 py-3 text-sm text-right text-slate-600">{formatCurrency(client.totalSpent)}</td>
                     <td className="px-4 py-3 text-sm text-center">
@@ -389,7 +460,16 @@ export default function ClientsPage() {
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-4">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">{detail.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-slate-900">{detail.name}</h3>
+                    <button
+                      onClick={openCategoryEditor}
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border hover:opacity-75 transition-opacity ${CATEGORY_BADGE[detail.effectiveCategory]}`}
+                      title={t('clients.changeCategory')}
+                    >
+                      {CATEGORY_LABELS[detail.effectiveCategory]}
+                    </button>
+                  </div>
                   <p className="text-xs text-slate-500">{detail.phone}</p>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 flex items-center gap-3">
@@ -597,6 +677,78 @@ export default function ClientsPage() {
         </div>
       )}
 
+      {/* Category Editor Modal */}
+      {showCategoryEditor && detail && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-[420px] border border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('clients.changeCategory')}</h2>
+            <p className="text-sm text-slate-500 mb-5">{detail.name} — {detail.phone}</p>
+
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-md p-1 mb-2">
+              {CATEGORY_ORDER.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategoryChoice(cat)}
+                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                    categoryChoice === cat ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-white'
+                  }`}
+                >
+                  {CATEGORY_LABELS[cat]}
+                </button>
+              ))}
+            </div>
+
+            {detail.manualCategory ? (
+              <p className="text-xs text-slate-400 mb-4">
+                {t('clients.categorySuggestion', { category: CATEGORY_LABELS[detail.computedCategory] })}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 mb-4">{t('clients.categoryAuto')}</p>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('clients.reason')}</label>
+              <input
+                type="text"
+                value={categoryReason}
+                onChange={(e) => setCategoryReason(e.target.value)}
+                placeholder={t('clients.categoryReasonPlaceholder')}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-between pt-2">
+              <button
+                type="button"
+                disabled={savingCategory || !detail.manualCategory}
+                onClick={() => handleSaveCategory(null)}
+                className="px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {t('clients.categoryAuto')}
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryEditor(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={savingCategory || !categoryChoice}
+                  onClick={() => handleSaveCategory(categoryChoice)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {t('common.confirm')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Loyalty Settings Modal */}
       {showLoyalty && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -624,6 +776,18 @@ export default function ClientsPage() {
                     min={0}
                     value={loyaltyForm.ancientClientRate}
                     onChange={(e) => setLoyaltyForm({ ...loyaltyForm, ancientClientRate: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">% sur 100 DH</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('loyalty.premiumClientRate')}</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={loyaltyForm.premiumClientRate}
+                    onChange={(e) => setLoyaltyForm({ ...loyaltyForm, premiumClientRate: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p className="text-xs text-slate-400 mt-1">% sur 100 DH</p>
@@ -661,20 +825,30 @@ export default function ClientsPage() {
                 />
                 <label htmlFor="loyaltyEnabled" className="text-sm font-medium text-slate-700">{t('loyalty.enabled')}</label>
               </div>
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="flex gap-2 justify-between items-center pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowLoyalty(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+                  disabled={recalculating}
+                  onClick={handleRecalculateCategories}
+                  className="px-3 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {t('common.cancel')}
+                  {recalculating ? t('common.loading') : t('loyalty.recalculateCategories')}
                 </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  {t('loyalty.updateSettings')}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLoyalty(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    {t('loyalty.updateSettings')}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

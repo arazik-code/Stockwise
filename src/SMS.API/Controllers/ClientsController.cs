@@ -20,12 +20,18 @@ public class ClientsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly LoyaltySettings _loyaltySettings;
     private readonly IClientCrmService _crmService;
+    private readonly IClientLoyaltyCategoryService _categoryService;
 
-    public ClientsController(AppDbContext db, IOptions<LoyaltySettings> loyaltySettings, IClientCrmService crmService)
+    public ClientsController(
+        AppDbContext db,
+        IOptions<LoyaltySettings> loyaltySettings,
+        IClientCrmService crmService,
+        IClientLoyaltyCategoryService categoryService)
     {
         _db = db;
         _loyaltySettings = loyaltySettings.Value;
         _crmService = crmService;
+        _categoryService = categoryService;
     }
 
     [HttpGet("crm-summary")]
@@ -56,7 +62,7 @@ public class ClientsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search, CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] ClientCategory? category, CancellationToken ct)
     {
         var query = _db.Clients.AsQueryable();
 
@@ -65,6 +71,9 @@ public class ClientsController : ControllerBase
             var q = search.ToLower();
             query = query.Where(c => c.Name.ToLower().Contains(q) || c.Phone.ToLower().Contains(q));
         }
+
+        if (category.HasValue)
+            query = query.Where(c => c.EffectiveCategory == category.Value);
 
         var clients = await query
             .OrderByDescending(c => c.LastVisitAt)
@@ -80,7 +89,11 @@ public class ClientsController : ControllerBase
                 VisitCount = c.Sales.Count,
                 LoyaltyRate = c.LoyaltyRate,
                 CreatedAt = c.CreatedAt,
-                LastVisitAt = c.LastVisitAt
+                LastVisitAt = c.LastVisitAt,
+                EffectiveCategory = c.EffectiveCategory,
+                ManualCategory = c.ManualCategory,
+                ComputedCategory = c.ComputedCategory,
+                CategoryUpdatedAt = c.CategoryUpdatedAt
             })
             .ToListAsync(ct);
         return Ok(clients);
@@ -198,6 +211,10 @@ public class ClientsController : ControllerBase
             LifetimePoints = 0,
             TotalSpent = 0,
             LoyaltyRate = _loyaltySettings.NewClientRate,
+            ManualCategory = null,
+            ComputedCategory = ClientCategory.Nouveau,
+            EffectiveCategory = ClientCategory.Nouveau,
+            CategoryUpdatedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -300,6 +317,27 @@ public class ClientsController : ControllerBase
         return Ok(new { pointsRedeemed = request.Points, discountAmount = request.DiscountAmount, remainingPoints = client.TotalPoints });
     }
 
+    [HttpPost("{id:int}/category")]
+    public async Task<IActionResult> SetCategory(int id, [FromBody] SetClientCategoryRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var client = await _categoryService.SetManualCategoryAsync(id, request.Category, request.Reason, ct);
+            return Ok(MapToDto(client));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpPost("recalculate-categories")]
+    public async Task<IActionResult> RecalculateCategories(CancellationToken ct)
+    {
+        var count = await _categoryService.RecategorizeAllAsync(ct);
+        return Ok(new { recalculated = count });
+    }
+
     private static ClientDto MapToDto(Client c) => new()
     {
         Id = c.Id,
@@ -313,6 +351,10 @@ public class ClientsController : ControllerBase
         LoyaltyRate = c.LoyaltyRate,
         CreatedAt = c.CreatedAt,
         LastVisitAt = c.LastVisitAt,
+        EffectiveCategory = c.EffectiveCategory,
+        ManualCategory = c.ManualCategory,
+        ComputedCategory = c.ComputedCategory,
+        CategoryUpdatedAt = c.CategoryUpdatedAt,
         RecentTransactions = c.LoyaltyTransactions.Select(t => new LoyaltyTransactionDto
         {
             Id = t.Id,

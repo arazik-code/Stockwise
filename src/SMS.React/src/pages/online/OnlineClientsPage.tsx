@@ -11,6 +11,7 @@ import {
 } from '../../api/clients'
 import { formatCurrency, formatDateTime } from '../../utils/format'
 import { openWhatsApp, hasWhatsApp, buildClientGreeting } from '../../utils/whatsapp'
+import { CATEGORY_BADGE, CATEGORY_LABELS } from '../../utils/clientCategory'
 
 const WhatsAppIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -233,6 +234,12 @@ export default function OnlineClientsPage() {
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border flex-shrink-0 ${SEGMENT_BADGE[c.segment]}`}>
                           {SEGMENT_LABELS[c.segment]}
                         </span>
+                        <span
+                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border flex-shrink-0 ${CATEGORY_BADGE[c.loyaltyCategory]}`}
+                          title="Catégorie de fidélité"
+                        >
+                          Fidélité : {CATEGORY_LABELS[c.loyaltyCategory]}
+                        </span>
                         {c.isShopifyImported && (
                           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">Shopify</span>
                         )}
@@ -351,6 +358,9 @@ function ClientDetailModal({ clientId, onClose }: { clientId: number; onClose: (
                   <h3 className="text-base font-semibold text-slate-900">{analytics.summary.name}</h3>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${SEGMENT_BADGE[analytics.summary.segment]}`}>
                     {SEGMENT_LABELS[analytics.summary.segment]}
+                  </span>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${CATEGORY_BADGE[analytics.summary.loyaltyCategory]}`}>
+                    Fidélité : {CATEGORY_LABELS[analytics.summary.loyaltyCategory]}
                   </span>
                   {clientHighlights(analytics.summary).map((h) => (
                     <span key={h.label} className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${h.className}`}>{h.label}</span>

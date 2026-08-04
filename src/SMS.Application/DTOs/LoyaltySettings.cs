@@ -4,8 +4,9 @@ public class LoyaltySettings
 {
     public const string SectionName = "Loyalty";
 
-    public int NewClientRate { get; set; } = 5;
-    public int AncientClientRate { get; set; } = 8;
+    public int NewClientRate { get; set; } = 5;      // Nouveau Client
+    public int AncientClientRate { get; set; } = 8;  // Bon Client (property name kept for appsettings.json compatibility)
+    public int PremiumClientRate { get; set; } = 12; // Client Premium
     public int PointsForRedemption { get; set; } = 10;
     public decimal DhPerRedemption { get; set; } = 1.00m;
     public int WelcomePoints { get; set; } = 50;

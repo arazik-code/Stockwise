@@ -32,7 +32,7 @@ public class OnlineOrderAppServiceTests
         _unitOfWorkMock.Setup(u => u.Clients).Returns(_clientRepoMock.Object);
 
         var loyaltyOptions = Options.Create(new LoyaltySettings());
-        _service = new OnlineOrderAppService(_unitOfWorkMock.Object, _notifierMock.Object, loyaltyOptions);
+        _service = new OnlineOrderAppService(_unitOfWorkMock.Object, _notifierMock.Object, loyaltyOptions, new LoyaltyRateResolver(), new Mock<IClientLoyaltyCategoryService>().Object);
     }
 
     private static StockItem MakeStockItem(int variantId, int onHand, int reserved = 0) => new()

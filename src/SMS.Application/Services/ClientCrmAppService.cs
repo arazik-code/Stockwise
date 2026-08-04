@@ -16,11 +16,17 @@ public class ClientCrmAppService : IClientCrmService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IShopifyApiClient? _shopifyClient;
     private readonly ILogger<ClientCrmAppService> _logger;
+    private readonly IClientLoyaltyCategoryService _categoryService;
 
-    public ClientCrmAppService(IUnitOfWork unitOfWork, ILogger<ClientCrmAppService> logger, IShopifyApiClient? shopifyClient = null)
+    public ClientCrmAppService(
+        IUnitOfWork unitOfWork,
+        ILogger<ClientCrmAppService> logger,
+        IClientLoyaltyCategoryService categoryService,
+        IShopifyApiClient? shopifyClient = null)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _categoryService = categoryService;
         _shopifyClient = shopifyClient;
     }
 
@@ -197,7 +203,7 @@ public class ClientCrmAppService : IClientCrmService
             .Select(c => new
             {
                 c.Id, c.Name, c.Phone, c.Email, c.Tags, c.ShopifyCustomerId, c.CreatedAt,
-                c.City, c.AddressLine, c.ShopifyTotalSpent, c.ShopifyOrdersCount
+                c.City, c.AddressLine, c.ShopifyTotalSpent, c.ShopifyOrdersCount, c.EffectiveCategory
             })
             .ToListAsync(ct);
 
@@ -307,7 +313,7 @@ public class ClientCrmAppService : IClientCrmService
                 c.Id, c.Name, c.Phone, c.Email, effectiveSpent, effectiveOrders,
                 agg.LastOrderAt, daysSinceLast, segment, favoriteCategory, c.Tags,
                 c.ShopifyCustomerId.HasValue, c.CreatedAt,
-                c.City, c.AddressLine, c.ShopifyTotalSpent, c.ShopifyOrdersCount);
+                c.City, c.AddressLine, c.ShopifyTotalSpent, c.ShopifyOrdersCount, c.EffectiveCategory);
         }).ToList();
     }
 
@@ -424,6 +430,7 @@ public class ClientCrmAppService : IClientCrmService
 
         var created = 0;
         var updated = 0;
+        var touchedClientIds = new HashSet<int>();
 
         // Fetch all existing clients once (bounded local dataset) and match in memory — Shopify phone
         // numbers arrive in varied formats (spaces, +212 prefixes) that don't reliably map to a
@@ -440,6 +447,8 @@ public class ClientCrmAppService : IClientCrmService
 
         foreach (var batch in shopifyCustomers.Chunk(ImportBatchSize))
         {
+            var batchClients = new List<Client>();
+
             foreach (var sc in batch)
             {
                 var name = $"{sc.FirstName} {sc.LastName}".Trim();
@@ -481,20 +490,35 @@ public class ClientCrmAppService : IClientCrmService
                         ShopifyOrdersCount = sc.OrdersCount,
                         TotalSpent = 0,
                         LoyaltyRate = 5,
+                        ManualCategory = null,
+                        ComputedCategory = ClientCategory.Nouveau,
+                        EffectiveCategory = ClientCategory.Nouveau,
+                        CategoryUpdatedAt = DateTime.UtcNow,
                         CreatedAt = DateTime.UtcNow
                     };
                     await _unitOfWork.AddAsync(client, ct);
                     created++;
                 }
+
+                batchClients.Add(client);
             }
 
             await _unitOfWork.SaveChangesAsync(ct);
+            // client.Id is only populated once SaveChanges assigns the generated key, so collect the
+            // touched ids here rather than inside the loop above (where new clients would still be 0).
+            foreach (var client in batchClients) touchedClientIds.Add(client.Id);
             _unitOfWork.ClearChangeTracker();
         }
 
         // With customers now in place (and stamped with ShopifyCustomerId), pull their full order
         // history so per-client purchase history, favorite categories and recommendations light up.
         var orderResult = await ImportOrdersFromShopifyAsync(ct);
+
+        // Tier every touched client from the freshly-imported purchase history (itemized orders if
+        // they matched, otherwise the Shopify lifetime spend/order fields just written above) - this
+        // is what makes a newly-imported Shopify client land on the right loyalty category immediately
+        // instead of sitting at "Nouveau" until their next local sale.
+        await _categoryService.RecategorizeManyAsync(touchedClientIds, ct);
 
         return new ShopifyClientImportResultDto(
             Configured: true, Approved: true, Created: created, Updated: updated, TotalFetched: shopifyCustomers.Count,

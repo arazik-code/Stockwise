@@ -33,6 +33,8 @@ builder.Services.AddScoped<IRefundService, RefundService>();
 builder.Services.AddScoped<IOnlineOrderService, OnlineOrderAppService>();
 builder.Services.AddScoped<IShopifyProductService, ShopifyProductAppService>();
 builder.Services.AddScoped<IClientCrmService, ClientCrmAppService>();
+builder.Services.AddScoped<ILoyaltyRateResolver, LoyaltyRateResolver>();
+builder.Services.AddScoped<IClientLoyaltyCategoryService, ClientCategoryAppService>();
 builder.Services.AddScoped<IOzonExpressService, OzonExpressAppService>();
 builder.Services.AddScoped<ICodLedgerService, CodLedgerAppService>();
 builder.Services.AddScoped<ICityResolverService, CityResolverService>();
