@@ -166,7 +166,9 @@ public class SaleAppService : ISaleService
 
             if (client is not null)
             {
-                client.TotalSpent += discountedSubTotal;
+                // TotalSpent is no longer incremented here - RecategorizeAsync below recomputes it
+                // authoritatively from the Sales/OnlineOrders tables (plus the Shopify lifetime total
+                // when higher), which already reflects this sale since it was saved above.
                 client.LastVisitAt = DateTime.UtcNow;
 
                 if (pointsRedeemed > 0)

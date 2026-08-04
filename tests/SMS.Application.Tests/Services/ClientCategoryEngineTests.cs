@@ -8,24 +8,16 @@ namespace SMS.Application.Tests.Services;
 public class ClientCategoryEngineTests
 {
     [Theory]
-    [InlineData(0, 0, ClientCategory.Nouveau)]
-    [InlineData(1199, 2, ClientCategory.Nouveau)]
-    [InlineData(1200, 0, ClientCategory.Bon)] // spend threshold, exact boundary
-    [InlineData(0, 3, ClientCategory.Bon)]    // order-count threshold, exact boundary
-    [InlineData(3999, 5, ClientCategory.Bon)]
-    [InlineData(4000, 0, ClientCategory.Premium)] // spend threshold, exact boundary
-    [InlineData(0, 6, ClientCategory.Premium)]    // order-count threshold, exact boundary
-    [InlineData(10000, 20, ClientCategory.Premium)]
-    public void Determine_AppliesThresholdsCorrectly(decimal spend, int orders, ClientCategory expected)
+    [InlineData(0, ClientCategory.Nouveau)]
+    [InlineData(1500, ClientCategory.Nouveau)]   // exactly at the Bon threshold - must exceed it, not just reach it
+    [InlineData(1500.01, ClientCategory.Bon)]
+    [InlineData(3000, ClientCategory.Bon)]
+    [InlineData(5000, ClientCategory.Bon)]       // exactly at the Premium threshold - must exceed it
+    [InlineData(5000.01, ClientCategory.Premium)]
+    [InlineData(10000, ClientCategory.Premium)]
+    public void Determine_AppliesSpendThresholdsCorrectly(decimal spend, ClientCategory expected)
     {
-        Assert.Equal(expected, ClientCategoryEngine.Determine(spend, orders));
-    }
-
-    [Fact]
-    public void Determine_PremiumTakesPriorityOverBon_WhenBothThresholdsMet()
-    {
-        // Spend alone clears the Bon bar but the order count alone clears Premium - the higher tier wins.
-        Assert.Equal(ClientCategory.Premium, ClientCategoryEngine.Determine(1500m, 6));
+        Assert.Equal(expected, ClientCategoryEngine.Determine(spend));
     }
 }
 

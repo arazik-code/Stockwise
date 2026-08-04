@@ -474,7 +474,9 @@ public class OnlineOrderAppService : IOnlineOrderService
 
         client.TotalPoints += pointsEarned;
         client.LifetimePoints += pointsEarned;
-        client.TotalSpent += netAmount;
+        // TotalSpent is no longer incremented here - RecategorizeAsync below recomputes it
+        // authoritatively from the Sales/OnlineOrders tables (plus the Shopify lifetime total when
+        // higher), which already reflects this order since it was saved before this method runs.
         client.LastVisitAt = DateTime.UtcNow;
 
         _unitOfWork.Clients.AddTransaction(new LoyaltyTransaction

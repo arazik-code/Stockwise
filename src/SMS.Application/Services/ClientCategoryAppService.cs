@@ -9,27 +9,23 @@ using SMS.Domain.Interfaces;
 namespace SMS.Application.Services;
 
 /// <summary>
-/// Auto-categorization thresholds for the loyalty tier (Nouveau/Bon/Premium). Deliberately set above
-/// the CRM segment's VIP bar (>=2500 DH or 4+ orders, see ClientCrmAppService.DetermineSegment) - a
-/// tier that pays a permanently higher point rate needs a higher bar than a "give this person
-/// attention" marketing flag, or the store would overpay a much larger population than intended.
-/// Account age is deliberately NOT a factor here (unlike the CRM segment's "New if age&lt;=60") - a
-/// large historical Shopify import should reflect its true tier immediately, since this is about
-/// purchase behavior, not tenure.
+/// Auto-categorization rule for the loyalty tier (Nouveau/Bon/Premium), based purely on cumulative
+/// purchase total: Nouveau by default, Bon once total purchases exceed 1500 DH, Premium once they
+/// exceed 5000 DH. Deliberately simple and spend-only - no order-count or account-age factor -
+/// independent of the CRM's separate, marketing-oriented ClientSegment (see
+/// ClientCrmAppService.DetermineSegment), which answers a different question.
 /// </summary>
 public static class ClientCategoryEngine
 {
-    public const decimal PremiumSpendThreshold = 4000m;
-    public const int PremiumOrderThreshold = 6;
-    public const decimal BonSpendThreshold = 1200m;
-    public const int BonOrderThreshold = 3;
+    public const decimal PremiumSpendThreshold = 5000m;
+    public const decimal BonSpendThreshold = 1500m;
 
-    public static ClientCategory Determine(decimal effectiveSpent, int effectiveOrders)
+    public static ClientCategory Determine(decimal effectiveSpent)
     {
-        if (effectiveSpent >= PremiumSpendThreshold || effectiveOrders >= PremiumOrderThreshold)
+        if (effectiveSpent > PremiumSpendThreshold)
             return ClientCategory.Premium;
 
-        if (effectiveSpent >= BonSpendThreshold || effectiveOrders >= BonOrderThreshold)
+        if (effectiveSpent > BonSpendThreshold)
             return ClientCategory.Bon;
 
         return ClientCategory.Nouveau;
@@ -55,17 +51,8 @@ public class ClientCategoryAppService : IClientLoyaltyCategoryService
 
     public async Task RecategorizeAsync(Client client, LoyaltySettings settings, CancellationToken ct = default)
     {
-        // Callers (SaleAppService, OnlineOrderAppService) invoke this right after bumping
-        // client.TotalSpent in-memory for the sale/order that's still being saved - a fresh
-        // Sales/OnlineOrders aggregate query wouldn't see that same not-yet-saved row anyway, so use
-        // the already-current client.TotalSpent as the authoritative spend figure instead of
-        // re-deriving it, and only query for the order count.
-        var orderCount = await _unitOfWork.Set<Sale>().CountAsync(s => s.ClientId == client.Id, ct)
-            + await _unitOfWork.Set<OnlineOrder>().CountAsync(o => o.ClientId == client.Id && !ExcludedOnlineStatuses.Contains(o.Status), ct);
-
-        var effectiveOrders = orderCount > 0 ? orderCount : (client.ShopifyOrdersCount ?? 0);
-        var effectiveSpent = orderCount > 0 ? client.TotalSpent : (client.ShopifyTotalSpent ?? 0m);
-        ApplyComputed(client, effectiveSpent, effectiveOrders, settings);
+        var effectiveSpent = await ComputeEffectiveSpendAsync(client.Id, client.ShopifyTotalSpent, ct);
+        ApplyComputed(client, effectiveSpent, settings);
     }
 
     public async Task<Client> SetManualCategoryAsync(int clientId, ClientCategory? manualCategory, string? reason, CancellationToken ct = default)
@@ -75,10 +62,11 @@ public class ClientCategoryAppService : IClientLoyaltyCategoryService
 
         var settings = _loyaltySettings;
 
-        // Refresh ComputedCategory too, so clearing the override falls back to an up-to-date
-        // suggestion rather than whatever was last computed (possibly a while ago).
-        var (spend, orders) = await ComputeEffectiveSpendOrdersAsync(client.Id, client.ShopifyTotalSpent, client.ShopifyOrdersCount, ct);
-        client.ComputedCategory = ClientCategoryEngine.Determine(spend, orders);
+        // Refresh ComputedCategory (and TotalSpent) too, so clearing the override falls back to an
+        // up-to-date suggestion rather than whatever was last computed (possibly a while ago).
+        var effectiveSpent = await ComputeEffectiveSpendAsync(client.Id, client.ShopifyTotalSpent, ct);
+        client.TotalSpent = effectiveSpent;
+        client.ComputedCategory = ClientCategoryEngine.Determine(effectiveSpent);
         client.ManualCategory = manualCategory;
         client.EffectiveCategory = client.ManualCategory ?? client.ComputedCategory;
         client.LoyaltyRate = _rateResolver.GetRate(client, settings);
@@ -117,26 +105,20 @@ public class ClientCategoryAppService : IClientLoyaltyCategoryService
         var saleAgg = await _unitOfWork.Set<Sale>()
             .Where(s => s.ClientId != null && clientIds.Contains(s.ClientId.Value))
             .GroupBy(s => s.ClientId!.Value)
-            .Select(g => new { ClientId = g.Key, Spent = g.Sum(s => s.TotalAmount), Orders = g.Count() })
+            .Select(g => new { ClientId = g.Key, Spent = g.Sum(s => s.TotalAmount) })
             .ToListAsync(ct);
 
         var onlineAgg = await _unitOfWork.Set<OnlineOrder>()
             .Where(o => o.ClientId != null && clientIds.Contains(o.ClientId.Value) && !ExcludedOnlineStatuses.Contains(o.Status))
             .GroupBy(o => o.ClientId!.Value)
-            .Select(g => new { ClientId = g.Key, Spent = g.Sum(o => o.TotalAmount), Orders = g.Count() })
+            .Select(g => new { ClientId = g.Key, Spent = g.Sum(o => o.TotalAmount) })
             .ToListAsync(ct);
 
-        var itemized = new Dictionary<int, (decimal Spent, int Orders)>();
+        var itemizedSpentByClient = new Dictionary<int, decimal>();
         foreach (var row in saleAgg)
-        {
-            var cur = itemized.GetValueOrDefault(row.ClientId);
-            itemized[row.ClientId] = (cur.Spent + row.Spent, cur.Orders + row.Orders);
-        }
+            itemizedSpentByClient[row.ClientId] = itemizedSpentByClient.GetValueOrDefault(row.ClientId) + row.Spent;
         foreach (var row in onlineAgg)
-        {
-            var cur = itemized.GetValueOrDefault(row.ClientId);
-            itemized[row.ClientId] = (cur.Spent + row.Spent, cur.Orders + row.Orders);
-        }
+            itemizedSpentByClient[row.ClientId] = itemizedSpentByClient.GetValueOrDefault(row.ClientId) + row.Spent;
 
         var recomputed = 0;
         foreach (var idBatch in clientIds.Chunk(200))
@@ -144,10 +126,14 @@ public class ClientCategoryAppService : IClientLoyaltyCategoryService
             var clients = await _unitOfWork.Set<Client>().Where(c => idBatch.Contains(c.Id)).ToListAsync(ct);
             foreach (var client in clients)
             {
-                var (itemizedSpent, itemizedOrders) = itemized.GetValueOrDefault(client.Id);
-                var spend = itemizedOrders > 0 ? itemizedSpent : (client.ShopifyTotalSpent ?? 0m);
-                var orders = itemizedOrders > 0 ? itemizedOrders : (client.ShopifyOrdersCount ?? 0);
-                ApplyComputed(client, spend, orders, settings);
+                var itemizedSpent = itemizedSpentByClient.GetValueOrDefault(client.Id);
+                // Shopify's lifetime customer figure is authoritative for that channel and may cover
+                // orders that were never itemized locally (partial/incomplete sync) - take whichever
+                // source shows more so a Shopify client's real purchase total is never undercounted,
+                // without double-counting orders that WERE itemized locally (itemized already includes
+                // them, so it's naturally >= the Shopify figure in that case).
+                var effectiveSpent = Math.Max(itemizedSpent, client.ShopifyTotalSpent ?? 0m);
+                ApplyComputed(client, effectiveSpent, settings);
                 recomputed++;
             }
 
@@ -158,35 +144,30 @@ public class ClientCategoryAppService : IClientLoyaltyCategoryService
         return recomputed;
     }
 
-    private void ApplyComputed(Client client, decimal effectiveSpent, int effectiveOrders, LoyaltySettings settings)
+    private void ApplyComputed(Client client, decimal effectiveSpent, LoyaltySettings settings)
     {
-        client.ComputedCategory = ClientCategoryEngine.Determine(effectiveSpent, effectiveOrders);
+        // TotalSpent is the figure shown in the Loyalty section - keeping it in sync here (rather
+        // than only ever incrementing it per-transaction) is what makes a Shopify client's purchases
+        // actually show up there, including lifetime spend that predates or wasn't itemized locally.
+        client.TotalSpent = effectiveSpent;
+        client.ComputedCategory = ClientCategoryEngine.Determine(effectiveSpent);
         client.EffectiveCategory = client.ManualCategory ?? client.ComputedCategory;
         client.LoyaltyRate = _rateResolver.GetRate(client, settings);
         client.CategoryUpdatedAt = DateTime.UtcNow;
     }
 
-    private async Task<(decimal Spend, int Orders)> ComputeEffectiveSpendOrdersAsync(
-        int clientId, decimal? shopifyTotalSpent, int? shopifyOrdersCount, CancellationToken ct)
+    private async Task<decimal> ComputeEffectiveSpendAsync(int clientId, decimal? shopifyTotalSpent, CancellationToken ct)
     {
-        var saleAgg = await _unitOfWork.Set<Sale>()
+        var saleSpent = await _unitOfWork.Set<Sale>()
             .Where(s => s.ClientId == clientId)
-            .GroupBy(s => s.ClientId)
-            .Select(g => new { Spent = g.Sum(s => s.TotalAmount), Orders = g.Count() })
-            .FirstOrDefaultAsync(ct);
+            .SumAsync(s => (decimal?)s.TotalAmount, ct) ?? 0m;
 
-        var onlineAgg = await _unitOfWork.Set<OnlineOrder>()
+        var onlineSpent = await _unitOfWork.Set<OnlineOrder>()
             .Where(o => o.ClientId == clientId && !ExcludedOnlineStatuses.Contains(o.Status))
-            .GroupBy(o => o.ClientId)
-            .Select(g => new { Spent = g.Sum(o => o.TotalAmount), Orders = g.Count() })
-            .FirstOrDefaultAsync(ct);
+            .SumAsync(o => (decimal?)o.TotalAmount, ct) ?? 0m;
 
-        var itemizedSpent = (saleAgg?.Spent ?? 0m) + (onlineAgg?.Spent ?? 0m);
-        var itemizedOrders = (saleAgg?.Orders ?? 0) + (onlineAgg?.Orders ?? 0);
-
-        return itemizedOrders > 0
-            ? (itemizedSpent, itemizedOrders)
-            : (shopifyTotalSpent ?? 0m, shopifyOrdersCount ?? 0);
+        var itemizedSpent = saleSpent + onlineSpent;
+        return Math.Max(itemizedSpent, shopifyTotalSpent ?? 0m);
     }
 
     private static string CategoryLabel(ClientCategory category) => category switch
