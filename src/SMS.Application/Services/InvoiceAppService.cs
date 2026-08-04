@@ -550,28 +550,37 @@ public class InvoiceAppService : IInvoiceService
 
     public async Task<InvoiceSummaryDto> GetSummaryAsync(CancellationToken ct = default)
     {
-        var invoices = await _unitOfWork.Invoices.GetAllAsync(ct);
         var now = DateTime.UtcNow;
-        var all = invoices.ToList();
-        var unpaid = all.Where(i => i.Status != InvoiceStatus.Paid.ToString() && i.Status != InvoiceStatus.Cancelled.ToString()).ToList();
+        var paidStatus = InvoiceStatus.Paid.ToString();
+        var cancelledStatus = InvoiceStatus.Cancelled.ToString();
+
+        // Summary only needs a handful of scalar fields, not the full invoice graph - the previous
+        // version went through Invoices.GetAllAsync(), which eagerly loads every LineItem and Payment
+        // for the store's entire invoice history just to add up a few numbers. On this box that
+        // full graph gets pulled twice per page load (GetAllAsync() runs the same query again for
+        // the list itself), and the cost only grows with the invoice history - a likely contributor
+        // to Factures getting slow/stuck under load. Project just what's needed instead.
+        var rows = await _unitOfWork.Invoices.GetSummaryRowsAsync(ct);
+
+        var unpaid = rows.Where(i => i.Status != paidStatus && i.Status != cancelledStatus).ToList();
         var overdue = unpaid.Where(i => i.DueDate is not null && i.DueDate < now).ToList();
-        var paid = all.Where(i => i.Status == InvoiceStatus.Paid.ToString()).ToList();
+        var paidCount = rows.Count(i => i.Status == paidStatus);
 
         return new InvoiceSummaryDto
         {
-            TotalOwed = unpaid.Sum(i => i.TotalAmount - i.PaidAmount),
-            TotalOverdue = overdue.Sum(i => i.TotalAmount - i.PaidAmount),
+            TotalOwed = unpaid.Sum(i => i.Owed),
+            TotalOverdue = overdue.Sum(i => i.Owed),
             PendingCount = unpaid.Count,
             OverdueCount = overdue.Count,
-            PaidCount = paid.Count,
-            TotalCount = all.Count,
+            PaidCount = paidCount,
+            TotalCount = rows.Count,
             FournisseurBalances = unpaid
-                .GroupBy(i => new { i.FournisseurId, Nom = i.Fournisseur?.Nom ?? string.Empty })
+                .GroupBy(i => new { i.FournisseurId, Nom = i.FournisseurNom })
                 .Select(g => new FournisseurBalanceDto
                 {
                     FournisseurId = g.Key.FournisseurId,
                     FournisseurNom = g.Key.Nom,
-                    TotalOwed = g.Sum(i => i.TotalAmount - i.PaidAmount),
+                    TotalOwed = g.Sum(i => i.Owed),
                     InvoiceCount = g.Count()
                 })
                 .OrderByDescending(b => b.TotalOwed)

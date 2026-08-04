@@ -64,6 +64,17 @@ public class InvoiceRepository : IInvoiceRepository
 
     public void Delete(Invoice invoice) => _context.Invoices.Remove(invoice);
 
+    public async Task<IReadOnlyList<InvoiceSummaryRow>> GetSummaryRowsAsync(CancellationToken ct = default)
+        => await _context.Invoices
+            .AsNoTracking()
+            .Select(i => new InvoiceSummaryRow(
+                i.FournisseurId,
+                i.Fournisseur != null ? i.Fournisseur.Nom : string.Empty,
+                i.Status,
+                i.DueDate,
+                i.TotalAmount - i.PaidAmount))
+            .ToListAsync(ct);
+
     public async Task<int> GetMaxInvoiceNumberAsync(CancellationToken ct = default)
     {
         var numbers = await _context.Invoices.Select(i => i.InvoiceNumber).ToListAsync(ct);

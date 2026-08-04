@@ -283,15 +283,15 @@ public class InvoiceAppServiceTests
     [Fact]
     public async Task GetSummaryAsync_CalculatesCorrectly()
     {
-        var invoices = new List<Invoice>
+        var rows = new List<InvoiceSummaryRow>
         {
-            new() { Id = 1, Status = InvoiceStatus.Pending.ToString(), TotalAmount = 1000, PaidAmount = 0, DueDate = DateTime.UtcNow.AddDays(10), Fournisseur = new Fournisseur { Nom = "A" }, LineItems = new List<InvoiceLineItem>(), Payments = new List<InvoicePayment>() },
-            new() { Id = 2, Status = InvoiceStatus.Paid.ToString(), TotalAmount = 500, PaidAmount = 500, Fournisseur = new Fournisseur { Nom = "B" }, LineItems = new List<InvoiceLineItem>(), Payments = new List<InvoicePayment>() },
-            new() { Id = 3, Status = InvoiceStatus.Pending.ToString(), TotalAmount = 2000, PaidAmount = 500, DueDate = DateTime.UtcNow.AddDays(-5), Fournisseur = new Fournisseur { Nom = "A" }, LineItems = new List<InvoiceLineItem>(), Payments = new List<InvoicePayment>() },
+            new(FournisseurId: 1, FournisseurNom: "A", Status: InvoiceStatus.Pending.ToString(), DueDate: DateTime.UtcNow.AddDays(10), Owed: 1000),
+            new(FournisseurId: 2, FournisseurNom: "B", Status: InvoiceStatus.Paid.ToString(), DueDate: null, Owed: 0),
+            new(FournisseurId: 1, FournisseurNom: "A", Status: InvoiceStatus.Pending.ToString(), DueDate: DateTime.UtcNow.AddDays(-5), Owed: 1500),
         };
 
-        _invoiceRepoMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(invoices);
+        _invoiceRepoMock.Setup(r => r.GetSummaryRowsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(rows);
 
         var result = await _service.GetSummaryAsync();
 
