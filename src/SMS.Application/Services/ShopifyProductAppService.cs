@@ -223,6 +223,9 @@ public class ShopifyProductAppService : IShopifyProductService
                     // Shopify stamps "Default Title" on the single variant of a product with no real
                     // options defined — it's a placeholder, not a merchandising color/size value.
                     var colorName = colorOptionIndex.HasValue ? NullIfDefaultTitle(optionValues[colorOptionIndex.Value]) : null;
+                    // This catalog has no Shopify color option at all (see ExtractColorFromTitle doc
+                    // comment) - fall back to parsing it out of the product title before giving up.
+                    colorName ??= ExtractColorFromTitle(sp.Title);
                     var sizeName = sizeOptionIndex.HasValue ? NullIfDefaultTitle(optionValues[sizeOptionIndex.Value]) : null;
 
                     var color = string.IsNullOrWhiteSpace(colorName)
@@ -397,6 +400,88 @@ public class ShopifyProductAppService : IShopifyProductService
         => string.IsNullOrWhiteSpace(value) || value.Trim().Equals("Default Title", StringComparison.OrdinalIgnoreCase)
             ? null
             : value;
+
+    // This store's Shopify catalog is one product per colorway (confirmed live: every product has
+    // exactly one option, "Pointures"/size - color is never a Shopify option at all), so colorOptionIndex
+    // is always null and every variant used to fall through to the "Standard" default color. The real
+    // color lives in the product title instead (e.g. "Basket En Cuir Marron - Zeggane", "Bally - Derby
+    // a pampilles en Cuir Noir") - this scans the title for a known color word/synonym (French, with
+    // gender/plural variants and common typos seen in the live catalog, plus English equivalents) and
+    // returns the matched canonical name(s) in reading order, or null if the title genuinely has none
+    // (falls back to "Standard", which is correct for those).
+    private static readonly (Regex Pattern, string Canonical)[] ColorTitleMatchers = BuildColorTitleMatchers();
+
+    private static (Regex, string)[] BuildColorTitleMatchers()
+    {
+        var bySpecificity = new (string Canonical, string[] Synonyms)[]
+        {
+            ("Bleu Marine", ["bleu marine", "blue marine", "navy"]),
+            ("Vert Foncé", ["vert foncé", "vert fonce"]),
+            ("Noir", ["noir", "noire", "noirs", "noires", "black"]),
+            ("Blanc", ["blanc", "blanche", "blancs", "blanches", "white"]),
+            ("Bleu", ["bleu", "bleue", "bleus", "bleues", "blue"]),
+            ("Marron", ["marron", "marrons", "maron", "brown"]),
+            ("Beige", ["beige", "beiges"]),
+            ("Gris", ["gris", "grise", "grises", "grey", "gray"]),
+            ("Vert", ["vert", "verte", "verts", "vertes", "green"]),
+            ("Tabac", ["tabac"]),
+            ("Camel", ["camel"]),
+            ("Cognac", ["cognac"]),
+            ("Chocolat", ["chocolat"]),
+            ("Rouge", ["rouge", "rouges", "red"]),
+            ("Jaune", ["jaune", "jaunes", "yellow"]),
+            ("Rose", ["rose", "roses", "pink"]),
+            ("Orange", ["orange", "oranges"]),
+            ("Violet", ["violet", "violette", "violettes", "purple"]),
+            ("Doré", ["doré", "dore", "dorée", "doree", "gold", "golden"]),
+            ("Argenté", ["argenté", "argente", "argentée", "argentee", "silver"]),
+            ("Kaki", ["kaki"]),
+            ("Bordeaux", ["bordeaux"]),
+            ("Fauve", ["fauve"]),
+        };
+
+        var list = new List<(Regex, string)>();
+        foreach (var (canonical, synonyms) in bySpecificity)
+        {
+            foreach (var syn in synonyms)
+            {
+                var escaped = Regex.Escape(syn).Replace(@"\ ", @"\s+");
+                list.Add((new Regex($@"\b{escaped}\b", RegexOptions.IgnoreCase), canonical));
+            }
+        }
+
+        // Longest synonym text first, so a compound ("bleu marine") is tried before its single-word
+        // component ("bleu") when scanning left to right - otherwise "bleu" would win first and the
+        // title would never be recognized as the more specific "Bleu Marine".
+        return [.. list.OrderByDescending(x => x.Item1.ToString().Length)];
+    }
+
+    internal static string? ExtractColorFromTitle(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return null;
+
+        var found = new List<(int Index, int Length, string Canonical)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (pattern, canonical) in ColorTitleMatchers)
+        {
+            if (seen.Contains(canonical)) continue;
+            var m = pattern.Match(title);
+            if (!m.Success) continue;
+            // Skip if this match overlaps a higher-priority match already accepted - e.g. once "Bleu
+            // Marine" is accepted, its own leading word would otherwise also match plain "Bleu" at
+            // the same span and wrongly produce "Bleu Marine / Bleu".
+            if (found.Any(f => m.Index < f.Index + f.Length && f.Index < m.Index + m.Length)) continue;
+            found.Add((m.Index, m.Length, canonical));
+            seen.Add(canonical);
+        }
+
+        if (found.Count == 0) return null;
+
+        // Preserve the order the colors actually appear in the title (e.g. "Marron & Vert" ->
+        // "Marron / Vert"), not the priority order they were matched in.
+        return string.Join(" / ", found.OrderBy(f => f.Index).Select(f => f.Canonical));
+    }
 
     private static string? StripHtml(string? html)
     {

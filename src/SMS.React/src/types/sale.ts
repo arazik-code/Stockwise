@@ -45,6 +45,7 @@ export interface CreateSaleRequest {
   taxRate: number
   clientId?: number
   loyaltyPointsToRedeem?: number
+  exchangeCreditAmount?: number
   items: { productVariantId: number; quantity: number; discountAmount: number }[]
 }
 

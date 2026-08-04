@@ -60,7 +60,6 @@ export default function CheckoutDialog({
       const capturedSubtotal = currentSubtotal
       const capturedTaxAmount = taxAmount
       const capturedTaxRate = taxRate
-      const capturedTotal = rawTotal
 
       const sale = await salesApi.create({
         category: category,
@@ -69,12 +68,19 @@ export default function CheckoutDialog({
         taxRate: useCartStore.getState().taxRate,
         clientId: loyaltyClient?.id,
         loyaltyPointsToRedeem: loyaltyEnabled && pointsToRedeem > 0 ? pointsToRedeem : undefined,
+        exchangeCreditAmount: isExchange ? exchangeCredit : undefined,
         items: items.map((i) => ({
           productVariantId: i.productVariantId,
           quantity: i.quantity,
           discountAmount: 0,
         })),
       })
+
+      // The receipt's total/paid/change come from the persisted sale, not a locally recomputed
+      // value - for an exchange this is the only number that's actually credit-adjusted (the backend
+      // applies exchangeCreditAmount), so using it here is what keeps the printed ticket, the change
+      // given, and the sale record itself in agreement instead of drifting apart.
+      const capturedTotal = sale.totalAmount
 
       // If exchange: create the refund record
       if (isExchange && exchangeContext) {
@@ -109,8 +115,8 @@ export default function CheckoutDialog({
         loyaltyDiscount: loyaltyDiscount,
         total: capturedTotal,
         paymentMethod,
-        amountPaid: parseFloat(amountPaid || total.toFixed(2)),
-        change: Math.max(0, parseFloat(amountPaid || '0') - capturedTotal),
+        amountPaid: sale.amountPaid,
+        change: sale.changeGiven,
         clientName: loyaltyClient?.name,
         clientQrCode: loyaltyClient?.qrCode,
         pointsEarned: loyaltyEnabled && !hasLiquidationItems() ? pointsToEarn : 0,
@@ -147,7 +153,7 @@ export default function CheckoutDialog({
     } finally {
       setProcessing(false)
     }
-  }, [processing, paymentMethod, change, items, rawTotal, total, currentSubtotal, taxAmount, taxRate, loyaltyClient, loyaltyEnabled, pointsToRedeem, loyaltyDiscount, hasLiquidationItems, pointsToEarn, amountPaid, clearCart, onSaleComplete, exchangeContext, exchangeCredit])
+  }, [processing, paymentMethod, change, items, total, currentSubtotal, taxAmount, taxRate, loyaltyClient, loyaltyEnabled, pointsToRedeem, loyaltyDiscount, hasLiquidationItems, pointsToEarn, amountPaid, amountPaidNum, clearCart, onSaleComplete, exchangeContext, exchangeCredit])
 
   // Keyboard navigation inside checkout dialog
   useEffect(() => {

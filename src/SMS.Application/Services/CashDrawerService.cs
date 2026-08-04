@@ -47,8 +47,14 @@ public class CashDrawerService : ICashDrawerService
             .Where(s => s.PaymentMethod == PaymentMethod.Cash)
             .SumAsync(s => s.TotalAmount, ct);
 
+        // Only standalone refunds ("Refund") belong here - an "Exchange" always creates its own
+        // replacement Sale, and that Sale's TotalAmount is already net of the exchange credit
+        // (SaleAppService applies ExchangeCreditAmount), collected via whatever payment method that
+        // sale actually used. Counting Refund.PriceDifference for exchanges too would double-adjust
+        // the same cash movement, and would do so under the ORIGINAL sale's payment method rather
+        // than the replacement sale's, compounding the error further.
         var cashRefundsTotal = await _unitOfWork.Set<Refund>()
-            .Where(r => r.Status == "Completed" && r.Sale != null && r.Sale.PaymentMethod == PaymentMethod.Cash)
+            .Where(r => r.Status == "Completed" && r.Type == "Refund" && r.Sale != null && r.Sale.PaymentMethod == PaymentMethod.Cash)
             .SumAsync(r => r.PriceDifference, ct);
 
         var manualMovements = await _unitOfWork.Set<CashDrawerMovement>().ToListAsync(ct);

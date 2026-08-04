@@ -124,7 +124,11 @@ public class SaleAppService : ISaleService
 
             var discountedSubTotal = subTotal - loyaltyDiscount;
             var taxAmount = discountedSubTotal * request.TaxRate;
-            var totalAmount = discountedSubTotal + taxAmount;
+            // Exchange credit (store credit from the items being returned, POS ExchangeDialog flow)
+            // reduces what's actually owed on this replacement sale - clamped at 0 since a credit
+            // that exceeds the new items' price means the store owes the customer, not the reverse,
+            // and that cash-back case isn't handled by this endpoint.
+            var totalAmount = Math.Max(0, discountedSubTotal + taxAmount - request.ExchangeCreditAmount);
             var changeGiven = request.AmountPaid - totalAmount;
 
             var rate = client is not null ? _loyaltyRateResolver.GetRate(client, _loyaltySettings) : _loyaltySettings.NewClientRate;

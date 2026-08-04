@@ -73,6 +73,76 @@ public class SaleAppServiceTests
     }
 
     [Fact]
+    public async Task CreateSaleAsync_WithExchangeCredit_DeductsCreditFromTotal()
+    {
+        // 2 x 100 DH item, no tax, 150 DH exchange credit from the returned item -> owed = 200 - 150 = 50.
+        var stockItem = new StockItem
+        {
+            ProductVariantId = 1,
+            QuantityOnHand = 50,
+            QuantityReserved = 0,
+            ProductVariant = new ProductVariant { Id = 1, Sku = "A001", Product = new Product { Id = 1, Name = "Shoe A", Price = 100m }, Color = new Color { Name = "Red" }, Size = new Size { Value = "42" } }
+        };
+
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stockItem);
+
+        _saleRepoMock.Setup(r => r.GenerateSaleNumberAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("POS-20260701-002");
+
+        _saleRepoMock.Setup(r => r.AddAsync(It.IsAny<Sale>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Sale s, CancellationToken _) => { s.Id = 2; return s; });
+
+        var request = new CreateSaleRequest
+        {
+            Items = [new SaleItemRequest { ProductVariantId = 1, Quantity = 2, DiscountAmount = 0 }],
+            PaymentMethod = PaymentMethod.Cash,
+            AmountPaid = 50m,
+            TaxRate = 0m,
+            ExchangeCreditAmount = 150m
+        };
+
+        var result = await _service.CreateSaleAsync(request, userId: 1);
+
+        Assert.Equal(50m, result.TotalAmount);
+        Assert.Equal(0m, result.ChangeGiven);
+    }
+
+    [Fact]
+    public async Task CreateSaleAsync_ExchangeCreditExceedsPrice_ClampsTotalToZero()
+    {
+        var stockItem = new StockItem
+        {
+            ProductVariantId = 1,
+            QuantityOnHand = 50,
+            QuantityReserved = 0,
+            ProductVariant = new ProductVariant { Id = 1, Sku = "A001", Product = new Product { Id = 1, Name = "Shoe A", Price = 100m }, Color = new Color { Name = "Red" }, Size = new Size { Value = "42" } }
+        };
+
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stockItem);
+
+        _saleRepoMock.Setup(r => r.GenerateSaleNumberAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("POS-20260701-003");
+
+        _saleRepoMock.Setup(r => r.AddAsync(It.IsAny<Sale>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Sale s, CancellationToken _) => { s.Id = 3; return s; });
+
+        var request = new CreateSaleRequest
+        {
+            Items = [new SaleItemRequest { ProductVariantId = 1, Quantity = 1, DiscountAmount = 0 }],
+            PaymentMethod = PaymentMethod.Cash,
+            AmountPaid = 0m,
+            TaxRate = 0m,
+            ExchangeCreditAmount = 500m // far exceeds the 100 DH item price
+        };
+
+        var result = await _service.CreateSaleAsync(request, userId: 1);
+
+        Assert.Equal(0m, result.TotalAmount);
+    }
+
+    [Fact]
     public async Task CreateSaleAsync_InsufficientStock_ThrowsInsufficientStock()
     {
         var stockItem = new StockItem

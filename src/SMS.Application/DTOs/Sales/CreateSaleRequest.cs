@@ -10,6 +10,9 @@ public class CreateSaleRequest
     public decimal TaxRate { get; set; }
     public int? ClientId { get; set; }
     public int? LoyaltyPointsToRedeem { get; set; }
+    // Store credit from returning items as part of an exchange (POS ExchangeDialog flow) - deducted
+    // from the total owed on this replacement sale. Distinct from LoyaltyPointsToRedeem.
+    public decimal ExchangeCreditAmount { get; set; }
     public List<SaleItemRequest> Items { get; set; } = [];
 }
 
