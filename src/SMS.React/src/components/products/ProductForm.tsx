@@ -172,10 +172,10 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
       if (isNewVariant && variantId) {
         try {
           const { devicesApi } = await import('../../api/devices')
+          const { hardwareApi } = await import('../../api/hardwareClient')
           const status = await devicesApi.getStatus()
           if (status.printer.online) {
-            const res = await fetch(`/api/printer/variant/${variantId}/print`, { method: 'POST' })
-            const data = await res.json()
+            const { data } = await hardwareApi.post(`/printer/variant/${variantId}/print`)
             if (data.sent) {
               showToast(`✓ Étiquette envoyée à l'imprimante`, 'success')
             }

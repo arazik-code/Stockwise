@@ -18,5 +18,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Update="icon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <!-- RemoteApiUrl empty by default - the app behaves exactly as it always has (local only)
+         until this is filled in once the VPS exists. NOTE: republishing resets this file back to
+         the empty template, same as appsettings.Production.json/.env.prod already work in this
+         repo - re-apply the real value in the installed location after each fresh deploy. -->
+    <None Update="desktop-config.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -1,13 +1,19 @@
 using System.Diagnostics;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/devices")]
-[Authorize]
+// Loopback-only (see LoopbackOnlyMiddleware) rather than JWT-authenticated - this only makes
+// sense called against the local API instance from the same machine, regardless of whether the
+// main session's brain is the VPS or the local fallback. EnableCors("HardwareLocal") because this
+// becomes a cross-origin call once the page is served from the VPS.
+[AllowAnonymous]
+[EnableCors("HardwareLocal")]
 public class DevicesController : ControllerBase
 {
     private readonly IConfiguration _configuration;

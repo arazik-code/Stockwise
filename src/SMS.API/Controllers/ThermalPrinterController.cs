@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using SMS.Application.DTOs.Printer;
 using SMS.Application.DTOs.Products;
@@ -10,7 +11,12 @@ namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/printer")]
-[Authorize]
+// Loopback-only (see LoopbackOnlyMiddleware) rather than JWT-authenticated - printing only makes
+// sense against the local API instance physically near the store's printer, regardless of
+// whether the main session's brain is the VPS or the local fallback. EnableCors("HardwareLocal")
+// because this becomes a cross-origin call once the page is served from the VPS.
+[AllowAnonymous]
+[EnableCors("HardwareLocal")]
 public class ThermalPrinterController : ControllerBase
 {
     private readonly ThermalPrinterService _printerService;

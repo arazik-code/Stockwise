@@ -1,4 +1,4 @@
-import api from './client'
+import { hardwareApi as api } from './hardwareClient'
 
 export interface DeviceStatus {
   printer: {

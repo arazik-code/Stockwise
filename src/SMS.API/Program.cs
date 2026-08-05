@@ -201,6 +201,18 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());
+
+    // Printer/hardware endpoints are always called against http://localhost:5001 directly (see
+    // ProductForm.tsx, api/devices.ts, api/printerClient.ts), regardless of whether the page
+    // itself is being served from the VPS or the local API - once the page is on the VPS, that
+    // call becomes cross-origin from the browser's perspective. Wide open here is safe: these
+    // routes are already loopback-gated by LoopbackOnlyMiddleware, so CORS is the least
+    // restrictive layer, not the only one. No AllowCredentials() - these calls carry no
+    // Authorization header or cookies (see the loopback-trust design, decision #4 in the plan).
+    options.AddPolicy("HardwareLocal", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
 var app = builder.Build();
@@ -252,6 +264,8 @@ app.UseStaticFiles(new StaticFileOptions
         }
     }
 });
+app.UseLoopbackOnlyForHardwareEndpoints();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

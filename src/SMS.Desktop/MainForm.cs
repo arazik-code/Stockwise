@@ -1,26 +1,71 @@
 using System.Diagnostics;
 using System.Net.Http;
+using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 
 namespace SMS.Desktop;
 
+public class DesktopConfig
+{
+    // Null/empty = no VPS configured yet - the app behaves exactly as it always has (local only,
+    // no health-check timer, no banner). Set once the VPS is up; see deploy/VPS-DEPLOY.md.
+    public string? RemoteApiUrl { get; set; }
+}
+
 public partial class MainForm : Form
 {
+    private enum Brain { Local, Remote }
+
     private Process? _apiProcess;
     private readonly int _apiPort = 5001;
-    private readonly string _baseUrl;
+    private readonly string _localUrl;
+    private string? _remoteUrl;
+    private Brain _currentBrain = Brain.Local;
+    private int _consecutiveFailures;
+    private System.Windows.Forms.Timer? _healthCheckTimer;
+    private readonly HttpClient _healthHttpClient = new() { Timeout = TimeSpan.FromSeconds(3) };
+
+    // A blip shouldn't bounce the app between brains - require this many consecutive failed
+    // checks (roughly one per HealthCheckIntervalMs) before actually failing over.
+    private const int FailureThreshold = 3;
+    private const int HealthCheckIntervalMs = 20_000;
+
     private Panel _loadingPanel = null!;
     private Label _statusLabel = null!;
     private Label _subtitleLabel = null!;
     private ProgressBar _progressBar = null!;
     private Microsoft.Web.WebView2.WinForms.WebView2 _webView = null!;
 
+    private Panel _bannerPanel = null!;
+    private Label _bannerLabel = null!;
+    private Button _bannerButton = null!;
+
     public MainForm()
     {
-        _baseUrl = $"http://localhost:{_apiPort}";
+        _localUrl = $"http://localhost:{_apiPort}";
+        _remoteUrl = LoadDesktopConfig().RemoteApiUrl;
+        if (string.IsNullOrWhiteSpace(_remoteUrl)) _remoteUrl = null;
+
         InitializeUI();
         Load += OnFormLoad;
         FormClosing += OnFormClosing;
+    }
+
+    private static DesktopConfig LoadDesktopConfig()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "desktop-config.json");
+            if (!File.Exists(path)) return new DesktopConfig();
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<DesktopConfig>(json) ?? new DesktopConfig();
+        }
+        catch
+        {
+            // Missing/malformed config is not fatal - just means "no remote configured", same as
+            // not having the file at all.
+            return new DesktopConfig();
+        }
     }
 
     private void InitializeUI()
@@ -107,8 +152,47 @@ public partial class MainForm : Form
             Visible = false
         };
 
+        // Thin status bar for the VPS/local-fallback connectivity state. Dock=Top, hidden by
+        // default (zero height in the layout when not Visible) - only shown once a RemoteApiUrl
+        // is actually configured and something's worth telling the cashier about. Added to the
+        // Controls collection AFTER the Fill-docked webview so it correctly reserves its slice at
+        // the top and the webview fills the remainder (WinForms docks later-added siblings first).
+        _bannerPanel = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 36,
+            Visible = false,
+            BackColor = Color.FromArgb(180, 83, 9) // amber-700, overwritten per-state below
+        };
+        _bannerLabel = new Label
+        {
+            Dock = DockStyle.Left,
+            AutoSize = false,
+            Width = 900,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(12, 0, 0, 0),
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Regular),
+            ForeColor = Color.White,
+            BackColor = Color.Transparent
+        };
+        _bannerButton = new Button
+        {
+            Dock = DockStyle.Right,
+            Width = 160,
+            Text = "Recharger",
+            Visible = false,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(255, 255, 255, 40),
+            ForeColor = Color.White
+        };
+        _bannerButton.FlatAppearance.BorderSize = 0;
+        _bannerButton.Click += (_, _) => SwitchToRemote(userInitiated: true);
+        _bannerPanel.Controls.Add(_bannerLabel);
+        _bannerPanel.Controls.Add(_bannerButton);
+
         Controls.Add(_webView);
         Controls.Add(_loadingPanel);
+        Controls.Add(_bannerPanel);
 
         ResumeLayout(false);
     }
@@ -133,7 +217,114 @@ public partial class MainForm : Form
         var env = await CoreWebView2Environment.CreateAsync(null, webViewDataFolder);
         await _webView.EnsureCoreWebView2Async(env);
         _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
-        _webView.CoreWebView2.Navigate($"{_baseUrl}?v={DateTime.Now.Ticks}");
+
+        if (_remoteUrl is not null)
+        {
+            // One quick check to decide the INITIAL brain - not the full 60s retry loop
+            // WaitForApiAsync uses for the local API, since we don't want a slow/unreachable VPS
+            // to hold up app startup for a cashier who just needs to ring up a sale.
+            var remoteHealthyAtStartup = await IsHealthyAsync(_remoteUrl);
+            _currentBrain = remoteHealthyAtStartup ? Brain.Remote : Brain.Local;
+
+            _healthCheckTimer = new System.Windows.Forms.Timer { Interval = HealthCheckIntervalMs };
+            _healthCheckTimer.Tick += async (_, _) => await HealthCheckTick();
+            _healthCheckTimer.Start();
+        }
+        else
+        {
+            _currentBrain = Brain.Local;
+        }
+
+        var targetUrl = _currentBrain == Brain.Remote ? _remoteUrl! : _localUrl;
+        _webView.CoreWebView2.Navigate($"{targetUrl}?v={DateTime.Now.Ticks}");
+    }
+
+    private async Task HealthCheckTick()
+    {
+        if (_remoteUrl is null) return;
+
+        var remoteHealthy = await IsHealthyAsync(_remoteUrl);
+
+        if (_currentBrain == Brain.Remote)
+        {
+            if (remoteHealthy)
+            {
+                _consecutiveFailures = 0;
+                return;
+            }
+
+            _consecutiveFailures++;
+            if (_consecutiveFailures >= FailureThreshold)
+            {
+                SwitchToLocal();
+            }
+        }
+        else // currently on the local fallback
+        {
+            if (remoteHealthy)
+            {
+                ShowReconnectBanner();
+            }
+            else
+            {
+                HideBanner();
+            }
+        }
+    }
+
+    // Automatic - a blip in the primary connection shouldn't need the cashier to do anything.
+    private void SwitchToLocal()
+    {
+        _currentBrain = Brain.Local;
+        _consecutiveFailures = 0;
+        ShowOfflineBanner();
+        _webView.CoreWebView2.Navigate($"{_localUrl}?v={DateTime.Now.Ticks}");
+    }
+
+    // User-initiated only (the banner's "Recharger" button) - never automatic, so a cashier
+    // mid-transaction is never surprised by a reload they didn't ask for. The cart survives the
+    // reload either way (persisted client-side), but choosing the moment is still nicer.
+    private void SwitchToRemote(bool userInitiated)
+    {
+        if (!userInitiated) return;
+        _currentBrain = Brain.Remote;
+        _consecutiveFailures = 0;
+        HideBanner();
+        _webView.CoreWebView2.Navigate($"{_remoteUrl}?v={DateTime.Now.Ticks}");
+    }
+
+    private void ShowOfflineBanner()
+    {
+        _bannerPanel.BackColor = Color.FromArgb(180, 83, 9); // amber-700
+        _bannerLabel.Text = "Mode hors-ligne - connexion au serveur principal indisponible. Fonctionnement en local.";
+        _bannerButton.Visible = false;
+        _bannerPanel.Visible = true;
+    }
+
+    private void ShowReconnectBanner()
+    {
+        _bannerPanel.BackColor = Color.FromArgb(21, 128, 61); // emerald-700
+        _bannerLabel.Text = "Connexion au serveur principal rétablie.";
+        _bannerButton.Visible = true;
+        _bannerPanel.Visible = true;
+    }
+
+    private void HideBanner()
+    {
+        _bannerPanel.Visible = false;
+    }
+
+    private async Task<bool> IsHealthyAsync(string baseUrl)
+    {
+        try
+        {
+            var resp = await _healthHttpClient.GetAsync($"{baseUrl}/api/health");
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -280,7 +471,7 @@ public partial class MainForm : Form
         {
             try
             {
-                var resp = await http.GetAsync($"{_baseUrl}/api/health");
+                var resp = await http.GetAsync($"{_localUrl}/api/health");
                 if (resp.IsSuccessStatusCode) return;
             }
             catch { }
@@ -293,6 +484,10 @@ public partial class MainForm : Form
     {
         try
         {
+            _healthCheckTimer?.Stop();
+            _healthCheckTimer?.Dispose();
+            _healthHttpClient.Dispose();
+
             if (_apiProcess != null && !_apiProcess.HasExited)
             {
                 _apiProcess.Kill(entireProcessTree: true);
