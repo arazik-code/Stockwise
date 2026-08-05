@@ -23,6 +23,7 @@ public class SaleAppService : ISaleService
     private readonly IInventoryPushQueue _pushQueue;
     private readonly ILoyaltyRateResolver _loyaltyRateResolver;
     private readonly IClientLoyaltyCategoryService _categoryService;
+    private readonly DeploymentOptions _deploymentOptions;
 
     public SaleAppService(
         IUnitOfWork unitOfWork,
@@ -33,7 +34,8 @@ public class SaleAppService : ISaleService
         IInventoryPushQueue pushQueue,
         ILoyaltyRateResolver loyaltyRateResolver,
         IClientLoyaltyCategoryService categoryService,
-        IShopifyApiClient? shopifyClient = null)
+        IShopifyApiClient? shopifyClient = null,
+        IOptions<DeploymentOptions>? deploymentOptions = null)
     {
         _unitOfWork = unitOfWork;
         _notifier = notifier;
@@ -43,6 +45,7 @@ public class SaleAppService : ISaleService
         _pushQueue = pushQueue;
         _loyaltyRateResolver = loyaltyRateResolver;
         _categoryService = categoryService;
+        _deploymentOptions = deploymentOptions?.Value ?? new DeploymentOptions();
         _shopifyClient = shopifyClient;
     }
 
@@ -156,6 +159,7 @@ public class SaleAppService : ISaleService
                 LoyaltyPointsEarned = pointsEarned,
                 LoyaltyPointsRedeemed = pointsRedeemed,
                 LoyaltyDiscountAmount = loyaltyDiscount,
+                IsLocalFallbackOrigin = _deploymentOptions.IsLocalFallback,
                 Items = saleItems
             };
 
@@ -465,7 +469,9 @@ public class SaleAppService : ISaleService
             LineTotal = i.LineTotal
         }).ToList(),
         ReceiptBarcode = s.ReceiptBarcodes.FirstOrDefault()?.Barcode,
-        CreatedAt = s.CreatedAt
+        CreatedAt = s.CreatedAt,
+        IsLocalFallbackOrigin = s.IsLocalFallbackOrigin,
+        ReconciledAt = s.ReconciledAt
     };
 
     public async Task VoidAsync(int id, CancellationToken ct = default)
@@ -489,5 +495,25 @@ public class SaleAppService : ISaleService
         }
         await _unitOfWork.SaveChangesAsync(ct);
         return sales.Count;
+    }
+
+    public async Task<IReadOnlyList<SaleDto>> GetUnreconciledOfflineSalesAsync(CancellationToken ct = default)
+    {
+        var sales = await _unitOfWork.Sales.FindAsync(
+            s => s.IsLocalFallbackOrigin && s.ReconciledAt == null, ct);
+        return sales.OrderByDescending(s => s.CreatedAt).Select(MapToDto).ToList();
+    }
+
+    public async Task<SaleDto?> MarkReconciledAsync(int id, CancellationToken ct = default)
+    {
+        var sale = await _unitOfWork.Sales.GetByIdAsync(id, ct);
+        if (sale is null) return null;
+
+        sale.ReconciledAt = DateTime.UtcNow;
+        _unitOfWork.Sales.Update(sale);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var reloaded = await _unitOfWork.Sales.GetWithItemsAsync(id, ct);
+        return reloaded is null ? null : MapToDto(reloaded);
     }
 }

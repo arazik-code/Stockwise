@@ -27,4 +27,11 @@ public class Sale
     public ICollection<SaleItem> Items { get; set; } = [];
     public ICollection<ReceiptBarcode> ReceiptBarcodes { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Set at creation time from the IsLocalFallback deployment config (see Program.cs) - true
+    // when this sale was rung up while the desktop shell had failed over to the local API rather
+    // than the VPS. Never touched by the nightly sync (Sales isn't a synced table); reconciled
+    // manually by the owner re-keying it into the VPS, then marking ReconciledAt.
+    public bool IsLocalFallbackOrigin { get; set; }
+    public DateTime? ReconciledAt { get; set; }
 }

@@ -14,6 +14,7 @@ import SalesPage from './pages/SalesPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
 import ThermalPrinterPage from './pages/ThermalPrinterPage'
+import OfflineSalesPage from './pages/OfflineSalesPage'
 import RefundsPage from './pages/RefundsPage'
 import ClientsPage from './pages/ClientsPage'
 import InvoiceDesigner from './pages/InvoiceDesigner'
@@ -50,6 +51,7 @@ export default function App() {
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/printer" element={<ThermalPrinterPage />} />
+              <Route path="/offline-sales" element={<OfflineSalesPage />} />
               <Route path="/refunds" element={<RefundsPage />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/invoice-designer" element={<InvoiceDesigner />} />

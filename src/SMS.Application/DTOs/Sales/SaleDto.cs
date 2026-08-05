@@ -25,6 +25,8 @@ public class SaleDto
     public List<SaleItemDto> Items { get; set; } = [];
     public string? ReceiptBarcode { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool IsLocalFallbackOrigin { get; set; }
+    public DateTime? ReconciledAt { get; set; }
 }
 
 public class SaleItemDto

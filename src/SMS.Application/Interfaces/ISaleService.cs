@@ -13,4 +13,9 @@ public interface ISaleService
     Task<SalesReportDto> GetSalesReportAsync(DateTime from, DateTime to, int? fournisseurId = null, SaleCategory? category = null, CancellationToken ct = default);
     Task VoidAsync(int id, CancellationToken ct = default);
     Task<int> VoidManyAsync(IEnumerable<int> ids, CancellationToken ct = default);
+    // "Sales made while offline" (Phase 5, plan doc) - manual reconciliation tooling for sales
+    // rung up on the local fallback while the VPS was unreachable. Not synced automatically
+    // (decision #3) - the owner reviews and re-keys these into the VPS, then marks them handled.
+    Task<IReadOnlyList<SaleDto>> GetUnreconciledOfflineSalesAsync(CancellationToken ct = default);
+    Task<SaleDto?> MarkReconciledAsync(int id, CancellationToken ct = default);
 }

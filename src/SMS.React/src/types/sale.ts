@@ -20,6 +20,8 @@ export interface Sale {
   items: SaleItem[]
   receiptBarcode?: string
   createdAt: string
+  isLocalFallbackOrigin: boolean
+  reconciledAt?: string
 }
 
 export interface SaleItem {

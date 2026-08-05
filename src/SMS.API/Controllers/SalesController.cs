@@ -89,4 +89,20 @@ public class SalesController : ControllerBase
         var deleted = await _saleService.VoidManyAsync(request.Ids, ct);
         return Ok(new { deleted });
     }
+
+    [HttpGet("offline")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetOfflineSales(CancellationToken ct)
+    {
+        var sales = await _saleService.GetUnreconciledOfflineSalesAsync(ct);
+        return Ok(sales);
+    }
+
+    [HttpPost("{id:int}/reconcile")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> MarkReconciled(int id, CancellationToken ct)
+    {
+        var sale = await _saleService.MarkReconciledAsync(id, ct);
+        return sale is null ? NotFound() : Ok(sale);
+    }
 }

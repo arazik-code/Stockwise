@@ -16,6 +16,7 @@ const fr = {
     printer: 'Étiquettes',
     refunds: 'Remboursements',
     clients: 'Clients',
+    offlineSales: 'Ventes hors-ligne',
   },
   auth: {
     signIn: 'Connexion',
@@ -176,6 +177,18 @@ const fr = {
     printSelected: 'Imprimer la sélection',
     noBarcode: 'Aucun code-barres',
     allVariantsSelected: 'Toutes les variantes',
+  },
+  offlineSales: {
+    title: 'Ventes hors-ligne',
+    explanation: "Ventes enregistrées pendant que la caisse fonctionnait en mode hors-ligne (connexion au serveur principal indisponible). Ré-enregistrez chacune manuellement dans le système principal, puis marquez-la comme réconciliée.",
+    date: 'Date',
+    client: 'Client',
+    items: 'Articles',
+    total: 'Total',
+    markReconciled: 'Marquer réconciliée',
+    reconcileConfirm: 'Confirmer que cette vente a bien été ré-enregistrée dans le système principal ?',
+    reconcileSuccess: 'Vente marquée comme réconciliée',
+    noneFound: 'Aucune vente hors-ligne en attente',
   },
   printer: {
     title: 'Imprimante thermique',

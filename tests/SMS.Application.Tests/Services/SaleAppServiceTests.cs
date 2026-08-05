@@ -230,4 +230,110 @@ public class SaleAppServiceTests
 
         Assert.Null(result);
     }
+
+    [Fact]
+    public async Task CreateSaleAsync_DeploymentIsLocalFallback_TagsSaleForReconciliation()
+    {
+        var stockItem = new StockItem
+        {
+            ProductVariantId = 1,
+            QuantityOnHand = 50,
+            QuantityReserved = 0,
+            ProductVariant = new ProductVariant { Id = 1, Sku = "A001", Product = new Product { Id = 1, Name = "Shoe A" }, Color = new Color { Name = "Red" }, Size = new Size { Value = "42" } }
+        };
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(stockItem);
+        _saleRepoMock.Setup(r => r.GenerateSaleNumberAsync(It.IsAny<CancellationToken>())).ReturnsAsync("POS-FALLBACK-001");
+        Sale? captured = null;
+        _saleRepoMock.Setup(r => r.AddAsync(It.IsAny<Sale>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Sale s, CancellationToken _) => { s.Id = 1; captured = s; return s; });
+
+        var fallbackService = new SaleAppService(
+            _unitOfWorkMock.Object, _notifierMock.Object,
+            Options.Create(new ShopifyOptions()), Options.Create(new LoyaltySettings()),
+            new Mock<ILogger<SaleAppService>>().Object, new Mock<IInventoryPushQueue>().Object,
+            new LoyaltyRateResolver(), new Mock<IClientLoyaltyCategoryService>().Object,
+            shopifyClient: null,
+            deploymentOptions: Options.Create(new DeploymentOptions { IsLocalFallback = true }));
+
+        var request = new CreateSaleRequest
+        {
+            Items = [new SaleItemRequest { ProductVariantId = 1, Quantity = 1, DiscountAmount = 0 }],
+            PaymentMethod = PaymentMethod.Cash,
+            AmountPaid = 100m,
+            TaxRate = 0m
+        };
+
+        var result = await fallbackService.CreateSaleAsync(request, userId: 1);
+
+        Assert.True(result.IsLocalFallbackOrigin);
+        Assert.NotNull(captured);
+        Assert.True(captured!.IsLocalFallbackOrigin);
+    }
+
+    [Fact]
+    public async Task CreateSaleAsync_DefaultDeployment_NotTaggedAsFallbackOrigin()
+    {
+        var stockItem = new StockItem
+        {
+            ProductVariantId = 1,
+            QuantityOnHand = 50,
+            QuantityReserved = 0,
+            ProductVariant = new ProductVariant { Id = 1, Sku = "A001", Product = new Product { Id = 1, Name = "Shoe A" }, Color = new Color { Name = "Red" }, Size = new Size { Value = "42" } }
+        };
+        _stockRepoMock.Setup(r => r.GetByVariantIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(stockItem);
+        _saleRepoMock.Setup(r => r.GenerateSaleNumberAsync(It.IsAny<CancellationToken>())).ReturnsAsync("POS-VPS-001");
+        _saleRepoMock.Setup(r => r.AddAsync(It.IsAny<Sale>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Sale s, CancellationToken _) => { s.Id = 1; return s; });
+
+        var request = new CreateSaleRequest
+        {
+            Items = [new SaleItemRequest { ProductVariantId = 1, Quantity = 1, DiscountAmount = 0 }],
+            PaymentMethod = PaymentMethod.Cash,
+            AmountPaid = 100m,
+            TaxRate = 0m
+        };
+
+        var result = await _service.CreateSaleAsync(request, userId: 1);
+
+        Assert.False(result.IsLocalFallbackOrigin);
+    }
+
+    [Fact]
+    public async Task GetUnreconciledOfflineSalesAsync_ReturnsOnlyUnreconciledFallbackSales()
+    {
+        _saleRepoMock.Setup(r => r.FindAsync(It.IsAny<System.Linq.Expressions.Expression<Func<Sale, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Sale>
+            {
+                new() { Id = 1, SaleNumber = "POS-1", IsLocalFallbackOrigin = true, ReconciledAt = null, Items = [] }
+            });
+
+        var result = await _service.GetUnreconciledOfflineSalesAsync();
+
+        Assert.Single(result);
+        Assert.Equal("POS-1", result[0].SaleNumber);
+    }
+
+    [Fact]
+    public async Task MarkReconciledAsync_ExistingSale_SetsReconciledAt()
+    {
+        var sale = new Sale { Id = 1, SaleNumber = "POS-1", IsLocalFallbackOrigin = true, Items = [] };
+        _saleRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(sale);
+        _saleRepoMock.Setup(r => r.GetWithItemsAsync(1, It.IsAny<CancellationToken>())).ReturnsAsync(sale);
+
+        var result = await _service.MarkReconciledAsync(1);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result!.ReconciledAt);
+        Assert.NotNull(sale.ReconciledAt);
+    }
+
+    [Fact]
+    public async Task MarkReconciledAsync_NonExistingSale_ReturnsNull()
+    {
+        _saleRepoMock.Setup(r => r.GetByIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((Sale?)null);
+
+        var result = await _service.MarkReconciledAsync(999);
+
+        Assert.Null(result);
+    }
 }

@@ -11,4 +11,6 @@ export const salesApi = {
     api.get<DailySalesReport>('/sales/daily-report', { params: { date } }).then((r) => r.data),
   getSalesReport: (from: string, to: string, fournisseurId?: number | null, category?: string | null) =>
     api.get<SalesReport>('/sales/sales-report', { params: { from, to, fournisseurId, category } }).then((r) => r.data),
+  getOfflineSales: () => api.get<Sale[]>('/sales/offline').then((r) => r.data),
+  markReconciled: (id: number) => api.post<Sale>(`/sales/${id}/reconcile`).then((r) => r.data),
 }

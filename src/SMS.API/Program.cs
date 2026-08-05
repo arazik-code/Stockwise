@@ -50,6 +50,7 @@ builder.Services.AddScoped<ThermalPrinterService>();
 builder.Services.AddScoped<ReportPdfService>();
 builder.Services.AddScoped<ReportCsvService>();
 
+builder.Services.Configure<DeploymentOptions>(builder.Configuration.GetSection(DeploymentOptions.SectionName));
 builder.Services.Configure<LoyaltySettings>(builder.Configuration.GetSection(LoyaltySettings.SectionName));
 builder.Services.Configure<StoreSettings>(builder.Configuration.GetSection(StoreSettings.SectionName));
 builder.Services.Configure<TaxSettings>(builder.Configuration.GetSection(TaxSettings.SectionName));
