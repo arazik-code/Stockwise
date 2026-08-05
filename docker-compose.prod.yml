@@ -1,0 +1,69 @@
+# Production deployment for the Hostinger VPS. Distinct from docker-compose.yml (dev reference,
+# weak/shared secrets, no TLS) - this one sources every secret from .env.prod (gitignored, never
+# hardcoded here), never publishes Postgres's port to the internet, and puts Caddy in front for
+# automatic HTTPS. See deploy/vps-setup.sh for first-time provisioning and deploy/vps-update.sh
+# for subsequent deploys.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: StockManagement
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    mem_limit: 512m
+    # Deliberately no `ports:` mapping - only the api service (same Docker network) can reach
+    # Postgres. Nothing about this stack exposes the database directly to the internet.
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api.prod
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__Default=Host=postgres;Database=StockManagement;Username=postgres;Password=${DB_PASSWORD}
+      - Jwt__SecretKey=${JWT_SECRET}
+      - Jwt__Issuer=StockManagementSystem
+      - Jwt__Audience=StockManagementSystem
+      - Cors__AllowedOrigins__0=${CORS_ALLOWED_ORIGIN}
+      - React__BaseUrl=${CORS_ALLOWED_ORIGIN}
+      - Shopify__Enabled=true
+      - Sync__ApiKey=${SYNC_API_KEY}
+    volumes:
+      - uploads:/app/wwwroot/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 768m
+    # api's own Dockerfile.api.prod already declares a HEALTHCHECK hitting /api/health -
+    # depends_on: condition: service_healthy on postgres is what matters here.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

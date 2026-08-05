@@ -1,0 +1,10 @@
+# Caddy automatically requests and renews a Let's Encrypt certificate for whatever domain is set
+# in DOMAIN (see .env.prod) - no certbot, no manual renewal cron job needed. reverse_proxy also
+# handles WebSocket upgrade (SignalR's /hubs/inventory) transparently with no extra config, unlike
+# nginx which needs explicit Connection/Upgrade header forwarding - that's the whole reason Caddy
+# was chosen over nginx+certbot for this deployment (see plan doc, Phase 2).
+{$DOMAIN:CHANGE_ME_your-vps-domain.com} {
+    reverse_proxy api:8080
+
+    encode gzip
+}

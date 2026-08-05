@@ -1,0 +1,42 @@
+# Production image for the VPS deployment. Bakes the built React SPA into the API's own
+# wwwroot so the deployed API serves the app and the API from one origin - the same model the
+# desktop-bundled deployment already uses successfully (see build-desktop.bat), which means the
+# frontend's relative '/api' and '/hubs/inventory' URLs just work with zero CORS involvement for
+# the primary VPS session. Kept as a separate file from src/SMS.API/Dockerfile (used by the dev
+# docker-compose.yml with its own standalone frontend container) so dev build times/behavior are
+# untouched by this.
+
+FROM node:20-alpine AS frontend-build
+WORKDIR /src
+COPY src/SMS.React/package*.json ./
+RUN npm ci
+COPY src/SMS.React/ .
+RUN npm run build
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+WORKDIR /app
+EXPOSE 8080
+RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 curl && rm -rf /var/lib/apt/lists/*
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8080/api/health || exit 1
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY ["src/SMS.API/SMS.API.csproj", "SMS.API/"]
+COPY ["src/SMS.Application/SMS.Application.csproj", "SMS.Application/"]
+COPY ["src/SMS.Domain/SMS.Domain.csproj", "SMS.Domain/"]
+COPY ["src/SMS.Infrastructure/SMS.Infrastructure.csproj", "SMS.Infrastructure/"]
+RUN dotnet restore "SMS.API/SMS.API.csproj"
+COPY src/ .
+WORKDIR "/src/SMS.API"
+RUN dotnet build -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish .
+COPY --from=frontend-build --chown=$APP_UID:$APP_UID /src/dist ./wwwroot
+USER $APP_UID
+ENTRYPOINT ["dotnet", "SMS.API.dll"]

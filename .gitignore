@@ -47,6 +47,7 @@ src/SMS.API/appsettings.*.json
 !src/SMS.API/appsettings.example.json
 deploy/appsettings.Production.json
 deploy/.env
+.env.prod
 
 ## Backups
 backups/
