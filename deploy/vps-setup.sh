@@ -45,7 +45,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 echo "== Setting up nightly backups (cron) =="
 chmod +x "$REPO_DIR/deploy/backup-vps.sh"
 CRON_LINE="0 3 * * * COMPOSE_FILE=$REPO_DIR/docker-compose.prod.yml BACKUP_DIR=$REPO_DIR/backups $REPO_DIR/deploy/backup-vps.sh >> /var/log/flexshoes-backup.log 2>&1"
-( crontab -l 2>/dev/null | grep -Fv "backup-vps.sh" ; echo "$CRON_LINE" ) | crontab -
+# grep -v exits 1 when nothing matches (the normal first-run case: no prior crontab at all) -
+# harmless here, but `set -e` would otherwise abort the whole script on that exit code.
+( crontab -l 2>/dev/null | grep -Fv "backup-vps.sh" || true ; echo "$CRON_LINE" ) | crontab -
 
 echo ""
 echo "Done. Check status with:"
