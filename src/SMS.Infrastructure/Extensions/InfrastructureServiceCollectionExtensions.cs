@@ -54,7 +54,7 @@ public static class InfrastructureServiceCollectionExtensions
             (!string.IsNullOrEmpty(shopifyOptions.AccessToken) ||
              (!string.IsNullOrEmpty(shopifyOptions.ClientId) && !string.IsNullOrEmpty(shopifyOptions.ClientSecret)));
 
-        if (shopifyOptions is not null && !string.IsNullOrEmpty(shopifyOptions.ShopDomain) && hasCredentials)
+        if (shopifyOptions is not null && shopifyOptions.Enabled && !string.IsNullOrEmpty(shopifyOptions.ShopDomain) && hasCredentials)
         {
             services.AddHttpClient(ShopifyTokenProvider.HttpClientName);
             services.AddSingleton<IShopifyTokenProvider, ShopifyTokenProvider>();

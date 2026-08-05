@@ -2,6 +2,11 @@ namespace SMS.Application.DTOs.Shopify;
 
 public class ShopifyOptions
 {
+    // Explicit kill switch, independent of whether credentials happen to be present. A
+    // local-fallback desktop install must never poll/receive Shopify webhooks even if its
+    // appsettings.json was copied from a VPS config that still has real credentials in it -
+    // Shopify ownership is meant to stay VPS-only so the same order is never processed twice.
+    public bool Enabled { get; set; } = true;
     public string ShopDomain { get; set; } = string.Empty;
     public string AccessToken { get; set; } = string.Empty;
     public string ClientId { get; set; } = string.Empty;

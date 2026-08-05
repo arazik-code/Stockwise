@@ -1,6 +1,7 @@
 using System.Text;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -171,6 +172,18 @@ builder.Services.AddResponseCompression(options =>
         .Concat(["application/json"]);
 });
 
+// The VPS deployment sits behind Caddy (TLS termination) - without this, Request.IsHttps is
+// always false inside Kestrel, which silently disables the HSTS header in SecurityHeadersMiddleware
+// and would break anything that branches on scheme. KnownNetworks/KnownProxies are cleared because
+// the proxy is a same-Docker-network sibling container, not a fixed public IP to allowlist; only
+// Caddy's port is actually published to the internet, so this doesn't widen the trust boundary.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 builder.Services.AddCors(options =>
 {
     var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
@@ -205,6 +218,8 @@ using (var scope = app.Services.CreateScope())
         await SeedData.InitializeAsync(db);
     }
 }
+
+app.UseForwardedHeaders();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
