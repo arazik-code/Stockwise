@@ -44,6 +44,7 @@ builder.Services.AddScoped<ICashDrawerService, CashDrawerService>();
 builder.Services.AddScoped<IShopifyInventoryPusher, ShopifyInventoryPusher>();
 builder.Services.AddScoped<IShopifyLinkService, ShopifyLinkService>();
 builder.Services.AddScoped<IWhatsAppTemplateService, WhatsAppTemplateAppService>();
+builder.Services.AddScoped<ISyncSnapshotService, SyncSnapshotAppService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ThermalPrinterService>();
 builder.Services.AddScoped<ReportPdfService>();

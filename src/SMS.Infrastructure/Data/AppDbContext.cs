@@ -44,6 +44,7 @@ public class AppDbContext : DbContext
     public DbSet<OzonDeliveryNote> OzonDeliveryNotes => Set<OzonDeliveryNote>();
     public DbSet<CashDrawerMovement> CashDrawerMovements => Set<CashDrawerMovement>();
     public DbSet<WhatsAppTemplate> WhatsAppTemplates => Set<WhatsAppTemplate>();
+    public DbSet<SyncState> SyncStates => Set<SyncState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
