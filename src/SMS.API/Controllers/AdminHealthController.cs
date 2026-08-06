@@ -47,16 +47,25 @@ public class AdminHealthController : ControllerBase
     [HttpGet("full")]
     public async Task<IActionResult> GetFull(CancellationToken ct)
     {
-        var probes = await Task.WhenAll(
-            RunProbe("Base de données", "Core", () => CheckDatabaseAsync(ct)),
-            RunProbe("Table Produits", "Core", () => CheckTableAsync("Products", () => _db.Products.CountAsync(ct))),
-            RunProbe("Table Ventes", "Core", () => CheckTableAsync("Sales", () => _db.Sales.CountAsync(ct))),
-            RunProbe("Table Clients", "Core", () => CheckTableAsync("Clients", () => _db.Clients.CountAsync(ct))),
-            RunProbe("Temps réel (SignalR)", "Core", () => CheckSignalRAsync()),
+        // AppDbContext is scoped per-request and not safe for concurrent use - EF Core/Npgsql
+        // throws ("A command is already in progress") the moment two queries run on the same
+        // instance at once. Every probe that touches _db must run sequentially; only the
+        // independent outbound HTTP calls (their own typed HttpClients, no shared state) are
+        // safe to run concurrently.
+        var probes = new List<HealthProbeResult>
+        {
+            await RunProbe("Base de données", "Core", () => CheckDatabaseAsync(ct)),
+            await RunProbe("Table Produits", "Core", () => CheckTableAsync(() => _db.Products.CountAsync(ct))),
+            await RunProbe("Table Ventes", "Core", () => CheckTableAsync(() => _db.Sales.CountAsync(ct))),
+            await RunProbe("Table Clients", "Core", () => CheckTableAsync(() => _db.Clients.CountAsync(ct))),
+            await RunProbe("Synchronisation VPS ↔ local", "Intégrations", () => CheckSyncFreshnessAsync(ct)),
+            await RunProbe("Temps réel (SignalR)", "Core", () => CheckSignalRAsync())
+        };
+
+        probes.AddRange(await Task.WhenAll(
             RunProbe("Intégration Shopify", "Intégrations", () => CheckShopifyAsync(ct)),
-            RunProbe("Intégration OzonExpress", "Intégrations", () => CheckOzonExpressAsync(ct)),
-            RunProbe("Synchronisation VPS ↔ local", "Intégrations", () => CheckSyncFreshnessAsync(ct))
-        );
+            RunProbe("Intégration OzonExpress", "Intégrations", () => CheckOzonExpressAsync(ct))
+        ));
 
         var overall = probes.Any(p => p.Status == "down" && p.Category == "Core")
             ? "down"
@@ -64,7 +73,7 @@ public class AdminHealthController : ControllerBase
                 ? "degraded"
                 : "healthy";
 
-        return Ok(new HealthBoardDto(overall, DateTime.UtcNow, probes.ToList()));
+        return Ok(new HealthBoardDto(overall, DateTime.UtcNow, probes));
     }
 
     private async Task<HealthProbeResult> RunProbe(string name, string category, Func<Task<(string status, string message)>> probe)
@@ -92,7 +101,7 @@ public class AdminHealthController : ControllerBase
         return canConnect ? ("healthy", "Connexion PostgreSQL OK") : ("down", "Impossible de se connecter");
     }
 
-    private async Task<(string, string)> CheckTableAsync(string label, Func<Task<int>> countAsync)
+    private async Task<(string, string)> CheckTableAsync(Func<Task<int>> countAsync)
     {
         var count = await countAsync();
         return ("healthy", $"{count} enregistrement(s) accessibles");
@@ -121,9 +130,14 @@ public class AdminHealthController : ControllerBase
 
         try
         {
-            var locations = await client.GetLocationsAsync(ct);
-            return locations is not null
-                ? ("healthy", $"API Shopify accessible ({locations.Locations?.Count ?? 0} emplacement(s))")
+            // Deliberately not GetLocationsAsync: that endpoint needs a read_locations scope this
+            // store's app was never granted (confirmed via a live 403 - "requires merchant approval
+            // for read_locations scope"), which is unrelated to whether the integration is actually
+            // healthy. Products is the scope this integration already leans on continuously (product
+            // sync, inventory push), so it reflects real health instead of an unrelated permission gap.
+            var products = await client.GetProductsAsync(limit: 1, ct: ct);
+            return products is not null
+                ? ("healthy", "API Shopify accessible")
                 : ("degraded", "Réponse Shopify vide");
         }
         catch (Exception ex)
