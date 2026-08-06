@@ -7,6 +7,7 @@ import type { Sale } from '../types/sale'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency, formatDate } from '../utils/format'
 import { CATEGORY_BADGE, CATEGORY_LABELS, CATEGORY_ORDER, type ClientCategoryValue } from '../utils/clientCategory'
+import ClientQrCard from '../components/loyalty/ClientQrCard'
 
 type TransactionTab = 'purchases' | 'points'
 
@@ -33,6 +34,8 @@ export default function ClientsPage() {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Client | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [showQrCard, setShowQrCard] = useState<Client | null>(null)
 
   const [showLoyalty, setShowLoyalty] = useState(false)
   const [loyaltyForm, setLoyaltyForm] = useState<LoyaltySettingsConfig>({
@@ -351,6 +354,12 @@ export default function ClientsPage() {
                           className="text-xs text-slate-500 hover:text-slate-700 font-medium transition-colors px-2 py-1 rounded hover:bg-slate-100"
                         >
                           {t('clients.viewDetail')}
+                        </button>
+                        <button
+                          onClick={() => setShowQrCard(client)}
+                          className="text-xs text-emerald-600 hover:text-emerald-700 font-medium transition-colors px-2 py-1 rounded hover:bg-emerald-50"
+                        >
+                          {t('clients.qrCard')}
                         </button>
                         <button
                           onClick={() => openEdit(client)}
@@ -747,6 +756,17 @@ export default function ClientsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* QR / WhatsApp Card */}
+      {showQrCard && (
+        <ClientQrCard
+          client={showQrCard}
+          title={t('clients.qrCardTitle')}
+          subtitle={showQrCard.phone}
+          closeLabel={t('common.close')}
+          onClose={() => setShowQrCard(null)}
+        />
       )}
 
       {/* Loyalty Settings Modal */}

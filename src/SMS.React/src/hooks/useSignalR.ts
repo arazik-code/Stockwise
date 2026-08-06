@@ -14,6 +14,15 @@ function getToken(): string | null {
   return null
 }
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.exp * 1000 < Date.now()
+  } catch {
+    return true
+  }
+}
+
 export function useSignalR() {
   const connectionRef = useRef<ReturnType<typeof HubConnectionBuilder.prototype.build> | null>(null)
   const updateStock = useInventoryStore((s) => s.updateStock)
@@ -21,9 +30,16 @@ export function useSignalR() {
   useEffect(() => {
     const token = getToken()
     if (!token) return
+    if (isTokenExpired(token)) {
+      localStorage.removeItem('sms-auth')
+      window.location.href = '/login'
+      return
+    }
 
     const connection = new HubConnectionBuilder()
-      .withUrl('/hubs/inventory', { accessTokenFactory: () => token })
+      .withUrl('/hubs/inventory', {
+        accessTokenFactory: () => getToken() || '',
+      })
       .withAutomaticReconnect()
       .configureLogging(LogLevel.Warning)
       .build()
@@ -47,8 +63,16 @@ export function useSignalR() {
     })
 
     connection.on('OrderStatusChanged', (_payload: { orderId: number; status: string }) => {
-      // Broadcast so any open order list / dashboard refreshes live.
       window.dispatchEvent(new CustomEvent('sms:orders-updated'))
+    })
+
+    connection.onreconnecting(() => {
+      const current = getToken()
+      if (!current || isTokenExpired(current)) {
+        connection.stop()
+        localStorage.removeItem('sms-auth')
+        window.location.href = '/login'
+      }
     })
 
     connection.start()

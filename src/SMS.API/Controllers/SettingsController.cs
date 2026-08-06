@@ -1,14 +1,16 @@
 using System.Text.Json;
-using Microsoft.AspNetCore.Authorization;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using SMS.API.Authorization;
 using SMS.Application.DTOs;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[RequireSection(Sections.Settings)]
 public class SettingsController : ControllerBase
 {
     private readonly IConfigurationRoot _configRoot;
@@ -28,6 +30,21 @@ public class SettingsController : ControllerBase
     {
         _configRoot.Reload();
         await Task.CompletedTask;
+    }
+
+    private static string Sanitize(string? value, int maxLength = 500)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+        var cleaned = Regex.Replace(value, "<[^>]*>", "");
+        cleaned = System.Net.WebUtility.HtmlEncode(cleaned);
+        return cleaned.Length > maxLength ? cleaned[..maxLength] : cleaned;
+    }
+
+    private static bool ValidateNoScriptInjection(string? value, string fieldName)
+    {
+        if (string.IsNullOrEmpty(value)) return true;
+        var patterns = new[] { "<script", "javascript:", "onerror=", "onload=", "onclick=", "onmouse" };
+        return !patterns.Any(p => value.Contains(p, StringComparison.OrdinalIgnoreCase));
     }
 
     // ── Loyalty ──
@@ -87,19 +104,24 @@ public class SettingsController : ControllerBase
     [HttpPut("store")]
     public async Task<IActionResult> UpdateStoreSettings([FromBody] StoreSettings updated, CancellationToken ct)
     {
+        if (!ValidateNoScriptInjection(updated.Name, "Name") ||
+            !ValidateNoScriptInjection(updated.Phone, "Phone") ||
+            !ValidateNoScriptInjection(updated.Address, "Address"))
+            return BadRequest(new { message = "Contenu invalide detecte" });
+
         var json = await System.IO.File.ReadAllTextAsync(ConfigPath, ct);
         var root = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
 
         root["Store"] = new Dictionary<string, object>
         {
-            ["Name"] = updated.Name,
-            ["Phone"] = updated.Phone,
-            ["Address"] = updated.Address
+            ["Name"] = Sanitize(updated.Name),
+            ["Phone"] = Sanitize(updated.Phone, 20),
+            ["Address"] = Sanitize(updated.Address, 300)
         };
 
         await System.IO.File.WriteAllTextAsync(ConfigPath, JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true }), ct);
         await ReloadConfig(ct);
-        return Ok(updated);
+        return Ok(new { Name = Sanitize(updated.Name), Phone = Sanitize(updated.Phone, 20), Address = Sanitize(updated.Address, 300) });
     }
 
     // ── Tax ──
@@ -114,6 +136,9 @@ public class SettingsController : ControllerBase
     [HttpPut("tax")]
     public async Task<IActionResult> UpdateTaxSettings([FromBody] TaxSettings updated, CancellationToken ct)
     {
+        if (updated.Rate < 0 || updated.Rate > 100)
+            return BadRequest(new { message = "Le taux de taxe doit etre entre 0 et 100" });
+
         var json = await System.IO.File.ReadAllTextAsync(ConfigPath, ct);
         var root = JsonSerializer.Deserialize<Dictionary<string, object?>>(json) ?? [];
 
@@ -172,13 +197,13 @@ public class SettingsController : ControllerBase
 
         root["InvoiceTemplate"] = new Dictionary<string, object>
         {
-            ["ShopName"] = updated.ShopName,
-            ["ShopAddress"] = updated.ShopAddress,
-            ["ShopPhone"] = updated.ShopPhone,
-            ["ShopEmail"] = updated.ShopEmail,
-            ["ShopWebsite"] = updated.ShopWebsite,
-            ["TaxId"] = updated.TaxId,
-            ["LogoBase64"] = updated.LogoBase64,
+            ["ShopName"] = Sanitize(updated.ShopName),
+            ["ShopAddress"] = Sanitize(updated.ShopAddress, 300),
+            ["ShopPhone"] = Sanitize(updated.ShopPhone, 20),
+            ["ShopEmail"] = Sanitize(updated.ShopEmail, 100),
+            ["ShopWebsite"] = Sanitize(updated.ShopWebsite, 200),
+            ["TaxId"] = Sanitize(updated.TaxId, 50),
+            ["LogoBase64"] = updated.LogoBase64 ?? "",
             ["ShowSku"] = updated.ShowSku,
             ["ShowColor"] = updated.ShowColor,
             ["ShowSize"] = updated.ShowSize,
@@ -190,13 +215,13 @@ public class SettingsController : ControllerBase
             ["ShowPaymentInfo"] = updated.ShowPaymentInfo,
             ["ShowSignature"] = updated.ShowSignature,
             ["ShowBorders"] = updated.ShowBorders,
-            ["FontFamily"] = updated.FontFamily,
-            ["FontSize"] = updated.FontSize,
-            ["HeaderText"] = updated.HeaderText,
-            ["FooterText"] = updated.FooterText,
-            ["NotesLabel"] = updated.NotesLabel,
-            ["DefaultNotes"] = updated.DefaultNotes,
-            ["PaperSize"] = updated.PaperSize,
+            ["FontFamily"] = Sanitize(updated.FontFamily, 100),
+            ["FontSize"] = Sanitize(updated.FontSize, 10),
+            ["HeaderText"] = Sanitize(updated.HeaderText, 100),
+            ["FooterText"] = Sanitize(updated.FooterText, 300),
+            ["NotesLabel"] = Sanitize(updated.NotesLabel, 50),
+            ["DefaultNotes"] = Sanitize(updated.DefaultNotes, 500),
+            ["PaperSize"] = Sanitize(updated.PaperSize, 20),
             ["Landscape"] = updated.Landscape
         };
 
@@ -246,24 +271,24 @@ public class SettingsController : ControllerBase
 
         root["Shopify"] = new Dictionary<string, object>
         {
-            ["ShopDomain"] = updated.ShopDomain,
+            ["ShopDomain"] = Sanitize(updated.ShopDomain, 200),
             ["AccessToken"] = accessToken,
             ["ClientId"] = clientId,
             ["ClientSecret"] = clientSecret,
-            ["ApiVersion"] = updated.ApiVersion,
+            ["ApiVersion"] = Sanitize(updated.ApiVersion, 20),
             ["WebhookSecret"] = webhookSecret,
             ["PollingIntervalSeconds"] = updated.PollingIntervalSeconds,
-            ["LocationId"] = updated.LocationId,
+            ["LocationId"] = Sanitize(updated.LocationId, 50),
             ["MaxRetryAttempts"] = 3
         };
 
         await System.IO.File.WriteAllTextAsync(ConfigPath, JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true }), ct);
         await ReloadConfig(ct);
-        return Ok(new { message = "Paramètres Shopify enregistrés. Redémarrez l'application pour appliquer les changements." });
+        return Ok(new { message = "Parametres Shopify enregistres. Redemarrez l'application pour appliquer les changements." });
     }
 
     private static string MaskSecret(string value)
-        => string.IsNullOrEmpty(value) ? "" : value.Length <= 4 ? "••••" : $"••••{value[^4..]}";
+        => string.IsNullOrEmpty(value) ? "" : value.Length <= 4 ? "****" : $"****{value[^4..]}";
 
     // ── OzonExpress ──
 
@@ -294,13 +319,13 @@ public class SettingsController : ControllerBase
 
         root["OzonExpress"] = new Dictionary<string, object>
         {
-            ["CustomerId"] = updated.CustomerId,
+            ["CustomerId"] = Sanitize(updated.CustomerId, 50),
             ["ApiKey"] = apiKey
         };
 
         await System.IO.File.WriteAllTextAsync(ConfigPath, JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true }), ct);
         await ReloadConfig(ct);
-        return Ok(new { message = "Paramètres OzonExpress enregistrés. Redémarrez l'application pour appliquer les changements." });
+        return Ok(new { message = "Parametres OzonExpress enregistres. Redemarrez l'application pour appliquer les changements." });
     }
 
     // ── Receipt Template ──
@@ -344,12 +369,12 @@ public class SettingsController : ControllerBase
 
         root["ReceiptTemplate"] = new Dictionary<string, object>
         {
-            ["ShopName"] = updated.ShopName,
-            ["ShopTagline"] = updated.ShopTagline,
-            ["ShopAddress"] = updated.ShopAddress,
-            ["ShopPhone"] = updated.ShopPhone,
-            ["ShopWebsite"] = updated.ShopWebsite,
-            ["LogoBase64"] = updated.LogoBase64,
+            ["ShopName"] = Sanitize(updated.ShopName),
+            ["ShopTagline"] = Sanitize(updated.ShopTagline, 100),
+            ["ShopAddress"] = Sanitize(updated.ShopAddress, 300),
+            ["ShopPhone"] = Sanitize(updated.ShopPhone, 20),
+            ["ShopWebsite"] = Sanitize(updated.ShopWebsite, 200),
+            ["LogoBase64"] = updated.LogoBase64 ?? "",
             ["ShowTicketNumber"] = updated.ShowTicketNumber,
             ["ShowDate"] = updated.ShowDate,
             ["ShowCashier"] = updated.ShowCashier,
@@ -362,10 +387,10 @@ public class SettingsController : ControllerBase
             ["ShowPaymentMethod"] = updated.ShowPaymentMethod,
             ["ShowLoyaltyInfo"] = updated.ShowLoyaltyInfo,
             ["ShowQrCode"] = updated.ShowQrCode,
-            ["HeaderText"] = updated.HeaderText,
-            ["FooterText"] = updated.FooterText,
-            ["TermsText"] = updated.TermsText,
-            ["FontFamily"] = updated.FontFamily
+            ["HeaderText"] = Sanitize(updated.HeaderText, 100),
+            ["FooterText"] = Sanitize(updated.FooterText, 300),
+            ["TermsText"] = Sanitize(updated.TermsText, 500),
+            ["FontFamily"] = Sanitize(updated.FontFamily, 100)
         };
 
         await System.IO.File.WriteAllTextAsync(ConfigPath, JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true }), ct);

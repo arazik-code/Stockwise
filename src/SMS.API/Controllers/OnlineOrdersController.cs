@@ -1,15 +1,16 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Online;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 using SMS.Domain.Enums;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/online-orders")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.OnlineOrders)]
 public class OnlineOrdersController : ControllerBase
 {
     private readonly IOnlineOrderService _service;

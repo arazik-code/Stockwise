@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Sales;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 using SMS.Domain.Enums;
 using System.Security.Claims;
 
@@ -9,7 +11,7 @@ namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,Cashier")]
+[RequireSection(Sections.Pos)]
 public class SalesController : ControllerBase
 {
     private readonly ISaleService _saleService;

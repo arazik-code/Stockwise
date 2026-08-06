@@ -1,9 +1,10 @@
 using System.Text;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Sales;
 using SMS.Application.Services;
+using SMS.Domain.Constants;
 using SMS.Domain.Enums;
 using SMS.Infrastructure.Data;
 
@@ -11,7 +12,7 @@ namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,StockManager,Cashier")]
+[RequireSection(Sections.Reports)]
 public class ReportsController : ControllerBase
 {
     private readonly AppDbContext _db;

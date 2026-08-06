@@ -1,13 +1,14 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Ozon;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/ozonexpress")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.OzonExpress)]
 public class OzonExpressController : ControllerBase
 {
     private readonly IOzonExpressService _service;

@@ -102,6 +102,8 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider, SMS.API.Authorization.SectionPolicyProvider>();
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, SMS.API.Authorization.SectionAuthorizationHandler>();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -230,6 +232,12 @@ using (var scope = app.Services.CreateScope())
             await db.Database.MigrateAsync();
         }
         await SeedData.InitializeAsync(db);
+    }
+    else
+    {
+        // Roles are structural reference data (not test-polluting accounts) that
+        // AuthController.Register and every Admin* controller depend on existing.
+        await SeedData.SeedRolesAsync(db);
     }
 }
 

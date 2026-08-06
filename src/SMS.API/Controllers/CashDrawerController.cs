@@ -1,16 +1,18 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
-// Admin-only: recording cash taken out of / put into the physical register is an owner-level
-// action, not something a cashier should be able to log themselves.
+// Admin-only by default: recording cash taken out of / put into the physical register is an
+// owner-level action. RequireSection still lets an Admin explicitly grant a custom role the
+// CashDrawer section if a store owner wants that - opt-in, not the default for anyone else.
 [ApiController]
 [Route("api/cash-drawer")]
-[Authorize(Roles = "Admin")]
+[RequireSection(Sections.CashDrawer)]
 public class CashDrawerController : ControllerBase
 {
     private readonly ICashDrawerService _service;

@@ -1,14 +1,15 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Categories;
+using SMS.Domain.Constants;
 using SMS.Infrastructure.Data;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.Catalog)]
 public class CategoriesController : ControllerBase
 {
     private readonly AppDbContext _db;

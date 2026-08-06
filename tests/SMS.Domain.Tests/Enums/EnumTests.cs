@@ -43,14 +43,6 @@ public class EnumTests
     }
 
     [Fact]
-    public void UserRole_HasCorrectValues()
-    {
-        Assert.Equal(0, (int)UserRole.Admin);
-        Assert.Equal(1, (int)UserRole.Manager);
-        Assert.Equal(2, (int)UserRole.Cashier);
-    }
-
-    [Fact]
     public void SaleChannel_AllValues_AreDefined()
     {
         var values = Enum.GetValues<SaleChannel>();
@@ -76,12 +68,5 @@ public class EnumTests
     {
         var values = Enum.GetValues<OrderStatus>();
         Assert.Equal(12, values.Length); // +Returned, +Refused - courier delivery-failure outcomes
-    }
-
-    [Fact]
-    public void UserRole_AllValues_AreDefined()
-    {
-        var values = Enum.GetValues<UserRole>();
-        Assert.Equal(4, values.Length);
     }
 }

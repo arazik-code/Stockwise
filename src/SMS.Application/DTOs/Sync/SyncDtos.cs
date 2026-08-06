@@ -21,7 +21,18 @@ public class SyncSnapshotDto
     public List<SyncProductVariantDto> ProductVariants { get; set; } = [];
     public List<SyncStockItemDto> StockItems { get; set; } = [];
     public List<SyncClientDto> Clients { get; set; } = [];
+    // Roles must travel with Users - a custom role created on the VPS after go-live wouldn't
+    // exist on the local fallback DB otherwise, breaking that user's login/permissions offline.
+    public List<SyncRoleDto> Roles { get; set; } = [];
     public List<SyncUserDto> Users { get; set; } = [];
+}
+
+public class SyncRoleDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsSystem { get; set; }
+    public List<string> Sections { get; set; } = [];
 }
 
 public class SyncCategoryDto
@@ -133,7 +144,7 @@ public class SyncUserDto
     // key (see SyncController), same trust level as every other secret this system already moves.
     public string PasswordHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
-    public UserRole Role { get; set; }
+    public string RoleName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -152,5 +163,6 @@ public class SyncApplyResultDto
     public int StockItemsSkippedDueToLocalActivity { get; set; }
     public int ClientsUpserted { get; set; }
     public int ClientsSkippedLoyaltyFieldsDueToLocalActivity { get; set; }
+    public int RolesUpserted { get; set; }
     public int UsersUpserted { get; set; }
 }

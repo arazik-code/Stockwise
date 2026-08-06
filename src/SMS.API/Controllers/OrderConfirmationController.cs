@@ -1,14 +1,15 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Online;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/order-confirmation")]
-[Authorize(Roles = "Admin,StockManager,Cashier")]
+[RequireSection(Sections.OrderConfirmation)]
 public class OrderConfirmationController : ControllerBase
 {
     private readonly IOrderConfirmationService _service;

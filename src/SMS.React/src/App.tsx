@@ -31,6 +31,12 @@ import OnlineSyncPage from './pages/online/OnlineSyncPage'
 import OnlineLinkPage from './pages/online/OnlineLinkPage'
 import OnlineWhatsAppTemplatesPage from './pages/online/OnlineWhatsAppTemplatesPage'
 import OnlineSettingsPage from './pages/online/OnlineSettingsPage'
+import AdminLayout from './pages/admin/AdminLayout'
+import AdminOverviewPage from './pages/admin/AdminOverviewPage'
+import AdminUsersPage from './pages/admin/AdminUsersPage'
+import AdminRolesPage from './pages/admin/AdminRolesPage'
+import AdminHealthPage from './pages/admin/AdminHealthPage'
+import AdminAuditLogPage from './pages/admin/AdminAuditLogPage'
 
 export default function App() {
   return (
@@ -68,6 +74,13 @@ export default function App() {
               <Route path="/online/link" element={<OnlineLinkPage />} />
               <Route path="/online/whatsapp-templates" element={<OnlineWhatsAppTemplatesPage />} />
               <Route path="/online/settings" element={<OnlineSettingsPage />} />
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminOverviewPage />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="roles" element={<AdminRolesPage />} />
+                <Route path="health" element={<AdminHealthPage />} />
+                <Route path="audit-log" element={<AdminAuditLogPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

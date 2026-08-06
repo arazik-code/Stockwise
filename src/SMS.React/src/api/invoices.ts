@@ -11,6 +11,7 @@ export const invoicesApi = {
   create: (data: CreateInvoiceRequest) => api.post<Invoice>('/invoices', data).then((r) => r.data),
   update: (id: number, data: CreateInvoiceRequest) => api.put<Invoice>(`/invoices/${id}`, data).then((r) => r.data),
   pay: (id: number, data: PayInvoiceRequest) => api.post<Invoice>(`/invoices/${id}/pay`, data).then((r) => r.data),
+  togglePaid: (id: number) => api.post<Invoice>(`/invoices/${id}/toggle-paid`).then((r) => r.data),
   cancel: (id: number, data?: CancelInvoiceRequest) =>
     api.post<Invoice>(`/invoices/${id}/cancel`, data).then((r) => r.data),
   receive: (id: number) => api.post<Invoice>(`/invoices/${id}/receive`).then((r) => r.data),

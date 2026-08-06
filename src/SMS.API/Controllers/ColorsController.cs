@@ -1,13 +1,14 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Colors;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.Catalog)]
 public class ColorsController : ControllerBase
 {
     private readonly IColorService _colorService;

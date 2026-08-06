@@ -1,13 +1,14 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Shopify;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/shopify-link")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.Shopify)]
 public class ShopifyLinkController : ControllerBase
 {
     private readonly IShopifyLinkService _service;

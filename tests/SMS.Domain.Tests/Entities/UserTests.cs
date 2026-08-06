@@ -1,5 +1,4 @@
 using SMS.Domain.Entities;
-using SMS.Domain.Enums;
 
 namespace SMS.Domain.Tests.Entities;
 
@@ -13,20 +12,22 @@ public class UserTests
         Assert.Equal(string.Empty, user.Username);
         Assert.Equal(string.Empty, user.PasswordHash);
         Assert.Equal(string.Empty, user.FullName);
-        Assert.Equal(UserRole.Admin, user.Role); // Default enum value is 0 (Admin)
+        Assert.Equal(0, user.RoleId);
         Assert.True(user.IsActive);
     }
 
     [Fact]
     public void User_CanSetAllProperties()
     {
+        var role = new Role { Id = 1, Name = "Admin", IsSystem = true };
         var user = new User
         {
             Id = 1,
             Username = "admin",
             PasswordHash = "hashed_password",
             FullName = "Admin User",
-            Role = UserRole.Admin,
+            RoleId = role.Id,
+            Role = role,
             IsActive = true
         };
 
@@ -34,18 +35,20 @@ public class UserTests
         Assert.Equal("admin", user.Username);
         Assert.Equal("hashed_password", user.PasswordHash);
         Assert.Equal("Admin User", user.FullName);
-        Assert.Equal(UserRole.Admin, user.Role);
+        Assert.Equal("Admin", user.Role.Name);
         Assert.True(user.IsActive);
     }
 
     [Theory]
-    [InlineData(UserRole.Admin)]
-    [InlineData(UserRole.Manager)]
-    [InlineData(UserRole.Cashier)]
-    public void User_SupportsAllRoles(UserRole role)
+    [InlineData("Admin")]
+    [InlineData("Cashier")]
+    [InlineData("StockManager")]
+    [InlineData("Comptable")]
+    public void User_SupportsAnyRoleName(string roleName)
     {
+        var role = new Role { Name = roleName };
         var user = new User { Role = role };
-        Assert.Equal(role, user.Role);
+        Assert.Equal(roleName, user.Role.Name);
     }
 
     [Fact]

@@ -51,19 +51,23 @@ public class AuthSecurityTests : IClassFixture<SmsWebApplicationFactory>
     }
 
     [Fact]
-    public async Task Devices_Anonymous_ReturnsUnauthorized()
+    public async Task Devices_Anonymous_ReturnsForbidden()
     {
+        // LoopbackOnlyMiddleware (added later, for the printer/hardware loopback-trust carve-out)
+        // runs before auth and rejects any non-loopback caller with 403 regardless of credentials -
+        // TestServer requests never look like loopback traffic, so this is what a real anonymous
+        // *and* a real authenticated-but-remote caller both get here.
         var response = await _client.SendAsync(Anonymous(HttpMethod.Get, "/api/devices/status"));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task Printer_Anonymous_ReturnsUnauthorized()
+    public async Task Printer_Anonymous_ReturnsForbidden()
     {
         var response = await _client.SendAsync(Anonymous(HttpMethod.Get, "/api/printer/label-sizes"));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
@@ -88,9 +92,8 @@ public class AuthSecurityTests : IClassFixture<SmsWebApplicationFactory>
         var response = await _client.PostAsJsonAsync("/api/auth/register", new
         {
             username = "newstaffmember",
-            password = "password123",
-            fullName = "New Staff Member",
-            role = 2 // UserRole.Cashier
+            password = "Password123!",
+            fullName = "New Staff Member"
         });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

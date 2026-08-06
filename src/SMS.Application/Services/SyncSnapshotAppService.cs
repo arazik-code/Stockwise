@@ -29,6 +29,10 @@ public class SyncSnapshotAppService : ISyncSnapshotService
         var stockItems = await _unitOfWork.FindAsync<StockItem>(_ => true, ct);
         var clients = await _unitOfWork.FindAsync<Client>(_ => true, ct);
         var users = await _unitOfWork.FindAsync<User>(_ => true, ct);
+        var roles = await _unitOfWork.FindAsync<Role>(_ => true, ct);
+        var roleSections = await _unitOfWork.FindAsync<RoleSection>(_ => true, ct);
+        var sectionsByRoleId = roleSections.GroupBy(rs => rs.RoleId).ToDictionary(g => g.Key, g => g.Select(rs => rs.SectionKey).ToList());
+        var roleNameById = roles.ToDictionary(r => r.Id, r => r.Name);
 
         return new SyncSnapshotDto
         {
@@ -125,13 +129,20 @@ public class SyncSnapshotAppService : ISyncSnapshotService
                 EffectiveCategory = c.EffectiveCategory,
                 CategoryUpdatedAt = c.CategoryUpdatedAt
             }).ToList(),
+            Roles = roles.Select(r => new SyncRoleDto
+            {
+                Name = r.Name,
+                Description = r.Description,
+                IsSystem = r.IsSystem,
+                Sections = sectionsByRoleId.TryGetValue(r.Id, out var secs) ? secs : []
+            }).ToList(),
             Users = users.Select(u => new SyncUserDto
             {
                 Id = u.Id,
                 Username = u.Username,
                 PasswordHash = u.PasswordHash,
                 FullName = u.FullName,
-                Role = u.Role,
+                RoleName = roleNameById.TryGetValue(u.RoleId, out var rn) ? rn : "Cashier",
                 IsActive = u.IsActive,
                 MustChangePassword = u.MustChangePassword,
                 CreatedAt = u.CreatedAt
@@ -427,6 +438,40 @@ public class SyncSnapshotAppService : ISyncSnapshotService
         }
         await _unitOfWork.SaveChangesAsync(ct);
 
+        // Roles travel ahead of Users so a custom role created on the VPS after go-live already
+        // exists locally (with the same granted Sections) by the time a User references it.
+        var existingRoles = (await _unitOfWork.FindAsync<Role>(_ => true, ct)).ToDictionary(x => x.Name);
+        var existingRoleSections = await _unitOfWork.FindAsync<RoleSection>(_ => true, ct);
+        foreach (var dto in snapshot.Roles)
+        {
+            Role roleEntity;
+            if (existingRoles.TryGetValue(dto.Name, out var found))
+            {
+                roleEntity = found;
+                roleEntity.Description = dto.Description;
+                // IsSystem/Name never change here - system-role identity is fixed everywhere.
+            }
+            else
+            {
+                roleEntity = new Role { Name = dto.Name, Description = dto.Description, IsSystem = dto.IsSystem };
+                await _unitOfWork.AddAsync(roleEntity, ct);
+                existingRoles[dto.Name] = roleEntity;
+            }
+            result.RolesUpserted++;
+        }
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        foreach (var dto in snapshot.Roles)
+        {
+            var roleEntity = existingRoles[dto.Name];
+            var currentSections = existingRoleSections.Where(rs => rs.RoleId == roleEntity.Id).ToList();
+            foreach (var stale in currentSections.Where(rs => !dto.Sections.Contains(rs.SectionKey)))
+                _unitOfWork.Remove(stale);
+            foreach (var missing in dto.Sections.Where(s => !currentSections.Any(rs => rs.SectionKey == s)))
+                await _unitOfWork.AddAsync(new RoleSection { RoleId = roleEntity.Id, SectionKey = missing }, ct);
+        }
+        await _unitOfWork.SaveChangesAsync(ct);
+
         // Users: the VPS is authoritative for credentials, always overwrite. Password changes
         // made while running on the local fallback (a rare edge case) would be lost on the next
         // sync - acceptable for v1, same as the client-facing loyalty conflict is scoped to stock
@@ -434,12 +479,18 @@ public class SyncSnapshotAppService : ISyncSnapshotService
         var existingUsers = (await _unitOfWork.FindAsync<User>(_ => true, ct)).ToDictionary(x => x.Id);
         foreach (var dto in snapshot.Users)
         {
+            // Falls back to Cashier if the snapshot ever names a role this side couldn't resolve -
+            // never silently grants Admin.
+            var roleId = existingRoles.TryGetValue(dto.RoleName, out var role)
+                ? role.Id
+                : existingRoles["Cashier"].Id;
+
             if (existingUsers.TryGetValue(dto.Id, out var entity))
             {
                 entity.Username = dto.Username;
                 entity.PasswordHash = dto.PasswordHash;
                 entity.FullName = dto.FullName;
-                entity.Role = dto.Role;
+                entity.RoleId = roleId;
                 entity.IsActive = dto.IsActive;
                 entity.MustChangePassword = dto.MustChangePassword;
             }
@@ -451,7 +502,7 @@ public class SyncSnapshotAppService : ISyncSnapshotService
                     Username = dto.Username,
                     PasswordHash = dto.PasswordHash,
                     FullName = dto.FullName,
-                    Role = dto.Role,
+                    RoleId = roleId,
                     IsActive = dto.IsActive,
                     MustChangePassword = dto.MustChangePassword,
                     CreatedAt = dto.CreatedAt

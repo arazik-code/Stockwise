@@ -281,6 +281,120 @@ public class InvoiceAppServiceTests
     }
 
     [Fact]
+    public async Task TogglePaidAsync_PendingInvoice_MarksFullyPaid()
+    {
+        var invoice = new Invoice
+        {
+            Id = 1, Status = InvoiceStatus.Pending.ToString(),
+            TotalAmount = 1000m, PaidAmount = 0,
+            Fournisseur = new Fournisseur { Nom = "Test" },
+            LineItems = new List<InvoiceLineItem>(),
+            Payments = new List<InvoicePayment>()
+        };
+
+        _invoiceRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(invoice);
+
+        var result = await _service.TogglePaidAsync(1);
+
+        Assert.NotNull(result);
+        Assert.Equal(InvoiceStatus.Paid, result.Status);
+        Assert.Equal(1000m, result.PaidAmount);
+        Assert.NotNull(result.PaidAt);
+        Assert.Single(invoice.Payments);
+        Assert.Equal(1000m, invoice.Payments.First().Amount);
+    }
+
+    [Fact]
+    public async Task TogglePaidAsync_PartiallyPaidInvoice_RecordsOnlyRemainingBalance()
+    {
+        var invoice = new Invoice
+        {
+            Id = 1, Status = InvoiceStatus.PartiallyPaid.ToString(),
+            TotalAmount = 1000m, PaidAmount = 400m,
+            Fournisseur = new Fournisseur { Nom = "Test" },
+            LineItems = new List<InvoiceLineItem>(),
+            Payments = new List<InvoicePayment> { new() { Amount = 400m, PaymentMethod = "Cash" } }
+        };
+
+        _invoiceRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(invoice);
+
+        var result = await _service.TogglePaidAsync(1);
+
+        Assert.NotNull(result);
+        Assert.Equal(InvoiceStatus.Paid, result.Status);
+        Assert.Equal(1000m, result.PaidAmount);
+        Assert.Equal(2, invoice.Payments.Count);
+        Assert.Equal(600m, invoice.Payments.Last().Amount);
+    }
+
+    [Fact]
+    public async Task TogglePaidAsync_PaidInvoice_ReopensAsPending()
+    {
+        var invoice = new Invoice
+        {
+            Id = 1, Status = InvoiceStatus.Paid.ToString(),
+            TotalAmount = 1000m, PaidAmount = 1000m, PaidAt = DateTime.UtcNow,
+            DueDate = DateTime.UtcNow.AddDays(10),
+            Fournisseur = new Fournisseur { Nom = "Test" },
+            LineItems = new List<InvoiceLineItem>(),
+            Payments = new List<InvoicePayment> { new() { Amount = 1000m, PaymentMethod = "Cash" } }
+        };
+
+        _invoiceRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(invoice);
+
+        var result = await _service.TogglePaidAsync(1);
+
+        Assert.NotNull(result);
+        Assert.Equal(InvoiceStatus.Pending, result.Status);
+        Assert.Equal(0m, result.PaidAmount);
+        Assert.Null(result.PaidAt);
+        Assert.Empty(invoice.Payments);
+    }
+
+    [Fact]
+    public async Task TogglePaidAsync_PaidInvoiceWithPastDueDate_ReopensAsOverdue()
+    {
+        var invoice = new Invoice
+        {
+            Id = 1, Status = InvoiceStatus.Paid.ToString(),
+            TotalAmount = 1000m, PaidAmount = 1000m, PaidAt = DateTime.UtcNow,
+            DueDate = DateTime.UtcNow.AddDays(-5),
+            Fournisseur = new Fournisseur { Nom = "Test" },
+            LineItems = new List<InvoiceLineItem>(),
+            Payments = new List<InvoicePayment> { new() { Amount = 1000m, PaymentMethod = "Cash" } }
+        };
+
+        _invoiceRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(invoice);
+
+        var result = await _service.TogglePaidAsync(1);
+
+        Assert.NotNull(result);
+        Assert.Equal(InvoiceStatus.Overdue, result.Status);
+    }
+
+    [Fact]
+    public async Task TogglePaidAsync_CancelledInvoice_ThrowsInvalidOperation()
+    {
+        var invoice = new Invoice
+        {
+            Id = 1, Status = InvoiceStatus.Cancelled.ToString(),
+            TotalAmount = 1000m, PaidAmount = 0,
+            Fournisseur = new Fournisseur { Nom = "Test" },
+            LineItems = new List<InvoiceLineItem>(),
+            Payments = new List<InvoicePayment>()
+        };
+
+        _invoiceRepoMock.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(invoice);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.TogglePaidAsync(1));
+    }
+
+    [Fact]
     public async Task GetSummaryAsync_CalculatesCorrectly()
     {
         var rows = new List<InvoiceSummaryRow>

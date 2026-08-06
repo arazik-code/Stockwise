@@ -1,11 +1,12 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SMS.API.Authorization;
 using SMS.Application.DTOs;
 using SMS.Application.DTOs.Clients;
 using SMS.Application.DTOs.Sales;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 using SMS.Domain.Entities;
 using SMS.Domain.Enums;
 using SMS.Infrastructure.Data;
@@ -14,7 +15,7 @@ namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,Cashier")]
+[RequireSection(Sections.Clients)]
 public class ClientsController : ControllerBase
 {
     private readonly AppDbContext _db;

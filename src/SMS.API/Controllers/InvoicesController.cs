@@ -1,14 +1,15 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Invoices;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.Invoices)]
 public class InvoicesController : ControllerBase
 {
     private readonly IInvoiceService _invoiceService;
@@ -65,6 +66,14 @@ public class InvoicesController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "1");
         var invoice = await _invoiceService.PayAsync(id, request, userId, ct);
+        return invoice is null ? NotFound() : Ok(invoice);
+    }
+
+    [HttpPost("{id:int}/toggle-paid")]
+    public async Task<IActionResult> TogglePaid(int id, CancellationToken ct)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "1");
+        var invoice = await _invoiceService.TogglePaidAsync(id, userId, ct);
         return invoice is null ? NotFound() : Ok(invoice);
     }
 

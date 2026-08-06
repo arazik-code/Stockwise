@@ -430,6 +430,54 @@ public class InvoiceAppService : IInvoiceService
         return MapToDto(invoice);
     }
 
+    public async Task<InvoiceDto?> TogglePaidAsync(int id, int? userId = null, CancellationToken ct = default)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(id, ct);
+        if (invoice is null) return null;
+
+        if (invoice.Status == InvoiceStatus.Cancelled.ToString())
+            throw new InvalidOperationException("Impossible de modifier le paiement d'une facture annulée");
+
+        if (invoice.Status == InvoiceStatus.Paid.ToString())
+        {
+            // Reopen: clear the payment history this correction produced rather than leaving a
+            // PaidAmount that no longer matches any recorded InvoicePayment - same LineItems.Clear()
+            // pattern UpdateAsync already relies on for cascading the delete via the required FK.
+            invoice.Payments.Clear();
+            invoice.PaidAmount = 0;
+            invoice.PaidAt = null;
+            invoice.Status = invoice.DueDate.HasValue && invoice.DueDate < DateTime.UtcNow
+                ? InvoiceStatus.Overdue.ToString()
+                : InvoiceStatus.Pending.ToString();
+        }
+        else
+        {
+            var remaining = invoice.TotalAmount - invoice.PaidAmount;
+            if (remaining > 0)
+            {
+                invoice.Payments.Add(new InvoicePayment
+                {
+                    InvoiceId = invoice.Id,
+                    Amount = remaining,
+                    PaymentMethod = "Manuel",
+                    PaymentDate = DateTime.UtcNow,
+                    Notes = "Marquée payée manuellement",
+                    RecordedByUserId = userId
+                });
+                invoice.PaidAmount = invoice.TotalAmount;
+            }
+            invoice.Status = InvoiceStatus.Paid.ToString();
+            invoice.PaidAt = DateTime.UtcNow;
+        }
+
+        invoice.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Invoices.Update(invoice);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return MapToDto(invoice);
+    }
+
     public async Task<InvoiceDto?> CancelAsync(int id, string? reason = null, CancellationToken ct = default)
     {
         var invoice = await _unitOfWork.Invoices.GetByIdAsync(id, ct);

@@ -45,6 +45,9 @@ public class AppDbContext : DbContext
     public DbSet<CashDrawerMovement> CashDrawerMovements => Set<CashDrawerMovement>();
     public DbSet<WhatsAppTemplate> WhatsAppTemplates => Set<WhatsAppTemplate>();
     public DbSet<SyncState> SyncStates => Set<SyncState>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RoleSection> RoleSections => Set<RoleSection>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

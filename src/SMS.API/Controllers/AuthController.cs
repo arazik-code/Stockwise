@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using SMS.Domain.Security;
 using SMS.Infrastructure.Data;
 
 namespace SMS.API.Controllers;
@@ -29,11 +30,12 @@ public class AuthController : ControllerBase
     [EnableRateLimiting("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username && u.IsActive, ct);
+        var user = await _db.Users.Include(u => u.Role).ThenInclude(r => r.Sections)
+            .FirstOrDefaultAsync(u => u.Username == request.Username && u.IsActive, ct);
         if (user is null)
             return Unauthorized(new { message = "Invalid credentials" });
 
-        if (!VerifyPassword(request.Password, user.PasswordHash))
+        if (!PasswordHasher.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new { message = "Invalid credentials" });
 
         var token = GenerateJwtToken(user);
@@ -46,15 +48,14 @@ public class AuthController : ControllerBase
                 user.Id,
                 user.Username,
                 user.FullName,
-                Role = user.Role.ToString(),
+                Role = user.Role.Name,
                 user.MustChangePassword
             }
         });
     }
 
-    // Creating accounts is an admin action, not a public signup form - this used to be
-    // AllowAnonymous and accepted a Role straight from the request body, so anyone who
-    // could reach the API could mint themselves an Admin account.
+    // Kept for backwards compatibility - always creates a Cashier account. Admins who want to
+    // choose a role (built-in or custom) should use POST /api/admin/users instead.
     [HttpPost("register")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken ct)
@@ -63,12 +64,20 @@ public class AuthController : ControllerBase
         if (existing is not null)
             return Conflict(new { message = "Username already exists" });
 
+        var passwordError = PasswordPolicy.Validate(request.Password);
+        if (passwordError is not null)
+            return BadRequest(new { message = passwordError });
+
+        var cashierRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "Cashier", ct);
+        if (cashierRole is null)
+            return StatusCode(500, new { message = "Default Cashier role is not seeded" });
+
         var user = new SMS.Domain.Entities.User
         {
             Username = request.Username,
-            PasswordHash = HashPassword(request.Password),
+            PasswordHash = PasswordHasher.Hash(request.Password),
             FullName = request.FullName,
-            Role = request.Role ?? SMS.Domain.Enums.UserRole.Cashier,
+            RoleId = cashierRole.Id,
             IsActive = true,
             MustChangePassword = true,
             CreatedAt = DateTime.UtcNow
@@ -84,7 +93,7 @@ public class AuthController : ControllerBase
                 user.Id,
                 user.Username,
                 user.FullName,
-                Role = user.Role.ToString()
+                Role = cashierRole.Name
             }
         });
     }
@@ -107,13 +116,14 @@ public class AuthController : ControllerBase
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (user is null) return NotFound();
 
-        if (!VerifyPassword(request.CurrentPassword, user.PasswordHash))
+        if (!PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash))
             return BadRequest(new { message = "Mot de passe actuel incorrect" });
 
-        if (request.NewPassword.Length < 8)
-            return BadRequest(new { message = "Le nouveau mot de passe doit contenir au moins 8 caracteres" });
+        var passwordError = PasswordPolicy.Validate(request.NewPassword);
+        if (passwordError is not null)
+            return BadRequest(new { message = passwordError });
 
-        user.PasswordHash = HashPassword(request.NewPassword);
+        user.PasswordHash = PasswordHasher.Hash(request.NewPassword);
         user.MustChangePassword = false;
         await _db.SaveChangesAsync(ct);
 
@@ -122,19 +132,25 @@ public class AuthController : ControllerBase
 
     private string GenerateJwtToken(SMS.Domain.Entities.User user)
     {
-        var secretKey = _configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("Jwt:SecretKey not configured");
+        var secretKey = _configuration["Jwt:SecretKey"]
+            ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+            ?? throw new InvalidOperationException("Jwt:SecretKey not configured");
         var issuer = _configuration["Jwt:Issuer"] ?? "StockManagementSystem";
         var audience = _configuration["Jwt:Audience"] ?? "StockManagementSystem";
         var expirationMinutes = int.TryParse(_configuration["Jwt:ExpirationMinutes"], out var exp) ? exp : 480;
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim("FullName", user.FullName),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.Username),
+            new("FullName", user.FullName),
+            new(ClaimTypes.Role, user.Role.Name),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+        // Additive alongside the Role claim above - see SMS.API.Authorization.RequireSectionAttribute.
+        // Admin doesn't need these baked in (it bypasses every section check), but including them
+        // anyway keeps the token self-describing for the frontend's own nav-hiding logic.
+        claims.AddRange(user.Role.Sections.Select(s => new Claim("section", s.SectionKey)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -148,31 +164,8 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
-
-    private static string HashPassword(string password)
-    {
-        var salt = System.Security.Cryptography.RandomNumberGenerator.GetBytes(16);
-        var hash = System.Security.Cryptography.Rfc2898DeriveBytes.Pbkdf2(
-            password, salt, 100000, System.Security.Cryptography.HashAlgorithmName.SHA256, 32);
-        var combined = new byte[49];
-        Buffer.BlockCopy(salt, 0, combined, 1, 16);
-        Buffer.BlockCopy(hash, 0, combined, 17, 32);
-        return Convert.ToBase64String(combined);
-    }
-
-    private static bool VerifyPassword(string password, string storedHash)
-    {
-        var combined = Convert.FromBase64String(storedHash);
-        var salt = new byte[16];
-        Buffer.BlockCopy(combined, 1, salt, 0, 16);
-        var hash = new byte[32];
-        Buffer.BlockCopy(combined, 17, hash, 0, 32);
-        var computed = System.Security.Cryptography.Rfc2898DeriveBytes.Pbkdf2(
-            password, salt, 100000, System.Security.Cryptography.HashAlgorithmName.SHA256, 32);
-        return hash.AsSpan().SequenceEqual(computed);
-    }
 }
 
 public record LoginRequest(string Username, string Password);
-public record RegisterRequest(string Username, string Password, string FullName, SMS.Domain.Enums.UserRole? Role);
+public record RegisterRequest(string Username, string Password, string FullName);
 public record ChangePasswordRequest(string CurrentPassword, string NewPassword);

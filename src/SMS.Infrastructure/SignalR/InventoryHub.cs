@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace SMS.Infrastructure.SignalR;
 
+[Microsoft.AspNetCore.Authorization.Authorize]
 public class InventoryHub : Hub
 {
     public async Task JoinPosRoom()

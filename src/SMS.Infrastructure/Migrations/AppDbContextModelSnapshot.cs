@@ -22,6 +22,50 @@ namespace SMS.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SMS.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ActorUsername")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.CashDrawerMovement", b =>
                 {
                     b.Property<int>("Id")
@@ -1484,6 +1528,51 @@ namespace SMS.Infrastructure.Migrations
                     b.ToTable("RefundItems");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.Role", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Roles");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.RoleSection", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SectionKey")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("RoleId", "SectionKey");
+
+                    b.ToTable("RoleSections");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Sale", b =>
                 {
                     b.Property<int>("Id")
@@ -1946,7 +2035,7 @@ namespace SMS.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<int>("Role")
+                    b.Property<int>("RoleId")
                         .HasColumnType("integer");
 
                     b.Property<string>("Username")
@@ -1955,6 +2044,8 @@ namespace SMS.Infrastructure.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
 
                     b.HasIndex("Username")
                         .IsUnique();
@@ -2346,6 +2437,17 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("SaleItem");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.RoleSection", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Role", "Role")
+                        .WithMany("Sections")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Sale", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.Client", "Client")
@@ -2440,6 +2542,17 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.User", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Role", "Role")
+                        .WithMany("Users")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.Category", b =>
                 {
                     b.Navigation("Products");
@@ -2498,6 +2611,13 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("ExchangeItems");
 
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.Role", b =>
+                {
+                    b.Navigation("Sections");
+
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Sale", b =>

@@ -1,14 +1,15 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SMS.API.Authorization;
 using SMS.Application.DTOs.Finance;
 using SMS.Application.Interfaces;
+using SMS.Domain.Constants;
 using System.Security.Claims;
 
 namespace SMS.API.Controllers;
 
 [ApiController]
 [Route("api/cod-finance")]
-[Authorize(Roles = "Admin,StockManager")]
+[RequireSection(Sections.CodFinance)]
 public class CodFinanceController : ControllerBase
 {
     private readonly ICodLedgerService _ledgerService;

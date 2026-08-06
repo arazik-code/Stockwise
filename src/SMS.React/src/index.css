@@ -54,6 +54,11 @@ body {
   animation: slide-in 0.2s ease-out;
 }
 
+/* Shared form input style - admin dashboard modals (create/edit user, role editor, etc.) */
+.input {
+  @apply w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500;
+}
+
 /* Fade-in for the sidebar subtitle when the store mode changes */
 @keyframes fade-in {
   from { opacity: 0; }

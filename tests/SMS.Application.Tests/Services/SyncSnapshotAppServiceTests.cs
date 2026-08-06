@@ -32,6 +32,8 @@ public class SyncSnapshotAppServiceTests
         SetupEmpty<Client>();
         SetupEmpty<User>();
         SetupEmpty<SyncState>();
+        SetupEmpty<Role>();
+        SetupEmpty<RoleSection>();
 
         SetupAddAsync<Category>();
         SetupAddAsync<Fournisseur>();
@@ -43,6 +45,8 @@ public class SyncSnapshotAppServiceTests
         SetupAddAsync<Client>();
         SetupAddAsync<User>();
         SetupAddAsync<SyncState>();
+        SetupAddAsync<Role>();
+        SetupAddAsync<RoleSection>();
 
         _stockRepoMock.Setup(r => r.GetMovementsAsync(It.IsAny<int?>(), It.IsAny<DateTime>(), It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<StockMovement>());
