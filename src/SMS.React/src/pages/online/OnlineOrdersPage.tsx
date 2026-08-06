@@ -216,7 +216,7 @@ export default function OnlineOrdersPage() {
       <Header
         title="Commandes en ligne"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-emerald-600" title="Les commandes Shopify se synchronisent automatiquement toutes les ~10 secondes">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Sync auto
@@ -511,8 +511,8 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-[720px] max-h-[90vh] overflow-auto border border-slate-200">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-[720px] max-h-[90vh] overflow-auto border border-slate-200">
         <h2 className="text-lg font-semibold text-slate-900 mb-5">Nouvelle commande en ligne</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

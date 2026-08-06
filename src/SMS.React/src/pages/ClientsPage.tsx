@@ -244,7 +244,7 @@ export default function ClientsPage() {
       <Header
         title={t('clients.title')}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               onClick={openLoyaltySettings}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
@@ -385,8 +385,8 @@ export default function ClientsPage() {
 
       {/* Create / Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[480px] max-h-[90vh] overflow-auto border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[480px] max-h-[90vh] overflow-auto border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-5">
               {editingClient ? t('clients.edit') : t('clients.add')}
             </h2>
@@ -435,8 +435,8 @@ export default function ClientsPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[420px] border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[420px] border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('clients.delete')}</h2>
             <p className="text-sm text-slate-600 mb-2">{t('clients.deleteConfirm')}</p>
             <p className="text-sm text-slate-500 mb-5">{t('clients.deleteWarning')}</p>
@@ -464,8 +464,8 @@ export default function ClientsPage() {
 
       {/* Detail Modal */}
       {detail && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-[720px] max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-[720px] max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-4">
                 <div>
@@ -638,8 +638,8 @@ export default function ClientsPage() {
 
       {/* Adjust Points Modal */}
       {showAdjust && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[420px] border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[420px] border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('clients.adjustPoints')}</h2>
             <p className="text-sm text-slate-500 mb-5">{showAdjust.name} — {showAdjust.phone}</p>
             <form onSubmit={handleAdjust} className="space-y-4">
@@ -688,8 +688,8 @@ export default function ClientsPage() {
 
       {/* Category Editor Modal */}
       {showCategoryEditor && detail && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[420px] border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[420px] border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('clients.changeCategory')}</h2>
             <p className="text-sm text-slate-500 mb-5">{detail.name} — {detail.phone}</p>
 
@@ -771,8 +771,8 @@ export default function ClientsPage() {
 
       {/* Loyalty Settings Modal */}
       {showLoyalty && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[480px] border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[480px] border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-5">{t('loyalty.title')}</h2>
             <form onSubmit={handleLoyaltySave} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

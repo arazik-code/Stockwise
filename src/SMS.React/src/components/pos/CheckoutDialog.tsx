@@ -227,8 +227,8 @@ export default function CheckoutDialog({
   // ── Post-sale receipt screen ──
   if (receiptData) {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-8 w-[420px] text-center border border-slate-200 shadow-xl">
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-5 sm:p-8 w-full max-w-[420px] max-h-[90vh] overflow-auto text-center border border-slate-200 shadow-xl">
           <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
             <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -288,8 +288,8 @@ export default function CheckoutDialog({
 
   // ── Checkout form ──
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-8 w-[440px] border border-slate-200 max-h-[90vh] overflow-auto shadow-xl">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-5 sm:p-8 w-full max-w-[440px] border border-slate-200 max-h-[90vh] overflow-auto shadow-xl">
         <h2 className="text-xl font-bold text-slate-900 mb-6">{t('pos.checkout')}</h2>
 
         {loyaltyClient && loyaltyEnabled && pointsToRedeem > 0 && (

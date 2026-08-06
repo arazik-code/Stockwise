@@ -67,10 +67,10 @@ export default function CashDrawerModal({ onClose }: CashDrawerModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50"
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-white rounded-2xl w-[460px] border border-slate-200 shadow-2xl overflow-hidden">
+      <div className="bg-white rounded-2xl w-full max-w-[460px] border border-slate-200 shadow-2xl overflow-hidden">
         <div className="px-6 pt-5 pb-4 bg-gradient-to-br from-slate-900 to-slate-700 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">

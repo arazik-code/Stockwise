@@ -426,8 +426,8 @@ export default function FournisseursPage() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[440px] border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[440px] border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-5">
               {editing ? t('fournisseurs.edit') : t('fournisseurs.add')}
             </h2>
@@ -504,8 +504,8 @@ export default function FournisseursPage() {
 
       {/* Fournisseur Facture Detail Modal */}
       {factureDetail && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-[900px] max-h-[85vh] overflow-hidden border border-slate-200 flex flex-col">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-[900px] max-h-[85vh] overflow-hidden border border-slate-200 flex flex-col">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">{factureDetail.fournisseurNom}</h3>

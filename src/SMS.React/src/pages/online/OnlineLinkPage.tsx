@@ -121,7 +121,7 @@ export default function OnlineLinkPage() {
       <Header
         title="Liaison Shopify"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               onClick={doAutoLink}
               disabled={busy || loading}

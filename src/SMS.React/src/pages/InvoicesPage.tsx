@@ -790,8 +790,8 @@ export default function InvoicesPage() {
 
       {/* Create / Edit Modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[800px] max-h-[90vh] overflow-auto border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[800px] max-h-[90vh] overflow-auto border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-5">
               {editingInvoice ? t('invoices.edit') : t('invoices.add')}
             </h2>
@@ -1290,8 +1290,8 @@ export default function InvoicesPage() {
 
       {/* Detail Modal */}
       {detail && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-[680px] max-h-[85vh] overflow-auto border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-[680px] max-h-[85vh] overflow-auto border border-slate-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">{detail.invoiceNumber}</h3>

@@ -128,8 +128,8 @@ export default function ReceiveDeliveryDialog({ fournisseurId, fournisseurName, 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-[600px] max-h-[85vh] overflow-auto border border-slate-200">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-[600px] max-h-[85vh] overflow-auto border border-slate-200">
         <h2 className="text-lg font-semibold text-slate-900 mb-1">
           {t('fournisseurs.receiveDelivery')}
         </h2>

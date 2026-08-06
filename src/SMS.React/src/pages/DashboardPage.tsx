@@ -104,22 +104,22 @@ export default function DashboardPage() {
       <div className="flex-1 overflow-auto">
 
         {/* ── HERO STRIP ── */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-5 text-white">
-          <div className="max-w-[1400px] mx-auto flex items-center justify-between">
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-4 sm:px-6 py-4 sm:py-5 text-white">
+          <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl font-bold tracking-tight">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight">
                 {t('dashboard.title')}
               </h1>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
                 {now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => navigate('/pos')} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors flex items-center gap-2">
+              <button onClick={() => navigate('/pos')} className="flex-1 sm:flex-none justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" /></svg>
                 {t('dashboard.openPOS')}
               </button>
-              <button onClick={() => navigate('/reports')} className="px-4 py-2 text-sm font-medium text-slate-300 bg-white/10 rounded-lg hover:bg-white/15 transition-colors flex items-center gap-2">
+              <button onClick={() => navigate('/reports')} className="flex-1 sm:flex-none justify-center px-4 py-2 text-sm font-medium text-slate-300 bg-white/10 rounded-lg hover:bg-white/15 transition-colors flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                 {t('nav.reports')}
               </button>
@@ -127,7 +127,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="max-w-[1400px] mx-auto p-6 space-y-6">
+        <div className="max-w-[1400px] mx-auto p-4 sm:p-6 space-y-6">
 
           {/* ── KPI GRID ── */}
           <div className={`grid grid-cols-2 md:grid-cols-3 gap-4 ${cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>

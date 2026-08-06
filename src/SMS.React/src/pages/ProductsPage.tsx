@@ -217,7 +217,7 @@ export default function ProductsPage() {
       <Header
         title={t('products.title')}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               onClick={handleImportCatalog}
               disabled={importing}
@@ -446,7 +446,7 @@ export default function ProductsPage() {
       )}
 
       {batchProduct && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg border border-slate-200 w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200">
               <div>
@@ -475,7 +475,7 @@ export default function ProductsPage() {
               </span>
             </div>
 
-            <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-6 bg-slate-50">
+            <div className="px-6 py-3 border-b border-slate-100 flex items-center flex-wrap gap-3 sm:gap-6 bg-slate-50">
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium text-slate-600">{t('printer.labelSize')}</label>
                 <select

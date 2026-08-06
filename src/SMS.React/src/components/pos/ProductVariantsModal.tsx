@@ -23,8 +23,8 @@ export default function ProductVariantsModal({ product, onClose, onSelectVariant
   const totalStock = product.variants.reduce((sum, v) => sum + v.stockQuantity, 0)
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-[560px] max-h-[85vh] flex flex-col border border-slate-200 shadow-xl">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-[560px] max-h-[85vh] flex flex-col border border-slate-200 shadow-xl">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
           <div>
             <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-0.5">Code-barres produit scanné</p>

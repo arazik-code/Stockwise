@@ -61,8 +61,8 @@ export default function SaleDetail({ sale, onClose }: SaleDetailProps) {
   const categoryKey = `sales.categories.${sale.category.charAt(0).toLowerCase() + sale.category.slice(1)}`
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-[680px] max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-[680px] max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
           <div>

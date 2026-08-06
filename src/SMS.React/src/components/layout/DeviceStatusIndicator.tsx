@@ -62,13 +62,13 @@ export default function DeviceStatusIndicator() {
         <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
-        <span className="text-xs font-medium text-slate-600">
+        <span className="hidden sm:inline text-xs font-medium text-slate-600">
           {allOnline ? t('devices.allConnected') : t('devices.issueDetected')}
         </span>
       </button>
 
       {expanded && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg border border-slate-200 shadow-xl z-[9999]">
+        <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-lg border border-slate-200 shadow-xl z-[9999]">
           <div className="p-3 border-b border-slate-100 flex items-center justify-between">
             <h4 className="text-sm font-semibold text-slate-900">{t('devices.title')}</h4>
             <button onClick={checkStatus} className="text-xs text-slate-400 hover:text-slate-600">

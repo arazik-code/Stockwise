@@ -19,6 +19,7 @@ import { productsApi } from '../api/products'
 import { clientsApi, settingsApi, type LoyaltySettingsConfig } from '../api/clients'
 import { showToast } from '../components/shared/Toast'
 import { playScanSuccess, playScanError } from '../utils/sound'
+import { formatCurrency } from '../utils/format'
 import type { Client } from '../api/clients'
 import type { Product, ProductVariant } from '../types/product'
 
@@ -37,6 +38,7 @@ export default function PosPage() {
   const [showClientLookup, setShowClientLookup] = useState(false)
   const [showRegistration, setShowRegistration] = useState(false)
   const [showCashDrawer, setShowCashDrawer] = useState(false)
+  const [showMobileCart, setShowMobileCart] = useState(false)
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
   const [registrationPhone, setRegistrationPhone] = useState('')
   const [loyaltyClient, setLoyaltyClient] = useState<Client | null>(null)
@@ -53,6 +55,7 @@ export default function PosPage() {
   const addItem = useCartStore((s) => s.addItem)
   const items = useCartStore((s) => s.items)
   const subtotal = useCartStore((s) => s.subtotal)
+  const cartTotal = useCartStore((s) => s.total)
   const setTaxRate = useCartStore((s) => s.setTaxRate)
   const hasLiquidationItems = useCartStore((s) => s.hasLiquidationItems)
   const clearCart = useCartStore((s) => s.clearCart)
@@ -67,6 +70,10 @@ export default function PosPage() {
     settingsApi.getLoyalty().then(setLoyaltySettings).catch(() => {})
     settingsApi.getTax().then((s) => setTaxRate(s.rate)).catch(() => {})
   }, [loadProducts, setTaxRate])
+
+  useEffect(() => {
+    if (itemCount === 0) setShowMobileCart(false)
+  }, [itemCount])
 
   useEffect(() => {
     if (isLiquidationCart && loyaltyEnabled) {
@@ -260,7 +267,7 @@ export default function PosPage() {
       <Header
         title={t('pos.title')}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
             {itemCount > 0 && (
               <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
                 {itemCount} {t('common.items')}
@@ -292,8 +299,8 @@ export default function PosPage() {
         }
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-[40%] p-4 overflow-auto bg-white border-r border-slate-200">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        <div className="w-full lg:w-[40%] p-4 pb-28 lg:pb-4 overflow-auto bg-white lg:border-r border-slate-200">
           <div className="mb-4">
             <ProductSearch ref={productSearchRef} onSearch={handleSearch} onBarcodeScan={handleBarcodeScan} />
           </div>
@@ -304,7 +311,7 @@ export default function PosPage() {
           )}
         </div>
 
-        <div className="w-[60%] bg-slate-50 flex flex-col">
+        <div className="hidden lg:flex lg:w-[60%] bg-slate-50 flex-col">
           {loyaltyClient && (
             <div className="p-4 bg-white border-b border-slate-200">
               <LoyaltyDisplay
@@ -333,6 +340,65 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile: floating "view cart" bar, tap to open the full-screen cart sheet */}
+      {itemCount > 0 && !showMobileCart && (
+        <button
+          onClick={() => setShowMobileCart(true)}
+          className="lg:hidden fixed bottom-4 inset-x-4 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl shadow-lg shadow-blue-600/30 px-5 py-3.5 flex items-center justify-between active:scale-[0.98] transition-transform"
+        >
+          <span className="flex items-center gap-2.5 font-semibold text-sm">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 text-sm">{itemCount}</span>
+            {t('pos.cart')}
+          </span>
+          <span className="font-bold text-base">{formatCurrency(Math.max(0, cartTotal() - loyaltyDiscount))}</span>
+        </button>
+      )}
+
+      {/* Mobile: full-screen cart sheet */}
+      {showMobileCart && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-slate-50 flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 bg-white">
+            <button
+              onClick={() => setShowMobileCart(false)}
+              className="p-2 -ml-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+              aria-label={t('common.close')}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 className="text-sm font-semibold text-slate-900">{t('pos.backToProducts')}</h2>
+          </div>
+
+          {loyaltyClient && (
+            <div className="p-4 bg-white border-b border-slate-200">
+              <LoyaltyDisplay
+                client={loyaltyClient}
+                onRemove={() => {
+                  setLoyaltyClient(null)
+                  setLoyaltyEnabled(true)
+                }}
+                loyaltyEnabled={loyaltyEnabled}
+                onToggleLoyalty={handleToggleLoyalty}
+                isLiquidationCart={isLiquidationCart}
+                loyaltySettings={loyaltySettings}
+              />
+            </div>
+          )}
+
+          <div className="flex-1 overflow-hidden">
+            <Cart
+              onCheckout={() => setShowCheckout(true)}
+              loyaltyClient={loyaltyClient}
+              loyaltyEnabled={loyaltyEnabled}
+              loyaltyDiscount={loyaltyDiscount}
+              pointsToRedeem={pointsToRedeem}
+              loyaltySettings={loyaltySettings}
+            />
+          </div>
+        </div>
+      )}
 
       {showExchange && (
         <ExchangeDialog

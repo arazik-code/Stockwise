@@ -75,6 +75,7 @@ const fr = {
     searchPlaceholder: 'Rechercher par nom, SKU, ou scanner code-barres...',
     cartEmpty: 'Panier vide',
     cart: 'Panier',
+    backToProducts: 'Retour aux produits',
     checkout: 'Payer',
     clear: 'Vider',
     loadingProducts: 'Chargement des produits...',

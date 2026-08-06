@@ -196,8 +196,8 @@ export default function ExchangeDialog({ onClose, onReadyForCheckout }: Exchange
   // ── Step: Scan ──
   if (step === 'scan') {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 w-[480px] border border-slate-200 shadow-xl">
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 w-full max-w-[480px] border border-slate-200 shadow-xl">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">ÉCHANGE</span>
@@ -238,8 +238,8 @@ export default function ExchangeDialog({ onClose, onReadyForCheckout }: Exchange
   if (step === 'selectReturn' && sale) {
     const availableItems = sale.items.filter((i) => i.availableForRefund > 0)
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 w-[600px] max-h-[80vh] overflow-auto border border-slate-200 shadow-xl">
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 w-full max-w-[600px] max-h-[80vh] overflow-auto border border-slate-200 shadow-xl">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">ÉCHANGE</span>
@@ -329,8 +329,8 @@ export default function ExchangeDialog({ onClose, onReadyForCheckout }: Exchange
   // ── Step: Search replacement ──
   if (step === 'searchReplace') {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 w-[550px] max-h-[80vh] overflow-auto border border-slate-200 shadow-xl">
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl p-6 w-full max-w-[550px] max-h-[80vh] overflow-auto border border-slate-200 shadow-xl">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">ÉCHANGE</span>

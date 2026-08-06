@@ -306,8 +306,8 @@ export default function StockPage() {
       )}
 
       {showMovements && selectedItem && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-[700px] max-h-[80vh] overflow-auto border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-[700px] max-h-[80vh] overflow-auto border border-slate-200">
             <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
               <h3 className="text-sm font-semibold text-slate-900">
                 {t('stock.history')}: {selectedItem.productName} - {selectedItem.colorName} / {selectedItem.sizeValue}

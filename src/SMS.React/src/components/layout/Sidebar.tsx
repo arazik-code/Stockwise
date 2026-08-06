@@ -1,7 +1,9 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../store/authStore'
 import { useStoreModeStore, type StoreMode } from '../../store/storeModeStore'
+import { useUIStore } from '../../store/uiStore'
 
 interface NavConfig {
   to: string
@@ -290,7 +292,7 @@ function useLinks(sections: NavSection[], t: (k: string) => string, role: string
     .filter((section) => section.items.length > 0)
 }
 
-function SidebarNavList({ sections }: { sections: ReturnType<typeof useLinks> }) {
+function SidebarNavList({ sections, onNavigate }: { sections: ReturnType<typeof useLinks>; onNavigate: () => void }) {
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 animate-fade-in">
       {sections.map((section) => (
@@ -302,6 +304,7 @@ function SidebarNavList({ sections }: { sections: ReturnType<typeof useLinks> })
                 key={link.to}
                 to={link.to}
                 end={link.end}
+                onClick={onNavigate}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 ${
                     isActive
@@ -338,9 +341,22 @@ export default function Sidebar() {
   const { user, logout } = useAuthStore()
   const { mode, setMode } = useStoreModeStore()
   const navigate = useNavigate()
+  const location = useLocation()
+  const { mobileNavOpen, closeMobileNav } = useUIStore()
   const localSections = useLinks(localNavSections, t, user?.role || 'Admin')
   const onlineSections = useLinks(onlineNavSections, t, user?.role || 'Admin')
   const meta = MODE_META[mode]
+
+  useEffect(() => {
+    closeMobileNav()
+  }, [location.pathname, closeMobileNav])
+
+  useEffect(() => {
+    document.body.style.overflow = mobileNavOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileNavOpen])
 
   const handleLogout = () => {
     logout()
@@ -348,10 +364,35 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 bg-slate-900 min-h-screen flex flex-col flex-shrink-0">
+    <>
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={closeMobileNav}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 flex flex-col flex-shrink-0 transform transition-transform duration-300 ease-in-out lg:static lg:z-auto lg:w-60 lg:min-h-screen lg:translate-x-0 ${
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
       <div className="px-5 py-5 border-b border-slate-800">
-        <h1 className="text-base font-bold text-white tracking-tight">{meta.title}</h1>
-        <p key={meta.subtitle} className="text-[11px] text-slate-400 mt-0.5 animate-fade-in">{meta.subtitle}</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-base font-bold text-white tracking-tight">{meta.title}</h1>
+            <p key={meta.subtitle} className="text-[11px] text-slate-400 mt-0.5 animate-fade-in">{meta.subtitle}</p>
+          </div>
+          <button
+            onClick={closeMobileNav}
+            className="lg:hidden text-slate-400 hover:text-white p-1 -mr-1 -mt-1"
+            aria-label={t('common.close')}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
         <div className="mt-3 flex bg-slate-950/60 rounded-lg p-0.5 gap-0.5">
           <button
@@ -376,7 +417,7 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1 min-h-0">
-        <SidebarNavList key={mode} sections={mode === 'online' ? onlineSections : localSections} />
+        <SidebarNavList key={mode} sections={mode === 'online' ? onlineSections : localSections} onNavigate={closeMobileNav} />
       </div>
 
       <div className="px-3 py-3 border-t border-slate-800">
@@ -402,6 +443,7 @@ export default function Sidebar() {
         </button>
         <p className="text-[10px] text-slate-600 text-center mt-2">v1.0.0</p>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

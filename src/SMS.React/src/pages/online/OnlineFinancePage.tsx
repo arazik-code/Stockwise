@@ -228,8 +228,8 @@ export default function OnlineFinancePage() {
       )}
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-[480px] border border-slate-200">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-[480px] border border-slate-200">
             <h3 className="text-sm font-semibold text-slate-900 mb-4">Nouvelle remise coursier</h3>
             <form
               onSubmit={(e) => { e.preventDefault(); handleCreateRemittance(new FormData(e.currentTarget)) }}
