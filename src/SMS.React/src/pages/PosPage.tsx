@@ -22,9 +22,15 @@ import { playScanSuccess, playScanError } from '../utils/sound'
 import type { Client } from '../api/clients'
 import type { Product, ProductVariant } from '../types/product'
 
+// The POS grid defaults to just this category until the cashier searches by name or scans a
+// barcode - keeps the default screen small and fast to scan visually for the store's actual
+// walk-up items, instead of drowning them in the full shoe catalog.
+const DEFAULT_VIEW_CATEGORY = 'Accessoires'
+
 export default function PosPage() {
   const { t } = useTranslation()
   const { products, variants, loading, loadProducts, searchProducts } = useProducts()
+  const [searchQuery, setSearchQuery] = useState('')
   const isAdmin = useAuthStore((s) => s.user?.role === 'Admin')
   const [showCheckout, setShowCheckout] = useState(false)
   const [showExchange, setShowExchange] = useState(false)
@@ -160,6 +166,20 @@ export default function PosPage() {
     return { loyaltyDiscount: discount, pointsToRedeem: points }
   }, [loyaltyClient, loyaltyEnabled, loyaltySettings, subtotal, items, isLiquidationCart])
 
+  const handleSearch = useCallback(
+    (query: string) => {
+      setSearchQuery(query)
+      searchProducts(query)
+    },
+    [searchProducts]
+  )
+
+  const isDefaultView = searchQuery.trim().length === 0
+  const displayVariants = useMemo(
+    () => (isDefaultView ? variants.filter((v) => v.categoryName === DEFAULT_VIEW_CATEGORY) : variants),
+    [variants, isDefaultView]
+  )
+
   const handleBarcodeScan = useCallback(
     async (barcode: string) => {
       // Try the regular per-variant barcode first (the common case)
@@ -275,12 +295,12 @@ export default function PosPage() {
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[40%] p-4 overflow-auto bg-white border-r border-slate-200">
           <div className="mb-4">
-            <ProductSearch ref={productSearchRef} onSearch={searchProducts} onBarcodeScan={handleBarcodeScan} />
+            <ProductSearch ref={productSearchRef} onSearch={handleSearch} onBarcodeScan={handleBarcodeScan} />
           </div>
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-sm">{t('pos.loadingProducts')}</div>
           ) : (
-            <ProductGrid variants={variants} />
+            <ProductGrid variants={displayVariants} defaultView={isDefaultView} defaultViewCategory={DEFAULT_VIEW_CATEGORY} />
           )}
         </div>
 

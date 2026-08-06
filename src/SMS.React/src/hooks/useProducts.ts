@@ -7,7 +7,7 @@ export function useProducts() {
   const [loading, setLoading] = useState(false)
 
   const variants = useMemo(() => {
-    const flat: (ProductVariant & { productName: string; brand?: string; imageUrl?: string; fournisseurNom?: string })[] = []
+    const flat: (ProductVariant & { productName: string; brand?: string; imageUrl?: string; fournisseurNom?: string; categoryName?: string })[] = []
     for (const p of products) {
       for (const v of p.variants) {
         flat.push({
@@ -16,6 +16,7 @@ export function useProducts() {
           brand: p.brand,
           imageUrl: v.imageUrl ?? p.imageUrl,
           fournisseurNom: p.fournisseurNom,
+          categoryName: p.categoryName,
         })
       }
     }

@@ -437,6 +437,9 @@ const fr = {
       loyaltyDiscount: 'Remise fidélité',
       profit: 'Bénéfice',
       cost: 'Coût total',
+      reprintReceipt: 'Réimprimer le reçu',
+      printing: 'Impression...',
+      reprintFailed: "Échec de l'impression du reçu",
     },
     statuses: {
       pending: 'En attente',

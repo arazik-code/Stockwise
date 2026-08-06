@@ -42,7 +42,11 @@ public static class Sections
     public static readonly IReadOnlyDictionary<string, string[]> SystemRoleDefaults = new Dictionary<string, string[]>
     {
         ["Admin"] = All.ToArray(),
-        ["Cashier"] = new[] { Dashboard, Pos, Clients, Refunds, Reports, WhatsApp, OrderConfirmation },
+        // Cashier keeps Pos (checkout, exchanges, refunds all read/write through it) but not
+        // Reports - that also removes the "Ventes" analytics view (SalesController's
+        // daily-report/report/sales-report actions are gated on Reports too, see SalesController)
+        // and the whole ReportsController/Reports page.
+        ["Cashier"] = new[] { Dashboard, Pos, Clients, Refunds, WhatsApp, OrderConfirmation },
         ["StockManager"] = new[]
         {
             Dashboard, Products, Stock, Catalog, Fournisseurs, Invoices, Reports, WhatsApp,

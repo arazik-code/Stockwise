@@ -5,7 +5,7 @@ const ONLINE_ROUTES = ['/online', '/online/orders', '/online/confirmation', '/on
 
 const ROLE_ROUTES: Record<string, string[]> = {
   Admin: ['/', '/pos', '/products', '/fournisseurs', '/invoices', '/stock', '/sales', '/reports', '/settings', '/printer', '/offline-sales', '/refunds', '/clients', '/invoice-designer', '/receipt-designer', ...ONLINE_ROUTES, '/online/settings', '/admin', '/admin/users', '/admin/roles', '/admin/health', '/admin/audit-log'],
-  Cashier: ['/', '/pos', '/sales', '/refunds', '/clients', '/reports'],
+  Cashier: ['/', '/pos', '/refunds', '/clients'],
   StockManager: ['/', '/products', '/fournisseurs', '/invoices', '/stock', '/reports', ...ONLINE_ROUTES],
 }
 

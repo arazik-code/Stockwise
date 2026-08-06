@@ -43,7 +43,12 @@ public class SalesController : ControllerBase
         return sale is null ? NotFound() : Ok(sale);
     }
 
+    // These three are the analytics/reporting views behind the "Ventes" page (date-range totals,
+    // category/fournisseur breakdowns) - not the checkout flow. Gated on Reports (stacking with
+    // the class-level Pos requirement) so removing Reports from a role also removes this browsing
+    // capability, while GetAll/GetById/Create stay under Pos alone for checkout, exchanges, and refunds.
     [HttpGet("daily-report")]
+    [RequireSection(Sections.Reports)]
     public async Task<IActionResult> GetDailyReport([FromQuery] DateTime? date, CancellationToken ct)
     {
         DateTime? utcDate = date.HasValue ? DateTime.SpecifyKind(date.Value, DateTimeKind.Utc) : (DateTime?)null;
@@ -52,6 +57,7 @@ public class SalesController : ControllerBase
     }
 
     [HttpGet("report")]
+    [RequireSection(Sections.Reports)]
     public async Task<IActionResult> GetReport(
         [FromQuery] DateTime from,
         [FromQuery] DateTime to,
@@ -65,6 +71,7 @@ public class SalesController : ControllerBase
     }
 
     [HttpGet("sales-report")]
+    [RequireSection(Sections.Reports)]
     public async Task<IActionResult> GetSalesReport(
         [FromQuery] DateTime from,
         [FromQuery] DateTime to,

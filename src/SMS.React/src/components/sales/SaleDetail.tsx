@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import { printReceipt, buildReceiptData } from '../../utils/printReceipt'
+import { showToast } from '../shared/Toast'
 import type { Sale } from '../../types/sale'
 
 interface SaleDetailProps {
@@ -9,6 +12,48 @@ interface SaleDetailProps {
 
 export default function SaleDetail({ sale, onClose }: SaleDetailProps) {
   const { t } = useTranslation()
+  const [printing, setPrinting] = useState(false)
+
+  const handleReprint = async () => {
+    setPrinting(true)
+    try {
+      const receipt = buildReceiptData({
+        saleNumber: sale.saleNumber,
+        items: sale.items.map((i) => ({
+          productVariantId: i.productVariantId,
+          productId: 0,
+          name: i.productName,
+          sku: i.variantSku,
+          colorName: i.colorName,
+          sizeValue: i.sizeValue,
+          unitPrice: i.unitPrice,
+          quantity: i.quantity,
+          lineTotal: i.lineTotal,
+          isLiquidation: false,
+        })),
+        subtotal: sale.subTotal,
+        taxRate: sale.subTotal > 0 ? sale.taxAmount / sale.subTotal : 0,
+        taxAmount: sale.taxAmount,
+        loyaltyDiscount: sale.loyaltyDiscountAmount,
+        total: sale.totalAmount,
+        // ReceiptData only distinguishes Cash/Card - Online (Shopify) sales print as Card, closer
+        // to an electronic payment than cash in a drawer.
+        paymentMethod: sale.paymentMethod === 'Cash' ? 'Cash' : 'Card',
+        amountPaid: sale.amountPaid,
+        change: sale.changeGiven,
+        clientName: sale.clientName,
+        pointsEarned: sale.loyaltyPointsEarned,
+        pointsRedeemed: sale.loyaltyPointsRedeemed,
+        receiptBarcode: sale.receiptBarcode,
+        cashier: sale.userName,
+      })
+      await printReceipt(receipt)
+    } catch {
+      showToast(t('sales.detailModal.reprintFailed'), 'error')
+    } finally {
+      setPrinting(false)
+    }
+  }
 
   const totalQty = sale.items.reduce((sum, i) => sum + i.quantity, 0)
   const totalCost = sale.items.reduce((sum, i) => sum + (i.costPrice * i.quantity), 0)
@@ -24,7 +69,17 @@ export default function SaleDetail({ sale, onClose }: SaleDetailProps) {
             <h2 className="text-xl font-bold text-slate-900">{t('sales.detailModal.title')}</h2>
             <p className="text-sm text-slate-500 mt-0.5">{sale.saleNumber} · {formatDateTime(sale.createdAt)}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none p-1">✕</button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleReprint}
+              disabled={printing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+              {printing ? t('sales.detailModal.printing') : t('sales.detailModal.reprintReceipt')}
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none p-1">✕</button>
+          </div>
         </div>
 
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
