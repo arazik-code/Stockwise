@@ -1,0 +1,371 @@
+/**
+ * TIER 3 - section accents, geometry, elevation, density, motion, glass.
+ *
+ * Everything here is theme-agnostic: it composes tier-2 semantic values that
+ * have already resolved for the active theme. Nothing in this file branches on
+ * light vs dark except where dark's *physics* genuinely differ (elevation).
+ */
+
+/* ══ Section accent ══════════════════════════════════════════════════════════
+ *
+ * <Page section="stock"> stamps data-section plus --acc-h / --acc-k / --acc-on
+ * from the registry in sections.ts. Everything downstream inherits, so the SAME
+ * <Button> is azure on POS and violet on Invoices with no props passed.
+ *
+ * --acc-l comes from palette.css and was SOLVED against a 4.5:1 gate; --acc-k
+ * caps chroma per section so a deliberately recessive area (Settings, k 0.45)
+ * cannot shout as loudly as POS (k 1.00).
+ */
+[data-section] {
+  --acc-l: var(--accent-l);
+  --acc-c: calc(var(--accent-c-base) * var(--acc-k, 1) * var(--chroma-scale));
+
+  --accent: oklch(var(--acc-l) var(--acc-c) var(--acc-h));
+  --accent-hover: oklch(calc(var(--acc-l) - 0.045) var(--acc-c) var(--acc-h));
+  --accent-active: oklch(calc(var(--acc-l) - 0.075) var(--acc-c) var(--acc-h));
+  --accent-ring: oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.34);
+  /* sectionVars() emits BOTH themes' measured foregrounds, so flipping theme
+     needs no React re-render - the correct one is simply selected here. */
+  --accent-fg: var(--acc-on-light, var(--on-accent));
+
+  /* Soft accent wash - a tinted surface, not a pale swatch. */
+  --accent-soft: oklch(0.965 calc(var(--acc-c) * 0.16) var(--acc-h));
+  --accent-soft-hover: oklch(0.945 calc(var(--acc-c) * 0.22) var(--acc-h));
+  --accent-ink: oklch(0.44 calc(var(--acc-c) * 0.85) var(--acc-h));
+
+  /* Shadows inherit the section hue. This is the "colored glow". */
+  --sh-h: var(--acc-h);
+}
+
+[data-theme='dark'] [data-section] {
+  --accent-fg: var(--acc-on-dark, var(--on-accent));
+  --accent-hover: oklch(calc(var(--acc-l) + 0.045) var(--acc-c) var(--acc-h));
+  --accent-active: oklch(calc(var(--acc-l) + 0.075) var(--acc-c) var(--acc-h));
+  --accent-soft: oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.16);
+  --accent-soft-hover: oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.24);
+  --accent-ink: oklch(0.80 calc(var(--acc-c) * 0.75) var(--acc-h));
+}
+
+/* ══ Tones ═══════════════════════════════════════════════════════════════════
+ *
+ * The entire colour surface of the status system: nine tones, nine token
+ * triples. Roughly 70 status values across 16 domains resolve through here
+ * (see status.ts), so adding a status can never introduce a new colour.
+ *
+ * Set [data-tone] on an element and its subtree can use --tone / --tone-soft /
+ * --tone-ink without knowing which status produced them.
+ */
+[data-tone='neutral']  { --tone: var(--neutral);  --tone-soft: var(--neutral-soft);  --tone-ink: var(--neutral-ink); }
+[data-tone='info']     { --tone: var(--info);     --tone-soft: var(--info-soft);     --tone-ink: var(--info-ink); }
+[data-tone='progress'] { --tone: var(--progress); --tone-soft: var(--progress-soft); --tone-ink: var(--progress-ink); }
+[data-tone='positive'] { --tone: var(--positive); --tone-soft: var(--positive-soft); --tone-ink: var(--positive-ink); }
+[data-tone='caution']  { --tone: var(--caution);  --tone-soft: var(--caution-soft);  --tone-ink: var(--caution-ink); }
+[data-tone='negative'] { --tone: var(--negative); --tone-soft: var(--negative-soft); --tone-ink: var(--negative-ink); }
+[data-tone='critical'] { --tone: var(--critical); --tone-soft: var(--critical-soft); --tone-ink: var(--critical-ink); }
+[data-tone='muted']    { --tone: var(--muted);    --tone-soft: var(--muted-soft);    --tone-ink: var(--muted-ink); }
+[data-tone='special']  { --tone: var(--special);  --tone-soft: var(--special-soft);  --tone-ink: var(--special-ink); }
+
+/* `critical` is the one tone that also carries weight, not just hue - a
+   stronger border so a stock conflict or a refused parcel reads as louder
+   than a merely negative state even at a glance across a room. */
+[data-tone='critical'] {
+  --tone-border-width: 1.5px;
+}
+
+/* ══ Geometry ════════════════════════════════════════════════════════════════
+ *
+ * Radii are named by ROLE, not size. This is what kills the current
+ * rounded-md x355 / rounded-lg x257 / rounded-xl x81 drift: there is no
+ * decision left to make at the call site.
+ *
+ * Nesting rule: child_radius = parent_radius - parent_padding. A 24px modal
+ * with 16px padding gets 8px inner cards. Concentric radii are a large part of
+ * why expensive interfaces look expensive.
+ */
+:root {
+  --r-inset: 8px;
+  --r-field: 12px;
+  --r-card: 18px;
+  --r-surface: 24px;
+  --r-chip: 9999px;
+
+  /* Blur levels. Gated by --perf; see the blur budget below. */
+  --blur-1: 8px;
+  --blur-2: 16px;
+  --blur-3: 28px;
+}
+
+/* ══ Elevation ═══════════════════════════════════════════════════════════════
+ *
+ * Three parts: a tight contact shadow, a wide ambient shadow, and a 1px top
+ * inner highlight. All tinted by --shadow-ink, which carries the section hue.
+ * Never black - black shadows are the single most reliable tell of an
+ * unconsidered interface.
+ *
+ * In dark mode --shadow-ink drops to L 0.06, so the ambient layers do almost
+ * nothing and elevation is carried by --surface-1/2/3 lightness plus the
+ * highlight. Same token names, different physics, zero `dark:` at the call site.
+ */
+:root {
+  --e1:
+    0 1px 2px oklch(from var(--shadow-ink) l c h / 0.05),
+    inset 0 1px 0 var(--highlight-top);
+  --e2:
+    0 2px 4px oklch(from var(--shadow-ink) l c h / 0.05),
+    0 8px 20px -6px oklch(from var(--shadow-ink) l c h / 0.1),
+    inset 0 1px 0 var(--highlight-top);
+  --e3:
+    0 4px 8px oklch(from var(--shadow-ink) l c h / 0.05),
+    0 18px 40px -10px oklch(from var(--shadow-ink) l c h / 0.14),
+    inset 0 1px 0 var(--highlight-top);
+  --e4:
+    0 8px 16px oklch(from var(--shadow-ink) l c h / 0.06),
+    0 32px 72px -16px oklch(from var(--shadow-ink) l c h / 0.22),
+    inset 0 1px 0 var(--highlight-top);
+
+  --glow-accent:
+    0 0 0 1px var(--accent-ring),
+    0 6px 24px -6px oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) var(--acc-h, 264) / 0.38);
+  --glow-soft:
+    0 0 18px -4px oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) var(--acc-h, 264) / 0.45);
+}
+
+/* ══ Density ═════════════════════════════════════════════════════════════════
+ *
+ * Spacing only - density NEVER touches a colour token, so it cannot break the
+ * design no matter how it is combined with theme or section.
+ *
+ * This is how luminous chrome and an 11-column table coexist: the glass
+ * container is generous and costs nothing (it exists once per page), while the
+ * rows inside it run compact.
+ */
+:root,
+[data-density='comfortable'] {
+  --row-h: 52px;
+  --pad-x: 16px;
+  --pad-y: 12px;
+  --gap: 16px;
+  --text-body: 0.9375rem;
+  --control-h: 40px;
+}
+
+[data-density='compact'] {
+  --row-h: 38px;
+  --pad-x: 12px;
+  --pad-y: 6px;
+  --gap: 10px;
+  --text-body: 0.8125rem;
+  --control-h: 34px;
+  --r-card: 14px;
+}
+
+/* The POS terminal: standing cashier, possibly gloved, working at speed. */
+[data-density='touch'] {
+  --row-h: 60px;
+  --pad-x: 20px;
+  --pad-y: 16px;
+  --gap: 18px;
+  --text-body: 1rem;
+  --control-h: 52px;
+  --r-card: 20px;
+}
+
+/* ══ Motion ══════════════════════════════════════════════════════════════════
+ *
+ * Mirrored in motion.ts for Framer Motion. The /design route asserts the two
+ * copies agree and shows a drift banner if they do not - see D in the plan.
+ */
+:root {
+  --duration-instant: 90ms;
+  --duration-fast: 150ms;
+  --duration-base: 240ms;
+  --duration-slow: 340ms;
+  --duration-slower: 460ms;
+  --duration-ambient: 900ms;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* ══ The blur budget ═════════════════════════════════════════════════════════
+ *
+ * backdrop-filter re-samples and re-blurs its backdrop EVERY FRAME THE BACKDROP
+ * CHANGES. Inside a scroll container that means every frame of every scroll,
+ * multiplied by the number of blurred elements. On an integrated-GPU Windows
+ * POS terminal that is the difference between 60fps and 12fps.
+ *
+ * So: faux glass is the DEFAULT, real blur is a rationed exception.
+ *
+ * Real glass is roughly 80% top-highlight + tinted shadow + translucent
+ * gradient, and only about 20% actual blur. `surface-glass` gets the look at
+ * zero GPU cost, which is why it is what almost everything uses.
+ *
+ * ALLOWED (fixed or transient chrome only, <= 3 live at once):
+ *   sidebar rail, app header strip, modal/sheet scrim, popover panel,
+ *   toast stack, POS floating cart pill.
+ *
+ * FORBIDDEN, always: table rows, cards inside overflow:auto, grid tiles, list
+ *   items, stat cards, chart containers - anything rendered in a .map().
+ */
+@utility surface-glass {
+  background-image: var(--glass-wash);
+  background-color: var(--surface-1);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--r-card);
+  box-shadow: var(--e2);
+  contain: paint;
+}
+
+@utility surface-glass-blur {
+  background-color: color-mix(in oklab, var(--surface-1) 72%, transparent);
+  backdrop-filter: blur(var(--blur-2)) saturate(1.6);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(1.6);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--e3);
+  contain: paint;
+}
+
+@utility surface-plain {
+  background-color: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--e1);
+}
+
+/* The ambient mesh: ONE background-image with a few radial gradients on the
+   page root. Not a stack of blurred absolutely-positioned blobs, and not
+   animated unless --perf allows it. */
+@utility page-mesh {
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 8% -8%,
+      oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) var(--acc-h, 264) / 0.07),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 100% 0%,
+      oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) calc(var(--acc-h, 264) + 40) / 0.05),
+      transparent 55%
+    );
+  background-attachment: local;
+  background-repeat: no-repeat;
+}
+
+/* ══ Performance escape hatch ════════════════════════════════════════════════
+ *
+ * data-perf is probed once at boot (perfProbe.ts), persisted, and overridable
+ * from Settings. `lean` is the honest answer to the accepted blur risk: one
+ * rule turns every backdrop-filter in the app off.
+ */
+[data-perf='balanced'] {
+  --blur-1: 5px;
+  --blur-2: 8px;
+  --blur-3: 14px;
+  --e4: var(--e3);
+}
+
+[data-perf='lean'] {
+  --blur-1: 0px;
+  --blur-2: 0px;
+  --blur-3: 0px;
+  --e3: var(--e2);
+  --e4: var(--e2);
+}
+
+[data-perf='lean'] *,
+[data-perf='lean'] *::before,
+[data-perf='lean'] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* `lean` also falls back to an opaque surface, since the translucency was only
+   ever legible because of the blur behind it. */
+[data-perf='lean'] .surface-glass-blur {
+  background-color: var(--surface-1);
+}
+
+/* ══ Reduced motion ══════════════════════════════════════════════════════════
+ *
+ * Layer 2 of 3 (layer 1 is <MotionConfig reducedMotion="user">, layer 3 is the
+ * Settings toggle that writes data-motion).
+ *
+ * DIRECTION RULE: the app setting may only ever REDUCE motion, never restore
+ * it. If the OS asks for reduced motion the app reduces regardless of the
+ * in-app preference. Overriding a stated accessibility preference upward is a
+ * bug, not a feature - so there is deliberately no [data-motion="full"] rule
+ * that could undo the media query below.
+ *
+ * Reduced motion does not mean no feedback. It means opacity and colour
+ * instead of transform and blur - a status badge still flashes its ring, it
+ * just does not scale or blur.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ══ Ambient keyframes ═══════════════════════════════════════════════════════
+ * CSS-only. Never referenced from motion.ts, so there is nothing to drift.
+ */
+@keyframes shimmer {
+  from { background-position: -180% 0; }
+  to { background-position: 180% 0; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 currentColor; opacity: 0.55; }
+  70% { box-shadow: 0 0 0 7px transparent; opacity: 0; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mesh-drift {
+  0%, 100% { background-position: 0% 0%, 100% 0%; }
+  50% { background-position: 6% 3%, 94% 4%; }
+}
+
+.animate-fade-in {
+  animation: fade-in var(--duration-slow) var(--ease-out-soft);
+}
+
+/* Skeletons shimmer only when the machine can afford it. */
+@utility skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--fg) 6%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 180% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+[data-perf='lean'] .skeleton-shimmer {
+  animation: none;
+}
+
+/* Only the `full` tier animates the mesh. */
+[data-perf='full'] .page-mesh-live {
+  animation: mesh-drift 22s var(--ease-in-out-soft) infinite;
+}

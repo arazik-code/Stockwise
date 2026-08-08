@@ -1,0 +1,172 @@
+/**
+ * TIER 4 - the Tailwind v4 bridge.
+ *
+ * ── Why `@theme inline` and not plain `@theme` ──────────────────────────────
+ *
+ * Plain `@theme` hoists each token into :root with its RESOLVED value at build
+ * time. `--color-surface: var(--surface-1)` would therefore freeze to white,
+ * and a `[data-theme="dark"]` override of `--surface-1` would never reach it.
+ *
+ * `@theme inline` instead compiles `.bg-surface` to
+ *     background-color: var(--surface-1);
+ * so the utility reads the LIVE custom property. Flipping one attribute on
+ * <html> re-resolves every utility in the app.
+ *
+ * That single distinction is the entire dark-mode mechanism. It is why there
+ * are zero `dark:` variants across 33 pages.
+ *
+ * Opacity modifiers still work: `bg-surface/60` compiles to
+ *     color-mix(in oklab, var(--surface-1) 60%, transparent)
+ */
+
+/**
+ * Registered, but RATIONED.
+ *
+ * The contract forbids `dark:` in pages and features. It exists only for the
+ * handful of spots inside components/ui/ where a value genuinely cannot be
+ * expressed as a semantic token (for example an SVG filter primitive that
+ * takes a raw number rather than a colour). Every use must carry a
+ * `// dark: justified - <reason>` comment.
+ *
+ * Grep gate: `dark:` must stay at zero outside components/ui/.
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-sunken: var(--surface-sunken);
+
+  /* ── Text ─────────────────────────────────────────────────────────────── */
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  /* ── Lines ────────────────────────────────────────────────────────────── */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-glass: var(--border-glass);
+
+  /* ── Section accent (inherited from [data-section]) ───────────────────── */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-fg: var(--accent-fg);
+
+  /* ── Status tones ─────────────────────────────────────────────────────── */
+  --color-positive: var(--positive);
+  --color-caution: var(--caution);
+  --color-negative: var(--negative);
+  --color-critical: var(--critical);
+  --color-info: var(--info);
+  --color-progress: var(--progress);
+  --color-special: var(--special);
+  --color-neutral: var(--neutral);
+
+  --color-positive-soft: var(--positive-soft);
+  --color-caution-soft: var(--caution-soft);
+  --color-negative-soft: var(--negative-soft);
+  --color-info-soft: var(--info-soft);
+
+  --color-positive-ink: var(--positive-ink);
+  --color-caution-ink: var(--caution-ink);
+  --color-negative-ink: var(--negative-ink);
+  --color-info-ink: var(--info-ink);
+
+  /* Tone-driven surfaces, set by [data-tone] - see Badge / StatusBadge. */
+  --color-tone: var(--tone);
+  --color-tone-soft: var(--tone-soft);
+  --color-tone-ink: var(--tone-ink);
+
+  /* ── Brand ────────────────────────────────────────────────────────────── */
+  --color-whatsapp: var(--brand-whatsapp);
+  --color-whatsapp-ink: var(--brand-whatsapp-ink);
+  --color-whatsapp-soft: var(--brand-whatsapp-soft);
+
+  /* ── Geometry ─────────────────────────────────────────────────────────── */
+  --radius-inset: var(--r-inset);
+  --radius-field: var(--r-field);
+  --radius-card: var(--r-card);
+  --radius-surface: var(--r-surface);
+  --radius-chip: var(--r-chip);
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --shadow-e1: var(--e1);
+  --shadow-e2: var(--e2);
+  --shadow-e3: var(--e3);
+  --shadow-e4: var(--e4);
+  --shadow-glow: var(--glow-accent);
+  --shadow-glow-soft: var(--glow-soft);
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ease-out-soft: var(--ease-out-soft);
+  --ease-in-out-soft: var(--ease-in-out-soft);
+  --ease-out-back: var(--ease-out-back);
+
+  /* ── Type ─────────────────────────────────────────────────────────────── */
+  /* One family. `font-sans` must agree with the body rule in index.css, which
+     is exactly what the current app gets wrong - it sets a body font-family
+     but leaves --font-sans at Tailwind's default, so the two disagree. */
+  --font-sans:
+    'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo,
+    monospace;
+}
+
+/* Durations are declared in a NON-inline @theme so Tailwind emits real
+   `duration-fast` / `duration-base` utility classes. They are plain values,
+   not references, so there is nothing for `inline` to preserve. These mirror
+   motion.ts; /design asserts the two agree. */
+@theme {
+  --duration-instant: 90ms;
+  --duration-fast: 150ms;
+  --duration-base: 240ms;
+  --duration-slow: 340ms;
+  --duration-slower: 460ms;
+}
+
+/* ══ Utilities the primitives rely on ═══════════════════════════════════════ */
+
+/* Density-driven sizing, so a component can size itself from the density token
+   rather than hard-coding a height that fights [data-density]. */
+@utility h-control {
+  height: var(--control-h);
+}
+
+@utility h-row {
+  height: var(--row-h);
+}
+
+@utility px-density {
+  padding-inline: var(--pad-x);
+}
+
+@utility py-density {
+  padding-block: var(--pad-y);
+}
+
+@utility text-density {
+  font-size: var(--text-body);
+}
+
+/* Money, quantities, SKUs. Without tabular figures, count-up animations
+   visibly jitter and 11-column tables shimmer on every re-render. */
+@utility num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* The one focus treatment in the system. Defined once here, consumed by every
+   primitive, never hand-rolled at a call site. */
+@utility focus-ring {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface-1),
+    0 0 0 4px var(--accent-ring);
+}

@@ -1,10 +1,60 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Stock Management System</title>
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f9fc" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1117" media="(prefers-color-scheme: dark)" />
+    <title>FlexShoes · Gestion de Stock</title>
+
+    <!--
+      Appearance boot script. BLOCKING, and deliberately so.
+
+      It must run before the stylesheet resolves, or the user sees a flash of
+      the wrong theme on every page load. Reading plain localStorage keys (not
+      a zustand persist envelope) is what keeps it to a handful of statements
+      in the critical path - see the comment in store/themeStore.ts.
+
+      The `style.background` line is the part that actually kills the flash:
+      the <html> element paints with it before any CSS has been parsed.
+
+      Electron note: this cannot prevent a white frame during BrowserWindow
+      creation, which happens before any renderer code runs. That needs
+      `new BrowserWindow({ backgroundColor: '#0e1117' })` on the main process.
+    -->
+    <script>
+      (function () {
+        try {
+          var d = document.documentElement
+          var ls = window.localStorage
+          var stored = ls.getItem('sms-theme')
+
+          // Windows POS terminals commonly run a dark OS theme, and a cashier
+          // arriving to a dark till on deploy morning is a support call. In
+          // Electron we default to light and let them opt in; on the web we
+          // follow the OS.
+          var isElectron = /Electron/i.test(navigator.userAgent)
+          var pref = stored || (isElectron ? 'light' : 'system')
+
+          var dark =
+            pref === 'dark' ||
+            (pref === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+          d.dataset.theme = dark ? 'dark' : 'light'
+          d.dataset.density = ls.getItem('sms-density') || 'comfortable'
+          d.dataset.perf = ls.getItem('sms-perf') || 'full'
+          if (ls.getItem('sms-motion') === 'reduced') d.dataset.motion = 'reduced'
+
+          d.style.colorScheme = dark ? 'dark' : 'light'
+          d.style.background = dark ? '#0e1117' : '#f7f9fc'
+        } catch (e) {
+          /* Private mode, disabled storage, anything: fall through to light. */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

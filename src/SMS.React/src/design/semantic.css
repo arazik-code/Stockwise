@@ -1,0 +1,175 @@
+/**
+ * TIER 2 - semantic aliases.
+ *
+ * THIS IS THE ONLY FILE IN THE CODEBASE THAT KNOWS LIGHT FROM DARK.
+ *
+ * Components never branch on theme. They consume these names, and flipping
+ * `data-theme` on <html> re-resolves every one of them. There are no `dark:`
+ * variants anywhere in the app (see theme.css for the single registered
+ * escape hatch and the rule governing it).
+ *
+ * Dark is NOT a mirror of light. Three structural differences are encoded here:
+ *
+ *   Elevation   light: shadow grows, surface stays white.
+ *               dark:  the SURFACE lightens, shadow nearly vanishes, and a top
+ *                      inner-highlight carries the edge. Same token names,
+ *                      different physics.
+ *
+ *   Accent      light: L 0.552 with white text.
+ *               dark:  L 0.656 with near-black text. Both solved against a
+ *                      4.5:1 gate in gen-palette.mjs - not picked by eye.
+ *
+ *   Chroma      dark:  scaled by 0.90. High chroma halates on a dark canvas.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ── Surfaces: an elevation ladder, not a colour set ───────────────────── */
+  --canvas: oklch(0.982 0.004 255);
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.994 0.003 255);
+  --surface-3: oklch(0.988 0.004 255);
+  --surface-sunken: oklch(0.965 0.006 255);
+
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --fg: var(--ink-950);
+  --fg-muted: oklch(0.520 0.015 255);
+  --fg-subtle: oklch(0.640 0.012 255);
+
+  /* ── Lines and glass ───────────────────────────────────────────────────── */
+  --border: oklch(0.910 0.006 255);
+  --border-strong: oklch(0.855 0.008 255);
+  --border-glass: oklch(1 0 0 / 0.70);
+  --highlight-top: oklch(1 0 0 / 0.90);
+  --glass-wash: linear-gradient(180deg, oklch(1 0 0 / 0.72), oklch(1 0 0 / 0.42));
+
+  /* Chroma multiplier applied to every section accent. Dark pulls this down. */
+  --chroma-scale: 1;
+  /* Which end of the accent ladder this theme uses (see palette.css). */
+  --accent-l: var(--accent-l-light);
+  /* Text painted ON a section accent. Light accents take white. */
+  --on-accent: oklch(1 0 0);
+
+  /* ── Status tones ──────────────────────────────────────────────────────── */
+  --positive: var(--emerald-600);
+  --caution: var(--amber-600);
+  --negative: var(--red-600);
+  --critical: var(--red-700);
+  --info: var(--blue-600);
+  --progress: var(--cyan-600);
+  --special: var(--violet-600);
+  --neutral: var(--ink-500);
+  --muted: var(--ink-400);
+
+  /* Soft fills behind tone text. */
+  --positive-soft: var(--emerald-50);
+  --caution-soft: var(--amber-50);
+  --negative-soft: var(--red-50);
+  --critical-soft: var(--red-100);
+  --info-soft: var(--blue-50);
+  --progress-soft: var(--cyan-50);
+  --special-soft: var(--violet-50);
+  --neutral-soft: var(--ink-100);
+  --muted-soft: var(--ink-100);
+
+  /* Tone text on its own soft fill - one step darker than the tone itself. */
+  --positive-ink: var(--emerald-800);
+  --caution-ink: var(--amber-800);
+  --negative-ink: var(--red-800);
+  --critical-ink: var(--red-900);
+  --info-ink: var(--blue-800);
+  --progress-ink: var(--cyan-800);
+  --special-ink: var(--violet-800);
+  --neutral-ink: var(--ink-700);
+  --muted-ink: var(--ink-600);
+
+  /* ── Brand ─────────────────────────────────────────────────────────────── */
+  /* WhatsApp green is a BRAND colour, not our positive tone. It is the one
+     colour in the system allowed to sit outside the ramps, because matching
+     a third party's mark is the whole point. */
+  --brand-whatsapp: #25d366;
+  --brand-whatsapp-ink: #0b6b33;
+  --brand-whatsapp-soft: oklch(0.95 0.05 158);
+
+  /* ── Shadow ink - hue-tinted, never black ──────────────────────────────── */
+  /* --sh-h is overridden per section in components.css, so a Stock card casts
+     a faint cyan shadow and an Invoices card a faint violet one. Free at
+     runtime, and a large part of why the surfaces read as expensive. */
+  --sh-h: 264;
+  --sh-c: 0.055;
+  --shadow-ink: oklch(0.45 var(--sh-c) var(--sh-h));
+
+  /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+  --scrollbar-thumb: oklch(0.855 0.008 255);
+  --scrollbar-thumb-hover: oklch(0.780 0.010 255);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Elevation by surface lightness. Note these ASCEND - that is the mechanism. */
+  --canvas: oklch(0.178 0.012 262);
+  --surface-1: oklch(0.212 0.014 262);
+  --surface-2: oklch(0.243 0.015 262);
+  --surface-3: oklch(0.276 0.016 262);
+  --surface-sunken: oklch(0.152 0.011 262);
+
+  --fg: oklch(0.968 0.004 255);
+  --fg-muted: oklch(0.712 0.014 258);
+  --fg-subtle: oklch(0.585 0.014 258);
+
+  --border: oklch(1 0 0 / 0.09);
+  --border-strong: oklch(1 0 0 / 0.16);
+  --border-glass: oklch(1 0 0 / 0.11);
+  --highlight-top: oklch(1 0 0 / 0.075);
+  --glass-wash: linear-gradient(180deg, oklch(1 0 0 / 0.055), oklch(1 0 0 / 0.012));
+
+  --chroma-scale: 0.9;
+  --accent-l: var(--accent-l-dark);
+  /* A 0.656-lightness accent takes NEAR-BLACK text, not white. This is solved,
+     not stylistic - see Gate B in gen-palette.mjs. */
+  --on-accent: var(--ink-950);
+
+  /* One step lighter across the board: a 600 on a 0.18 canvas is muddy. */
+  --positive: var(--emerald-500);
+  --caution: var(--amber-500);
+  --negative: var(--red-500);
+  --critical: var(--red-400);
+  --info: var(--blue-500);
+  --progress: var(--cyan-500);
+  --special: var(--violet-500);
+  --neutral: var(--ink-400);
+  --muted: var(--ink-500);
+
+  /* Soft fills become translucent tints of the tone rather than pale washes -
+     a light -50 swatch on a dark canvas would glare. */
+  --positive-soft: color-mix(in oklab, var(--emerald-500) 16%, transparent);
+  --caution-soft: color-mix(in oklab, var(--amber-500) 16%, transparent);
+  --negative-soft: color-mix(in oklab, var(--red-500) 16%, transparent);
+  --critical-soft: color-mix(in oklab, var(--red-500) 24%, transparent);
+  --info-soft: color-mix(in oklab, var(--blue-500) 16%, transparent);
+  --progress-soft: color-mix(in oklab, var(--cyan-500) 16%, transparent);
+  --special-soft: color-mix(in oklab, var(--violet-500) 16%, transparent);
+  --neutral-soft: oklch(1 0 0 / 0.08);
+  --muted-soft: oklch(1 0 0 / 0.06);
+
+  --positive-ink: var(--emerald-300);
+  --caution-ink: var(--amber-300);
+  --negative-ink: var(--red-300);
+  --critical-ink: var(--red-200);
+  --info-ink: var(--blue-300);
+  --progress-ink: var(--cyan-300);
+  --special-ink: var(--violet-300);
+  --neutral-ink: var(--ink-200);
+  --muted-ink: var(--ink-300);
+
+  --brand-whatsapp-ink: #4ade80;
+  --brand-whatsapp-soft: oklch(0.65 0.16 158 / 0.16);
+
+  /* Ambient shadow all but disappears; --surface-* lightness carries elevation. */
+  --shadow-ink: oklch(0.06 0.03 262);
+
+  --scrollbar-thumb: oklch(1 0 0 / 0.14);
+  --scrollbar-thumb-hover: oklch(1 0 0 / 0.24);
+}

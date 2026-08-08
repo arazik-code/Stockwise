@@ -1,0 +1,51 @@
+/**
+ * Print + "paper" surfaces.
+ *
+ * The designers' live preview panes and every physical output (receipts,
+ * invoices, packing slips, barcode labels, loyalty QR cards) must render as
+ * real paper: white, opaque, no glass, no glow, no dark mode.
+ *
+ * Because tier-2 tokens are scoped by [data-theme], wrapping a preview in
+ *     <div data-theme="light" data-perf="lean" class="paper">
+ * creates a LIGHT ISLAND that is immune to the app theme with zero conditional
+ * code. A dark-mode user's invoice preview is still white paper. That falls
+ * straight out of the token architecture rather than needing special-casing.
+ */
+
+@utility paper {
+  background: #fff;
+  color: #000;
+  border-radius: var(--r-inset);
+  box-shadow: var(--e2);
+}
+
+.paper * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+@media print {
+  /* Never invert a printout because the operator happens to be in dark mode. */
+  html {
+    color-scheme: light !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-label,
+  .print-label * {
+    visibility: visible;
+  }
+
+  .print-label {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 60mm;
+    height: 40mm;
+    padding: 3mm;
+    box-sizing: border-box;
+  }
+}
