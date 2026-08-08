@@ -36,7 +36,11 @@ export default function MainLayout() {
   const openMobileNav = useUIStore((s) => s.openMobileNav)
 
   return (
-    <div className="flex min-h-screen bg-canvas" style={{ isolation: 'isolate' }}>
+    // h-screen + overflow-hidden, not min-h-screen: the shell must have a
+    // DEFINITE height so that <Page fill> (POS and the two designers, which use
+    // fixed split panels that must not scroll the page) can resolve h-full.
+    // Only <main> scrolls; the sidebar and header never move.
+    <div className="flex h-screen overflow-hidden bg-canvas" style={{ isolation: 'isolate' }}>
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -94,7 +98,7 @@ export default function MainLayout() {
               initial="initial"
               animate="animate"
               exit="exit"
-              className="min-h-full"
+              className="h-full"
             >
               <Outlet />
             </motion.div>

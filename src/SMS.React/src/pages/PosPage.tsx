@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import Header from '../components/layout/Header'
+import { AnimatePresence, motion } from 'motion/react'
+import { ChevronLeft, Repeat2, ShoppingBag, UserRound } from 'lucide-react'
 import ProductGrid from '../components/pos/ProductGrid'
 import ProductSearch, { type ProductSearchHandle } from '../components/pos/ProductSearch'
 import Cart from '../components/pos/Cart'
@@ -20,8 +21,38 @@ import { clientsApi, settingsApi, type LoyaltySettingsConfig } from '../api/clie
 import { showToast } from '../components/shared/Toast'
 import { playScanSuccess, playScanError } from '../utils/sound'
 import { formatCurrency } from '../utils/format'
+import { Badge, Button, Page, Spinner, cn } from '../components/ui'
+import { SPRING } from '../design/motion'
 import type { Client } from '../api/clients'
 import type { Product, ProductVariant } from '../types/product'
+
+/**
+ * ══ CONSOLE ARCHETYPE - GOLDEN REFERENCE ════════════════════════════════════
+ *
+ * Copy this for Refunds and the online confirmation queue.
+ *
+ * ── Why the POS is the one screen that is NOT frosted glass ─────────────────
+ *
+ * The rest of the app is translucent, layered and blurred. This screen
+ * deliberately is not, and that is a design decision rather than a compromise.
+ *
+ * The POS is operated standing, at speed, sometimes with a queue waiting,
+ * under retail lighting that is nothing like a desk. Translucency lowers text
+ * contrast exactly when the cashier can least afford to re-read a total, and
+ * backdrop-filter costs frames precisely during a barcode-scan burst, when the
+ * screen most needs to keep up.
+ *
+ * So Console keeps the whole Luminous Depth LANGUAGE - hue-tinted shadows, the
+ * gradient mesh, spring motion, success bursts - but pays for its expensive
+ * feel with clarity instead of blur:
+ *
+ *   solid opaque surfaces        no backdrop-filter anywhere on this route
+ *   data-density="touch"         60px rows, 52px controls, 1rem text
+ *   glow ONLY as a state signal  cart changes, scan hits, totals - never ambient
+ *
+ * It ends up looking more expensive than the glass version, not less. Frosted
+ * chrome on a working till reads as a demo; this reads as an instrument.
+ */
 
 // The POS grid defaults to just this category until the cashier searches by name or scans a
 // barcode - keeps the default screen small and fast to scan visually for the store's actual
@@ -263,57 +294,73 @@ export default function PosPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
-      <Header
-        title={t('pos.title')}
-        actions={
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+    <Page
+      section="pos"
+      fill
+      bare
+      title={t('pos.title')}
+      actions={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* The item count is a live signal, so it animates on change rather
+              than silently swapping - the cashier should never have to check
+              whether a scan registered. */}
+          <AnimatePresence mode="popLayout">
             {itemCount > 0 && (
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-                {itemCount} {t('common.items')}
-              </span>
+              <motion.span
+                key={itemCount}
+                initial={{ scale: 0.7, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.7, opacity: 0 }}
+                transition={SPRING.snappy}
+              >
+                <Badge tone="info" size="md">
+                  <span className="num font-semibold">{itemCount}</span>
+                  &nbsp;{t('common.items')}
+                </Badge>
+              </motion.span>
             )}
-            <button
-              onClick={() => setShowExchange(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-              {t('pos.exchange.title')}
-            </button>
-            <button
-              onClick={() => loyaltyClient ? setLoyaltyClient(null) : setShowClientLookup(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                loyaltyClient
-                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-              {loyaltyClient ? loyaltyClient.name : t('pos.loyalty')}
-            </button>
-          </div>
-        }
-      />
+          </AnimatePresence>
 
-      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
-        <div className="w-full lg:w-[40%] p-4 pb-28 lg:pb-4 overflow-auto bg-white lg:border-r border-slate-200">
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Repeat2 className="h-4 w-4" />}
+            onClick={() => setShowExchange(true)}
+          >
+            {t('pos.exchange.title')}
+          </Button>
+
+          <Button
+            size="sm"
+            variant={loyaltyClient ? 'soft' : 'outline'}
+            icon={<UserRound className="h-4 w-4" />}
+            onClick={() => (loyaltyClient ? setLoyaltyClient(null) : setShowClientLookup(true))}
+          >
+            {loyaltyClient ? loyaltyClient.name : t('pos.loyalty')}
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Product side. Solid surface, never glass - see the note at the top. */}
+        <div className="w-full overflow-auto border-border bg-surface p-4 pb-28 lg:w-[40%] lg:border-r lg:pb-4">
           <div className="mb-4">
             <ProductSearch ref={productSearchRef} onSearch={handleSearch} onBarcodeScan={handleBarcodeScan} />
           </div>
           {loading ? (
-            <div className="text-center py-12 text-slate-400 text-sm">{t('pos.loadingProducts')}</div>
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
+              <Spinner size="lg" />
+              <p className="text-sm text-fg-subtle">{t('pos.loadingProducts')}</p>
+            </div>
           ) : (
             <ProductGrid variants={displayVariants} defaultView={isDefaultView} defaultViewCategory={DEFAULT_VIEW_CATEGORY} />
           )}
         </div>
 
-        <div className="hidden lg:flex lg:w-[60%] bg-slate-50 flex-col">
+        {/* Cart side. */}
+        <div className="hidden flex-col bg-canvas lg:flex lg:w-[60%]">
           {loyaltyClient && (
-            <div className="p-4 bg-white border-b border-slate-200">
+            <div className="border-b border-border bg-surface p-4">
               <LoyaltyDisplay
                 client={loyaltyClient}
                 onRemove={() => {
@@ -341,64 +388,89 @@ export default function PosPage() {
         </div>
       </div>
 
-      {/* Mobile: floating "view cart" bar, tap to open the full-screen cart sheet */}
-      {itemCount > 0 && !showMobileCart && (
-        <button
-          onClick={() => setShowMobileCart(true)}
-          className="lg:hidden fixed bottom-4 inset-x-4 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl shadow-lg shadow-blue-600/30 px-5 py-3.5 flex items-center justify-between active:scale-[0.98] transition-transform"
-        >
-          <span className="flex items-center gap-2.5 font-semibold text-sm">
-            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-white/20 text-sm">{itemCount}</span>
-            {t('pos.cart')}
-          </span>
-          <span className="font-bold text-base">{formatCurrency(Math.max(0, cartTotal() - loyaltyDiscount))}</span>
-        </button>
-      )}
+      {/* Mobile: floating "view cart" bar. The one place on this route allowed
+          real blur - a single fixed element over a static backdrop. */}
+      <AnimatePresence>
+        {itemCount > 0 && !showMobileCart && (
+          <motion.button
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={SPRING.panel}
+            whileTap={{ scale: 0.985 }}
+            onClick={() => setShowMobileCart(true)}
+            className={cn(
+              'fixed inset-x-4 bottom-4 z-30 flex items-center justify-between rounded-surface px-5 py-3.5 lg:hidden',
+              'bg-[var(--accent)] text-[var(--accent-fg)] shadow-glow backdrop-blur-[var(--blur-1)]'
+            )}
+          >
+            <span className="flex items-center gap-2.5 text-sm font-semibold">
+              <span className="num flex h-7 w-7 items-center justify-center rounded-chip bg-[color-mix(in_oklab,var(--accent-fg)_22%,transparent)]">
+                {itemCount}
+              </span>
+              {t('pos.cart')}
+            </span>
+            <span className="num text-base font-bold">{formatCurrency(Math.max(0, cartTotal() - loyaltyDiscount))}</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Mobile: full-screen cart sheet */}
-      {showMobileCart && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-slate-50 flex flex-col">
-          <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 bg-white">
-            <button
-              onClick={() => setShowMobileCart(false)}
-              className="p-2 -ml-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-              aria-label={t('common.close')}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h2 className="text-sm font-semibold text-slate-900">{t('pos.backToProducts')}</h2>
-          </div>
+      <AnimatePresence>
+        {showMobileCart && (
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={SPRING.panel}
+            className="fixed inset-0 z-40 flex flex-col bg-canvas lg:hidden"
+          >
+            <div className="flex items-center gap-2 border-b border-border bg-surface px-3 py-2.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<ChevronLeft className="h-5 w-5" />}
+                onClick={() => setShowMobileCart(false)}
+                aria-label={t('common.close')}
+                className="-ml-1"
+              >
+                {t('pos.backToProducts')}
+              </Button>
+              <span className="ml-auto flex items-center gap-1.5 text-sm font-semibold text-fg">
+                <ShoppingBag className="h-4 w-4 text-fg-subtle" />
+                <span className="num">{formatCurrency(Math.max(0, cartTotal() - loyaltyDiscount))}</span>
+              </span>
+            </div>
 
-          {loyaltyClient && (
-            <div className="p-4 bg-white border-b border-slate-200">
-              <LoyaltyDisplay
-                client={loyaltyClient}
-                onRemove={() => {
-                  setLoyaltyClient(null)
-                  setLoyaltyEnabled(true)
-                }}
+            {loyaltyClient && (
+              <div className="border-b border-border bg-surface p-4">
+                <LoyaltyDisplay
+                  client={loyaltyClient}
+                  onRemove={() => {
+                    setLoyaltyClient(null)
+                    setLoyaltyEnabled(true)
+                  }}
+                  loyaltyEnabled={loyaltyEnabled}
+                  onToggleLoyalty={handleToggleLoyalty}
+                  isLiquidationCart={isLiquidationCart}
+                  loyaltySettings={loyaltySettings}
+                />
+              </div>
+            )}
+
+            <div className="flex-1 overflow-hidden">
+              <Cart
+                onCheckout={() => setShowCheckout(true)}
+                loyaltyClient={loyaltyClient}
                 loyaltyEnabled={loyaltyEnabled}
-                onToggleLoyalty={handleToggleLoyalty}
-                isLiquidationCart={isLiquidationCart}
+                loyaltyDiscount={loyaltyDiscount}
+                pointsToRedeem={pointsToRedeem}
                 loyaltySettings={loyaltySettings}
               />
             </div>
-          )}
-
-          <div className="flex-1 overflow-hidden">
-            <Cart
-              onCheckout={() => setShowCheckout(true)}
-              loyaltyClient={loyaltyClient}
-              loyaltyEnabled={loyaltyEnabled}
-              loyaltyDiscount={loyaltyDiscount}
-              pointsToRedeem={pointsToRedeem}
-              loyaltySettings={loyaltySettings}
-            />
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {showExchange && (
         <ExchangeDialog
@@ -443,6 +515,6 @@ export default function PosPage() {
       )}
 
       {showCashDrawer && <CashDrawerModal onClose={() => setShowCashDrawer(false)} />}
-    </div>
+    </Page>
   )
 }

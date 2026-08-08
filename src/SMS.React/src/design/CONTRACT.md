@@ -38,11 +38,18 @@ Additional invariants:
 ### How this is checked
 
 ```bash
-git diff <base> -- <file> | grep '^[+-]' | sed -n '/return (/q;p'
+git diff <base> -- <file> | sed -n '/^[ +-][[:space:]]*return (/q;p' | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)'
 ```
 
-The pre-`return` region of the diff must contain **only import lines**. Ten
-seconds per file, and it is the single highest-value control in the project.
+The output must contain **only import lines**.
+
+Order matters here. `sed` has to run on the *raw* diff, because the line it
+stops at — `return (` — is usually unchanged, so it carries a leading space
+rather than `+`/`-`. Filter to `+`/`-` first and `sed` never finds its
+terminator and happily prints the entire diff, which looks like a pass because
+you stop reading. Ask me how I know.
+
+Ten seconds per file, and it is the single highest-value control in the project.
 
 ---
 
