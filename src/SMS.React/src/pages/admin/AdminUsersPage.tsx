@@ -1,19 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
-import DataTable from '../../components/shared/DataTable'
-import Modal from '../../components/shared/Modal'
-import ConfirmDialog from '../../components/shared/ConfirmDialog'
-import LoadingSpinner from '../../components/shared/LoadingSpinner'
+import { Search, UserPlus } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import { adminUsersApi, type AdminUser } from '../../api/adminUsers'
 import { adminRolesApi, type Role } from '../../api/adminRoles'
 import { useAuthStore } from '../../store/authStore'
-
-const ROLE_COLORS: Record<string, string> = {
-  Admin: 'bg-purple-50 text-purple-700 border-purple-200',
-  Cashier: 'bg-blue-50 text-blue-700 border-blue-200',
-  StockManager: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-}
-const roleBadgeClass = (name: string) => ROLE_COLORS[name] ?? 'bg-slate-50 text-slate-700 border-slate-200'
+import {
+  Badge, Button, ConfirmDialog, DataTable, Input, Modal, Page, Select,
+  StatusBadge, StatusDot, type Column,
+} from '../../components/ui'
 
 export default function AdminUsersPage() {
   const currentUsername = useAuthStore((s) => s.user?.username)
@@ -71,89 +65,92 @@ export default function AdminUsersPage() {
     }
   }
 
-  if (loading && users.length === 0) return <LoadingSpinner />
+  const columns: Column<AdminUser>[] = [
+    {
+      key: 'username',
+      header: 'Utilisateur',
+      render: (u) => (
+        <div>
+          <div className="font-medium text-fg">{u.fullName}</div>
+          <div className="text-xs text-fg-subtle">@{u.username}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'roleName',
+      header: 'Rôle',
+      render: (u) => <StatusBadge domain="adminRole" value={u.roleName} animate={false} showIcon={false} />,
+    },
+    {
+      key: 'isActive',
+      header: 'Statut',
+      render: (u) => (
+        <div className="flex items-center gap-1.5">
+          <StatusDot tone={u.isActive ? 'positive' : 'muted'} />
+          <span className="text-xs font-medium text-fg-muted">{u.isActive ? 'Actif' : 'Désactivé'}</span>
+          {u.mustChangePassword && u.isActive && (
+            <Badge tone="caution" size="xs" title="Doit changer son mot de passe">
+              !
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (u) => (
+        <div className="flex justify-end gap-3 text-xs font-medium">
+          <button onClick={() => setEditUser(u)} className="text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)]">
+            Modifier
+          </button>
+          <button onClick={() => setResetUser(u)} className="text-fg-muted transition-colors hover:text-fg">
+            Réinitialiser
+          </button>
+          <button
+            onClick={() => handleToggleActive(u)}
+            disabled={u.username === currentUsername && u.isActive}
+            className="text-[var(--negative)] transition-colors hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            {u.isActive ? 'Désactiver' : 'Réactiver'}
+          </button>
+        </div>
+      ),
+    },
+  ]
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <input
+    <Page
+      section="adminUsers"
+      title="Utilisateurs"
+      actions={
+        <Button size="sm" icon={<UserPlus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+          Nouvel utilisateur
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <Input
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
             load(e.target.value)
           }}
           placeholder="Rechercher un utilisateur..."
-          className="w-72 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+          leading={<Search />}
+          size="sm"
+          wrapperClassName="w-full sm:w-72"
         />
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          + Nouvel utilisateur
-        </button>
-      </div>
 
-      <DataTable<AdminUser>
-        keyField="id"
-        emptyMessage="Aucun utilisateur trouvé"
-        data={users}
-        columns={[
-          {
-            key: 'username',
-            header: 'Utilisateur',
-            render: (u) => (
-              <div>
-                <div className="font-medium text-slate-900">{u.fullName}</div>
-                <div className="text-slate-400 text-xs">@{u.username}</div>
-              </div>
-            ),
-          },
-          {
-            key: 'roleName',
-            header: 'Rôle',
-            render: (u) => (
-              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${roleBadgeClass(u.roleName)}`}>
-                {u.roleName}
-              </span>
-            ),
-          },
-          {
-            key: 'isActive',
-            header: 'Statut',
-            render: (u) => (
-              <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${u.isActive ? 'text-emerald-700' : 'text-slate-400'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                {u.isActive ? 'Actif' : 'Désactivé'}
-                {u.mustChangePassword && u.isActive && (
-                  <span className="ml-1 text-amber-600" title="Doit changer son mot de passe">⚠</span>
-                )}
-              </span>
-            ),
-          },
-          {
-            key: 'actions',
-            header: '',
-            className: 'text-right',
-            render: (u) => (
-              <div className="flex justify-end gap-3 text-xs font-medium">
-                <button onClick={() => setEditUser(u)} className="text-blue-600 hover:text-blue-800">
-                  Modifier
-                </button>
-                <button onClick={() => setResetUser(u)} className="text-slate-600 hover:text-slate-900">
-                  Réinitialiser
-                </button>
-                <button
-                  onClick={() => handleToggleActive(u)}
-                  disabled={u.username === currentUsername && u.isActive}
-                  className="text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  {u.isActive ? 'Désactiver' : 'Réactiver'}
-                </button>
-              </div>
-            ),
-          },
-        ]}
-      />
+        <DataTable<AdminUser>
+          columns={columns}
+          data={users}
+          keyField={(u) => u.id}
+          loading={loading}
+          emptyMessage="Aucun utilisateur trouvé"
+        />
+      </div>
 
       {createOpen && (
         <CreateUserModal
@@ -190,30 +187,47 @@ export default function AdminUsersPage() {
         />
       )}
 
-      {deactivateTarget && (
-        <ConfirmDialog
-          title="Désactiver cet utilisateur ?"
-          message={`${deactivateTarget.fullName} (@${deactivateTarget.username}) ne pourra plus se connecter.`}
-          confirmLabel="Désactiver"
-          variant="danger"
-          onConfirm={confirmDeactivate}
-          onCancel={() => setDeactivateTarget(null)}
-        />
-      )}
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        title="Désactiver cet utilisateur ?"
+        message={
+          deactivateTarget
+            ? `${deactivateTarget.fullName} (@${deactivateTarget.username}) ne pourra plus se connecter.`
+            : undefined
+        }
+        confirmLabel="Désactiver"
+        variant="danger"
+        onConfirm={confirmDeactivate}
+        onCancel={() => setDeactivateTarget(null)}
+      />
 
-      {revealedPassword && (
-        <Modal title="Mot de passe temporaire" onClose={() => setRevealedPassword(null)} width="sm"
-          footer={<button onClick={() => setRevealedPassword(null)} className="px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Fermer</button>}
-        >
-          <p className="text-sm text-slate-600 mb-3">
-            Communiquez ce mot de passe à <strong>@{revealedPassword.username}</strong> - il ne sera plus jamais affiché. Un changement sera exigé à la première connexion.
-          </p>
-          <code className="block w-full px-3 py-2 bg-slate-900 text-emerald-400 rounded-lg text-sm text-center tracking-wider select-all">
-            {revealedPassword.password}
-          </code>
-        </Modal>
-      )}
-    </div>
+      <Modal
+        open={!!revealedPassword}
+        onClose={() => setRevealedPassword(null)}
+        size="sm"
+        title="Mot de passe temporaire"
+        footer={
+          <Button size="sm" onClick={() => setRevealedPassword(null)}>
+            Fermer
+          </Button>
+        }
+      >
+        {revealedPassword && (
+          <>
+            <p className="mb-3 text-sm text-fg-muted">
+              Communiquez ce mot de passe à <strong>@{revealedPassword.username}</strong> — il ne sera
+              plus jamais affiché. Un changement sera exigé à la première connexion.
+            </p>
+            <code
+              data-tone="positive"
+              className="num block w-full select-all rounded-field bg-[var(--ink-950)] px-3 py-2 text-center text-sm tracking-wider text-[var(--tone)]"
+            >
+              {revealedPassword.password}
+            </code>
+          </>
+        )}
+      </Modal>
+    </Page>
   )
 }
 
@@ -239,34 +253,35 @@ function CreateUserModal({ roles, onClose, onCreated }: { roles: Role[]; onClose
 
   return (
     <Modal
-      title="Nouvel utilisateur"
+      open
       onClose={onClose}
+      title="Nouvel utilisateur"
       footer={
         <>
-          <button onClick={onClose} className="px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-          <button onClick={submit} disabled={saving || !username || !fullName} className="px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
-            {saving ? 'Création...' : 'Créer'}
-          </button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button size="sm" onClick={submit} loading={saving} disabled={!username || !fullName}>
+            Créer
+          </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="Nom d'utilisateur">
-          <input value={username} onChange={(e) => setUsername(e.target.value)} className="input" autoFocus />
-        </Field>
-        <Field label="Nom complet">
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" />
-        </Field>
-        <Field label="Rôle">
-          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} className="input">
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Mot de passe (laisser vide pour en générer un)">
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" className="input" placeholder="Généré automatiquement" />
-        </Field>
+        <Input label="Nom d'utilisateur" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+        <Input label="Nom complet" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        <Select label="Rôle" value={roleId} onChange={(e) => setRoleId(Number(e.target.value))}>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </Select>
+        <Input
+          label="Mot de passe (laisser vide pour en générer un)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          type="text"
+          placeholder="Généré automatiquement"
+        />
       </div>
     </Modal>
   )
@@ -292,28 +307,27 @@ function EditUserModal({ user, roles, onClose, onSaved }: { user: AdminUser; rol
 
   return (
     <Modal
-      title={`Modifier @${user.username}`}
+      open
       onClose={onClose}
+      title={`Modifier @${user.username}`}
       footer={
         <>
-          <button onClick={onClose} className="px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-          <button onClick={submit} disabled={saving} className="px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button size="sm" onClick={submit} loading={saving}>
+            Enregistrer
+          </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <Field label="Nom complet">
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" autoFocus />
-        </Field>
-        <Field label="Rôle">
-          <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} className="input">
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
-        </Field>
+        <Input label="Nom complet" value={fullName} onChange={(e) => setFullName(e.target.value)} autoFocus />
+        <Select label="Rôle" value={roleId} onChange={(e) => setRoleId(Number(e.target.value))}>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </Select>
       </div>
     </Modal>
   )
@@ -337,31 +351,29 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: AdminUser; onClos
 
   return (
     <Modal
-      title={`Réinitialiser le mot de passe de @${user.username}`}
+      open
       onClose={onClose}
-      width="sm"
+      size="sm"
+      title={`Réinitialiser le mot de passe de @${user.username}`}
       footer={
         <>
-          <button onClick={onClose} className="px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-          <button onClick={submit} disabled={saving} className="px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
-            {saving ? '...' : 'Réinitialiser'}
-          </button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button size="sm" onClick={submit} loading={saving}>
+            Réinitialiser
+          </Button>
         </>
       }
     >
-      <Field label="Nouveau mot de passe (laisser vide pour en générer un)">
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="text" className="input" placeholder="Généré automatiquement" />
-      </Field>
-      <p className="text-xs text-slate-400 mt-2">L'utilisateur devra le changer à sa prochaine connexion.</p>
+      <Input
+        label="Nouveau mot de passe (laisser vide pour en générer un)"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        type="text"
+        placeholder="Généré automatiquement"
+      />
+      <p className="mt-2 text-xs text-fg-subtle">L'utilisateur devra le changer à sa prochaine connexion.</p>
     </Modal>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="block text-xs font-medium text-slate-500 mb-1">{label}</span>
-      {children}
-    </label>
   )
 }

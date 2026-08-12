@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import Modal from '../../components/shared/Modal'
-import ConfirmDialog from '../../components/shared/ConfirmDialog'
-import LoadingSpinner from '../../components/shared/LoadingSpinner'
+import { Lock, Plus, ShieldCheck } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import { adminRolesApi, type Role } from '../../api/adminRoles'
 import { sectionLabel } from '../../constants/sections'
+import {
+  Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, Input, Modal,
+  Page, SkeletonCards, cn,
+} from '../../components/ui'
 
 const ADMIN_GUARDED = new Set(['AdminUsers', 'AdminRoles', 'AdminHealth'])
 
@@ -45,70 +47,85 @@ export default function AdminRolesPage() {
     }
   }
 
-  if (loading && roles.length === 0) return <LoadingSpinner />
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          Chaque rôle donne accès à un ensemble précis de sections de l'application. Les 3 rôles système ne peuvent pas être renommés ni supprimés, mais leurs permissions restent modifiables.
+    <Page
+      section="adminRoles"
+      title="Rôles & Permissions"
+      actions={
+        <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setEditRole('new')}>
+          Nouveau rôle
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-fg-subtle">
+          Chaque rôle donne accès à un ensemble précis de sections de l'application. Les 3 rôles
+          système ne peuvent pas être renommés ni supprimés, mais leurs permissions restent
+          modifiables.
         </p>
-        <button
-          onClick={() => setEditRole('new')}
-          className="shrink-0 ml-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          + Nouveau rôle
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {roles.map((role) => (
-          <div key={role.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                  {role.name}
-                  {role.isSystem && (
-                    <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Système</span>
-                  )}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">{role.userCount} utilisateur(s)</p>
-              </div>
-            </div>
-            {role.description && <p className="text-sm text-slate-500 mb-3">{role.description}</p>}
-            <div className="flex flex-wrap gap-1.5 mb-4 flex-1">
-              {role.sections.length === 0 ? (
-                <span className="text-xs text-slate-300 italic">Aucune section accordée</span>
-              ) : (
-                role.sections.slice(0, 6).map((s) => (
-                  <span key={s} className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                    {sectionLabel(s)}
-                  </span>
-                ))
-              )}
-              {role.sections.length > 6 && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-100">
-                  +{role.sections.length - 6}
-                </span>
-              )}
-            </div>
-            <div className="flex gap-3 text-xs font-medium pt-3 border-t border-slate-100">
-              <button onClick={() => setEditRole(role)} className="text-blue-600 hover:text-blue-800">
-                Modifier les permissions
-              </button>
-              {!role.isSystem && (
-                <button
-                  onClick={() => setDeleteTarget(role)}
-                  disabled={role.userCount > 0}
-                  className="text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
-                  title={role.userCount > 0 ? 'Réaffectez les utilisateurs avant de supprimer' : undefined}
-                >
-                  Supprimer
-                </button>
-              )}
-            </div>
+        {loading ? (
+          <SkeletonCards count={6} />
+        ) : roles.length === 0 ? (
+          <div className="surface-glass">
+            <EmptyState icon={ShieldCheck} title="Aucun rôle" description="Créez le premier rôle pour commencer." />
           </div>
-        ))}
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {roles.map((role) => (
+              <Card key={role.id} className="flex flex-col">
+                <div className="mb-2 flex items-start justify-between">
+                  <div>
+                    <h3 className="flex items-center gap-2 font-semibold text-fg">
+                      {role.name}
+                      {role.isSystem && (
+                        <Badge tone="neutral" size="xs">
+                          Système
+                        </Badge>
+                      )}
+                    </h3>
+                    <p className="num mt-0.5 text-xs text-fg-subtle">{role.userCount} utilisateur(s)</p>
+                  </div>
+                </div>
+                {role.description && <p className="mb-3 text-sm text-fg-muted">{role.description}</p>}
+                <div className="mb-4 flex flex-1 flex-wrap gap-1.5">
+                  {role.sections.length === 0 ? (
+                    <span className="text-xs italic text-fg-subtle">Aucune section accordée</span>
+                  ) : (
+                    role.sections.slice(0, 6).map((s) => (
+                      <Badge key={s} tone="info" size="xs">
+                        {sectionLabel(s)}
+                      </Badge>
+                    ))
+                  )}
+                  {role.sections.length > 6 && (
+                    <Badge tone="neutral" size="xs">
+                      +{role.sections.length - 6}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex gap-3 border-t border-border pt-3 text-xs font-medium">
+                  <button
+                    onClick={() => setEditRole(role)}
+                    className="text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)]"
+                  >
+                    Modifier les permissions
+                  </button>
+                  {!role.isSystem && (
+                    <button
+                      onClick={() => setDeleteTarget(role)}
+                      disabled={role.userCount > 0}
+                      title={role.userCount > 0 ? 'Réaffectez les utilisateurs avant de supprimer' : undefined}
+                      className="text-[var(--negative)] transition-colors hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
       {editRole && (
@@ -123,17 +140,16 @@ export default function AdminRolesPage() {
         />
       )}
 
-      {deleteTarget && (
-        <ConfirmDialog
-          title="Supprimer ce rôle ?"
-          message={`Le rôle "${deleteTarget.name}" sera définitivement supprimé.`}
-          confirmLabel="Supprimer"
-          variant="danger"
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
-    </div>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Supprimer ce rôle ?"
+        message={deleteTarget ? `Le rôle « ${deleteTarget.name} » sera définitivement supprimé.` : undefined}
+        confirmLabel="Supprimer"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </Page>
   )
 }
 
@@ -189,45 +205,51 @@ function RoleEditorModal({
 
   return (
     <Modal
-      title={isNew ? 'Nouveau rôle' : `Permissions de « ${role.name} »`}
+      open
       onClose={onClose}
-      width="lg"
+      size="lg"
+      title={isNew ? 'Nouveau rôle' : `Permissions de « ${role.name} »`}
       footer={
         <>
-          <button onClick={onClose} className="px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-          <button onClick={submit} disabled={saving} className="px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button size="sm" onClick={submit} loading={saving}>
+            Enregistrer
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
         {isNew && (
-          <label className="block">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Nom du rôle</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="ex: Comptable" autoFocus />
-          </label>
+          <Input label="Nom du rôle" value={name} onChange={(e) => setName(e.target.value)} placeholder="ex: Comptable" autoFocus />
         )}
-        <label className="block">
-          <span className="block text-xs font-medium text-slate-500 mb-1">Description (optionnelle)</span>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className="input" />
-        </label>
+        <Input label="Description (optionnelle)" value={description} onChange={(e) => setDescription(e.target.value)} />
 
         <div>
-          <span className="block text-xs font-medium text-slate-500 mb-2">Sections accessibles</span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+          <span className="mb-2 block text-xs font-medium text-fg-muted">Sections accessibles</span>
+          <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
             {availableSections.map((key) => {
               const locked = isAdminRole && ADMIN_GUARDED.has(key)
               return (
                 <label
                   key={key}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm cursor-pointer transition-colors ${
-                    sections.has(key) ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                  } ${locked ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 rounded-field border px-3 py-2 text-sm transition-colors',
+                    sections.has(key)
+                      ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent-ink)]'
+                      : 'border-border bg-surface text-fg-muted hover:border-border-strong',
+                    locked && 'cursor-not-allowed opacity-70'
+                  )}
                 >
-                  <input type="checkbox" checked={sections.has(key)} disabled={locked} onChange={() => toggle(key)} className="accent-blue-600" />
+                  <Checkbox checked={sections.has(key)} disabled={locked} onChange={() => toggle(key)} />
                   {sectionLabel(key)}
-                  {locked && <span className="ml-auto text-[10px] text-slate-400">requis</span>}
+                  {locked && (
+                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-fg-subtle">
+                      <Lock className="h-2.5 w-2.5" />
+                      requis
+                    </span>
+                  )}
                 </label>
               )
             })}
