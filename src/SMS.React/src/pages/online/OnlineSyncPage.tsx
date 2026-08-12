@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import Header from '../../components/layout/Header'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { onlineApi } from '../../api/online'
 import { shopifyApi, type ShopifySyncStatus } from '../../api/shopify'
 import { ozonApi } from '../../api/ozon'
 import { showToast } from '../../components/shared/Toast'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import {
+  Button, Card, DataTable, EmptyState, Page, Skeleton, Tabs, type Column,
+} from '../../components/ui'
 import type { OnlineOrder } from '../../types/onlineOrder'
 
 type SyncTab = 'conflicts' | 'status' | 'cities'
@@ -136,199 +139,146 @@ export default function OnlineSyncPage() {
     }
   }
 
-  return (
-    <div className="flex flex-col flex-1">
-      <Header title="Synchronisation" />
-      <div className="px-6 pt-5">
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                tab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+  const conflictColumns: Column<OnlineOrder>[] = [
+    { key: 'orderNumber', header: 'Commande', render: (o) => <span className="num font-medium text-fg">{o.orderNumber}</span> },
+    { key: 'channel', header: 'Canal', render: (o) => <span className="text-fg-muted">{o.channel}</span> },
+    { key: 'customer', header: 'Client', render: (o) => <span className="text-fg-muted">{o.customerName}</span> },
+    { key: 'date', header: 'Date', render: (o) => <span className="text-fg-muted">{formatDateTime(o.createdAt)}</span> },
+    {
+      key: 'items',
+      header: 'Articles',
+      render: (o) => {
+        const unmapped = o.items.filter((i) => !i.productVariantId)
+        if (o.items.length === 0) {
+          return <span className="text-xs font-medium text-[var(--negative)]">Aucun article — utiliser "Récupérer depuis Shopify"</span>
+        }
+        if (unmapped.length > 0) {
+          return (
+            <div className="space-y-0.5">
+              {unmapped.map((i) => (
+                <div key={i.id} className="flex items-center gap-1 text-xs text-[var(--caution-ink)]" title={`SKU Shopify: ${i.shopifySku ?? '—'}`}>
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {i.productName} (×{i.quantity})
+                </div>
+              ))}
+            </div>
+          )
+        }
+        return <span className="text-xs text-fg-subtle">{o.items.length} article(s) — stock insuffisant</span>
+      },
+    },
+    { key: 'total', header: 'Total', numeric: true, render: (o) => <span className="font-medium text-fg">{formatCurrency(o.totalAmount)}</span> },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'center',
+      render: (o) => (
+        <button onClick={() => handleCancel(o)} className="rounded-inset px-2 py-1 text-xs font-medium text-[var(--negative)] transition-colors hover:bg-[var(--negative-soft)]">
+          Annuler
+        </button>
+      ),
+    },
+  ]
 
-      {tab === 'conflicts' && (
-        <div className="p-6 flex-1">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-            </div>
-          ) : conflicts.length === 0 ? (
-            <div className="text-center py-16">
-              <svg className="w-12 h-12 mx-auto mb-3 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-slate-500">Aucun conflit de stock — tout est synchronisé.</p>
+  const cityColumns: Column<{ rawCity: string; orderCount: number }>[] = [
+    { key: 'rawCity', header: 'Ville (texte brut)', render: (c) => <span className="text-fg" dir="auto">{c.rawCity}</span> },
+    { key: 'orderCount', header: 'Commandes concernées', numeric: true, render: (c) => <span className="text-fg-muted">{c.orderCount}</span> },
+  ]
+
+  return (
+    <Page section="onlineSync" title="Synchronisation">
+      <div className="space-y-5">
+        <Tabs
+          variant="segmented"
+          layoutGroupId="sync-tabs"
+          value={tab}
+          onChange={(v) => setTab(v as SyncTab)}
+          items={TABS.map((t) => ({ value: t.key, label: t.label }))}
+        />
+
+        {tab === 'conflicts' && (
+          conflicts.length === 0 && !loading ? (
+            <div className="surface-glass">
+              <EmptyState icon={CheckCircle2} title="Aucun conflit de stock" description="Tout est synchronisé." />
             </div>
           ) : (
-            <div className="bg-white border border-red-200 rounded-lg overflow-hidden">
-              <div className="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
-                <p className="text-sm font-medium text-red-700">{conflicts.length} commande(s) en conflit de stock</p>
+            <Card padded={false} className="border-[color-mix(in_oklab,var(--negative)_25%,transparent)]">
+              <div className="flex items-center justify-between border-b border-[color-mix(in_oklab,var(--negative)_25%,transparent)] bg-[var(--negative-soft)] px-4 py-3">
+                <p className="num text-sm font-medium text-[var(--negative-ink)]">{conflicts.length} commande(s) en conflit de stock</p>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleBackfill}
-                    disabled={backfilling}
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    loading={backfilling}
                     title="Récupère les articles manquants depuis Shopify pour les commandes sans aucun article"
-                    className="text-xs font-medium px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    onClick={handleBackfill}
                   >
-                    {backfilling ? 'Récupération…' : 'Récupérer depuis Shopify'}
-                  </button>
-                  <button
-                    onClick={handleRematch}
-                    disabled={rematching}
-                    title="Retente le rapprochement avec le catalogue actuel pour tous les articles non résolus"
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {rematching ? 'Rapprochement…' : 'Rapprocher le catalogue'}
-                  </button>
+                    Récupérer depuis Shopify
+                  </Button>
+                  <Button size="xs" variant="success" loading={rematching} onClick={handleRematch}>
+                    Rapprocher le catalogue
+                  </Button>
                 </div>
               </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Commande</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Canal</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Articles</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Total</th>
-                    <th className="text-center px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {conflicts.map((order) => {
-                    const unmapped = order.items.filter((i) => !i.productVariantId)
-                    return (
-                      <tr key={order.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 text-sm font-mono font-medium text-slate-900">{order.orderNumber}</td>
-                        <td className="px-4 py-3 text-sm text-slate-600">{order.channel}</td>
-                        <td className="px-4 py-3 text-sm text-slate-600">{order.customerName}</td>
-                        <td className="px-4 py-3 text-sm text-slate-600">{formatDateTime(order.createdAt)}</td>
-                        <td className="px-4 py-3 text-sm">
-                          {order.items.length === 0 ? (
-                            <span className="text-xs text-red-600 font-medium">Aucun article — utiliser "Récupérer depuis Shopify"</span>
-                          ) : unmapped.length > 0 ? (
-                            <div className="space-y-0.5">
-                              {unmapped.map((i) => (
-                                <div key={i.id} className="text-xs text-amber-700" title={`SKU Shopify: ${i.shopifySku ?? '—'}`}>
-                                  ⚠ {i.productName} (×{i.quantity})
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">{order.items.length} article(s) — stock insuffisant</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right font-medium text-slate-900">{formatCurrency(order.totalAmount)}</td>
-                        <td className="px-4 py-3 text-sm text-center">
-                          <button onClick={() => handleCancel(order)} className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50">
-                            Annuler
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-      {tab === 'status' && (
-        <div className="p-6 flex-1">
-          {statusLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+              <DataTable columns={conflictColumns} data={conflicts} keyField={(o) => o.id} loading={loading} />
+            </Card>
+          )
+        )}
+
+        {tab === 'status' && statusLoading ? (
+          <div className="max-w-2xl">
+            <Skeleton className="h-40" />
+          </div>
+        ) : tab === 'status' && (
+          <div className="max-w-2xl space-y-4">
+            <Card>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-fg">Statut de la synchronisation Shopify</h3>
+                <Button size="xs" variant="success" loading={syncing} onClick={handleTriggerSync}>
+                  Synchroniser maintenant
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="mb-1 text-xs uppercase tracking-wide text-fg-subtle">Dernière exécution</p>
+                  <p className="text-sm font-medium text-fg">{status?.lastSyncTime ? formatDateTime(status.lastSyncTime) : '—'}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs uppercase tracking-wide text-fg-subtle">Commandes en conflit</p>
+                  <p className="num text-sm font-medium text-fg">{status?.pendingOrders ?? 0}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs uppercase tracking-wide text-fg-subtle">État</p>
+                  <p className="text-sm font-medium text-fg">{status?.isSyncing ? 'En cours' : 'Inactif'}</p>
+                </div>
+              </div>
+            </Card>
+            <p className="text-xs text-fg-subtle">
+              La synchronisation automatique nécessite une connexion Shopify configurée dans{' '}
+              <span className="font-medium text-fg-muted">Paramètres → Boutique en ligne → Shopify</span>. Sans domaine/jeton
+              configurés, le déclenchement manuel n'a aucun effet.
+            </p>
+          </div>
+        )}
+
+        {tab === 'cities' && (
+          unresolvedCities.length === 0 && !citiesLoading ? (
+            <div className="surface-glass">
+              <EmptyState icon={CheckCircle2} title="Toutes les villes sont rapprochées" description="Le catalogue OzonExpress est à jour." />
             </div>
           ) : (
-            <div className="max-w-2xl space-y-4">
-              <div className="bg-white border border-slate-200 rounded-lg p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-slate-900">Statut de la synchronisation Shopify</h3>
-                  <button
-                    onClick={handleTriggerSync}
-                    disabled={syncing}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Dernière exécution</p>
-                    <p className="text-sm font-medium text-slate-900">{status?.lastSyncTime ? formatDateTime(status.lastSyncTime) : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Commandes en conflit</p>
-                    <p className="text-sm font-medium text-slate-900">{status?.pendingOrders ?? 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">État</p>
-                    <p className="text-sm font-medium text-slate-900">{status?.isSyncing ? 'En cours' : 'Inactif'}</p>
-                  </div>
-                </div>
+            <Card padded={false} className="border-[color-mix(in_oklab,var(--caution)_25%,transparent)]">
+              <div className="flex items-center justify-between border-b border-[color-mix(in_oklab,var(--caution)_25%,transparent)] bg-[var(--caution-soft)] px-4 py-3">
+                <p className="num text-sm font-medium text-[var(--caution-ink)]">{unresolvedCities.length} orthographe(s) de ville non rapprochée(s)</p>
+                <Button size="xs" variant="success" loading={bootstrapping} onClick={handleBootstrapCities}>
+                  Relancer le rapprochement
+                </Button>
               </div>
-              <p className="text-xs text-slate-400">
-                La synchronisation automatique nécessite une connexion Shopify configurée dans{' '}
-                <span className="font-medium text-slate-500">Paramètres → Boutique en ligne → Shopify</span>. Sans domaine/jeton configurés, le déclenchement manuel n'a aucun effet.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-      {tab === 'cities' && (
-        <div className="p-6 flex-1">
-          {citiesLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-            </div>
-          ) : unresolvedCities.length === 0 ? (
-            <div className="text-center py-16">
-              <svg className="w-12 h-12 mx-auto mb-3 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-slate-500">Toutes les villes sont rapprochees du catalogue OzonExpress.</p>
-            </div>
-          ) : (
-            <div className="bg-white border border-amber-200 rounded-lg overflow-hidden">
-              <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
-                <p className="text-sm font-medium text-amber-700">{unresolvedCities.length} orthographe(s) de ville non rapprochee(s)</p>
-                <button
-                  onClick={handleBootstrapCities}
-                  disabled={bootstrapping}
-                  className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {bootstrapping ? 'Rapprochement…' : 'Relancer le rapprochement'}
-                </button>
-              </div>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Ville (texte brut)</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Commandes concernees</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {unresolvedCities.map((c) => (
-                    <tr key={c.rawCity} className="hover:bg-slate-50">
-                      <td className="px-4 py-2.5 text-sm text-slate-900" dir="auto">{c.rawCity}</td>
-                      <td className="px-4 py-2.5 text-sm text-right text-slate-600">{c.orderCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+              <DataTable columns={cityColumns} data={unresolvedCities} keyField={(c) => c.rawCity} loading={citiesLoading} />
+            </Card>
+          )
+        )}
+      </div>
+    </Page>
   )
 }
