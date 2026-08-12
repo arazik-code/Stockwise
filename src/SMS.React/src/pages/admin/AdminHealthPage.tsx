@@ -1,21 +1,42 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { AlertTriangle, CheckCircle2, RotateCw, XCircle } from 'lucide-react'
 import { adminHealthApi, type HealthBoard, type HealthProbeResult } from '../../api/adminHealth'
+import { Button, Page, SkeletonCards, StatusBadge, StatusDot } from '../../components/ui'
+import type { Tone } from '../../design/status'
 
 const REFRESH_INTERVAL_MS = 20_000
 
-const STATUS_META: Record<HealthProbeResult['status'], { dot: string; text: string; ring: string; label: string }> = {
-  healthy: { dot: 'bg-emerald-400', text: 'text-emerald-300', ring: 'ring-emerald-400/30', label: 'Opérationnel' },
-  degraded: { dot: 'bg-amber-400', text: 'text-amber-300', ring: 'ring-amber-400/30', label: 'Dégradé' },
-  down: { dot: 'bg-red-400', text: 'text-red-300', ring: 'ring-red-400/30', label: 'Hors service' },
-  not_configured: { dot: 'bg-slate-500', text: 'text-slate-400', ring: 'ring-slate-500/20', label: 'Non configuré' },
+const OVERALL_TONE: Record<HealthBoard['overallStatus'], Tone> = {
+  healthy: 'positive',
+  degraded: 'caution',
+  down: 'critical',
 }
 
-const OVERALL_META: Record<HealthBoard['overallStatus'], { gradient: string; label: string }> = {
-  healthy: { gradient: 'from-emerald-500/20 via-emerald-400/5 to-transparent', label: 'Tous les systèmes sont opérationnels' },
-  degraded: { gradient: 'from-amber-500/20 via-amber-400/5 to-transparent', label: 'Un ou plusieurs services sont dégradés' },
-  down: { gradient: 'from-red-500/20 via-red-400/5 to-transparent', label: 'Un service critique est hors service' },
+const OVERALL_ICON = {
+  healthy: CheckCircle2,
+  degraded: AlertTriangle,
+  down: XCircle,
+} as const
+
+const OVERALL_LABEL: Record<HealthBoard['overallStatus'], string> = {
+  healthy: 'Tous les systèmes sont opérationnels',
+  degraded: 'Un ou plusieurs services sont dégradés',
+  down: 'Un service critique est hors service',
 }
 
+/**
+ * Mission-control health board.
+ *
+ * The `adminHealth` section is declared `forceDark: true` in
+ * src/design/sections.ts, so <Page> renders this as a permanently dark island
+ * regardless of the app theme, automatically. That replaces the old
+ * `-mx-4 sm:-mx-6 lg:-mx-8 -mb-8 ... bg-slate-950` negative-margin hack with a
+ * first-class pattern - zero conditional styling needed anywhere downstream.
+ *
+ * Probe cards use `surface-glass` (faux glass, zero blur), not
+ * `surface-glass-blur`: real backdrop-filter inside a `.map()` is exactly the
+ * case the blur budget forbids, since the cost multiplies with every probe.
+ */
 export default function AdminHealthPage() {
   const [board, setBoard] = useState<HealthBoard | null>(null)
   const [error, setError] = useState(false)
@@ -44,87 +65,79 @@ export default function AdminHealthPage() {
   }, [load])
 
   const categories = board ? Array.from(new Set(board.probes.map((p) => p.category))) : []
+  const OverallIcon = board ? OVERALL_ICON[board.overallStatus] : null
 
   return (
-    <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mb-8 px-4 sm:px-6 lg:px-8 pb-10 pt-6 rounded-b-2xl bg-slate-950 text-slate-100 min-h-[70vh]">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${board ? STATUS_META[board.overallStatus === 'healthy' ? 'healthy' : board.overallStatus === 'degraded' ? 'degraded' : 'down'].dot : 'bg-slate-500'}`} />
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${board ? STATUS_META[board.overallStatus === 'healthy' ? 'healthy' : board.overallStatus === 'degraded' ? 'degraded' : 'down'].dot : 'bg-slate-500'}`} />
-            </span>
-            Centre de contrôle système
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Vérifications en direct - actualisation automatique toutes les {REFRESH_INTERVAL_MS / 1000}s
-            {board && <> · dernière vérification {new Date(board.generatedAt).toLocaleTimeString('fr-FR')}</>}
-          </p>
-        </div>
-        <button
-          onClick={load}
-          disabled={refreshing}
-          className="px-3.5 py-2 text-xs font-medium text-slate-200 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
-        >
-          {refreshing ? 'Vérification...' : '↻ Actualiser'}
-        </button>
-      </div>
+    <Page
+      section="adminHealth"
+      title={
+        <span className="flex items-center gap-2">
+          <StatusDot tone={board ? OVERALL_TONE[board.overallStatus] : 'muted'} pulse />
+          Centre de contrôle système
+        </span>
+      }
+      actions={
+        <Button variant="outline" size="sm" icon={<RotateCw className="h-3.5 w-3.5" />} onClick={load} loading={refreshing}>
+          Actualiser
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        <p className="-mt-2 text-xs text-fg-subtle">
+          Vérifications en direct — actualisation automatique toutes les {REFRESH_INTERVAL_MS / 1000}s
+          {board && <> · dernière vérification {new Date(board.generatedAt).toLocaleTimeString('fr-FR')}</>}
+        </p>
 
-      {error && !board && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300 mb-6">
-          Impossible de contacter le serveur pour récupérer l'état du système.
-        </div>
-      )}
+        {error && !board && (
+          <div
+            data-tone="negative"
+            className="rounded-card border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] px-4 py-3 text-sm text-[var(--tone-ink)]"
+          >
+            Impossible de contacter le serveur pour récupérer l'état du système.
+          </div>
+        )}
 
-      {board && (
-        <div className={`relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${OVERALL_META[board.overallStatus].gradient} px-6 py-5 mb-8`}>
-          <div className="flex items-center gap-3">
-            <span className={`text-3xl font-bold ${STATUS_META[board.overallStatus === 'healthy' ? 'healthy' : board.overallStatus === 'degraded' ? 'degraded' : 'down'].text}`}>
-              {board.overallStatus === 'healthy' ? '✓' : board.overallStatus === 'degraded' ? '!' : '✕'}
-            </span>
-            <div>
-              <div className="font-semibold text-slate-100">{OVERALL_META[board.overallStatus].label}</div>
-              <div className="text-xs text-slate-400">{board.probes.length} vérification(s) effectuée(s)</div>
+        {board && OverallIcon && (
+          <div
+            data-tone={OVERALL_TONE[board.overallStatus]}
+            className="relative overflow-hidden rounded-surface border border-[color-mix(in_oklab,var(--tone)_25%,transparent)] bg-[var(--tone-soft)] px-6 py-5"
+          >
+            <div className="flex items-center gap-3">
+              <OverallIcon className="h-8 w-8 text-[var(--tone)]" aria-hidden="true" />
+              <div>
+                <div className="font-semibold text-fg">{OVERALL_LABEL[board.overallStatus]}</div>
+                <div className="num text-xs text-fg-subtle">{board.probes.length} vérification(s) effectuée(s)</div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {!board && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-28 rounded-xl bg-white/5 border border-white/10 animate-pulse" />
-          ))}
-        </div>
-      )}
+        {!board && !error && <SkeletonCards count={6} />}
 
-      {categories.map((category) => (
-        <div key={category} className="mb-8">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">{category}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {board!.probes.filter((p) => p.category === category).map((probe) => (
-              <ProbeCard key={probe.name} probe={probe} />
-            ))}
+        {categories.map((category) => (
+          <div key={category}>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-fg-subtle">{category}</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {board!.probes.filter((p) => p.category === category).map((probe) => (
+                <ProbeCard key={probe.name} probe={probe} />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </Page>
   )
 }
 
 function ProbeCard({ probe }: { probe: HealthProbeResult }) {
-  const meta = STATUS_META[probe.status]
   return (
-    <div className={`rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur px-4 py-4 ring-1 ${meta.ring} transition-all hover:bg-white/[0.06]`}>
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-sm font-medium text-slate-200">{probe.name}</span>
-        <span className={`flex items-center gap-1.5 text-[11px] font-medium ${meta.text}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${meta.dot} ${probe.status === 'healthy' ? 'animate-pulse' : ''}`} />
-          {meta.label}
-        </span>
+    <div className="surface-glass p-4 transition-shadow hover:shadow-e3">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <span className="text-sm font-medium text-fg">{probe.name}</span>
+        <StatusBadge domain="health" value={probe.status} showDot showIcon={false} size="xs" />
       </div>
-      <p className="text-xs text-slate-400 leading-relaxed">{probe.message}</p>
-      <div className="mt-3 flex items-center justify-between text-[10px] text-slate-600">
+      <p className="text-xs leading-relaxed text-fg-subtle">{probe.message}</p>
+      <div className="num mt-3 flex items-center justify-between text-[10px] text-fg-subtle">
         <span>{probe.latencyMs}ms</span>
         <span>{new Date(probe.checkedAt).toLocaleTimeString('fr-FR')}</span>
       </div>
