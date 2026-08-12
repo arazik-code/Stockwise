@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from '../../components/layout/Header'
+import {
+  ArrowRight, CheckCircle2, CircleDollarSign, Package, Plus, Printer,
+  RefreshCw, Search, Truck, X,
+} from 'lucide-react'
 import { onlineApi } from '../../api/online'
 import { shopifyApi } from '../../api/shopify'
 import { productsApi } from '../../api/products'
@@ -11,6 +14,12 @@ import { printPackingSlip } from '../../utils/printPackingSlip'
 import { WhatsAppConfirmMenu } from '../../components/shared/WhatsAppConfirmButton'
 import CreateOzonParcelModal from '../../components/ozon/CreateOzonParcelModal'
 import { ozonApi, ozonDeliveryNoteLabel10x10Url } from '../../api/ozon'
+import { getStatus } from '../../design/status'
+import {
+  Avatar, Badge, Button, DataTable, EmptyState, IconButton, Input, Modal, Page,
+  Pagination, Select, Sheet, SkeletonTable, StatusBadge, StatusDot, Tabs,
+  Textarea, Toolbar, type Column,
+} from '../../components/ui'
 import type { Product } from '../../types/product'
 
 // Opens OzonExpress's own official parcel label (barcode/QR code, sized to stick on the package) -
@@ -38,21 +47,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'shopify', label: 'Shopify' },
   { key: 'whatsapp', label: 'WhatsApp' },
 ]
-
-const STATUS_META: Record<OnlineOrderStatus, { label: string; className: string }> = {
-  Pending: { label: 'En attente', className: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  Processing: { label: 'En traitement', className: 'bg-sky-50 text-sky-700 border border-sky-200' },
-  Confirmed: { label: 'Confirmée', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
-  Packing: { label: 'Emballage', className: 'bg-violet-50 text-violet-700 border border-violet-200' },
-  ReadyToShip: { label: 'Prête à expédier', className: 'bg-cyan-50 text-cyan-700 border border-cyan-200' },
-  Shipped: { label: 'Expédiée', className: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
-  Delivered: { label: 'Livrée', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-  Cancelled: { label: 'Annulée', className: 'bg-slate-100 text-slate-500 border border-slate-200' },
-  Refunded: { label: 'Remboursée', className: 'bg-rose-50 text-rose-700 border border-rose-200' },
-  InventoryConflict: { label: 'Conflit de stock', className: 'bg-red-50 text-red-700 border border-red-200' },
-  Returned: { label: 'Retournée', className: 'bg-orange-50 text-orange-700 border border-orange-200' },
-  Refused: { label: 'Refusée', className: 'bg-red-50 text-red-800 border border-red-300' },
-}
 
 const NEXT_STATUS: Partial<Record<OnlineOrderStatus, OnlineOrderStatus>> = {
   Pending: 'Confirmed',
@@ -211,152 +205,202 @@ export default function OnlineOrdersPage() {
     }
   }
 
-  return (
-    <div className="flex flex-col flex-1">
-      <Header
-        title="Commandes en ligne"
-        actions={
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-emerald-600" title="Les commandes Shopify se synchronisent automatiquement toutes les ~10 secondes">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Sync auto
-            </span>
-            <button
-              onClick={handleSyncNow}
-              disabled={syncing}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors disabled:opacity-50"
-            >
-              {syncing ? 'Synchronisation…' : '↻ Synchroniser'}
-            </button>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Nouvelle commande
-            </button>
-          </div>
-        }
-      />
-
-      <div className="p-6 flex-1 space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  tab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            placeholder="Rechercher n°, client, téléphone, ville..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 min-w-[220px] max-w-sm px-3.5 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <span className="text-xs text-slate-400 ml-auto">{filteredOrders.length} commande(s)</span>
+  const columns: Column<OnlineOrder>[] = [
+    {
+      key: 'orderNumber',
+      header: 'N° Commande',
+      render: (o) => <span className="num font-medium text-fg">{o.orderNumber}</span>,
+    },
+    {
+      key: 'channel',
+      header: 'Canal',
+      render: (o) => <StatusBadge domain="channel" value={o.channel} animate={false} showIcon={false} size="xs" />,
+    },
+    {
+      key: 'customer',
+      header: 'Client',
+      render: (o) => (
+        <div>
+          <p className="font-medium text-fg">{o.customerName}</p>
+          {(o.customerPhone || o.city) && (
+            <p className="text-xs text-fg-subtle">{[o.customerPhone, o.city].filter(Boolean).join(' · ')}</p>
+          )}
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-          </div>
-        ) : (
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">N° Commande</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Canal</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Total</th>
-                    <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Paiement</th>
-                    <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
-                    <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-32">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredOrders.length === 0 && (
-                    <tr><td colSpan={8} className="text-center py-8 text-sm text-slate-400">Aucune commande</td></tr>
-                  )}
-                  {pagedOrders.map((order) => {
-                    const meta = STATUS_META[order.status]
-                    const next = NEXT_STATUS[order.status]
-                    return (
-                      <tr key={order.id} onClick={() => setDetail(order)} className="hover:bg-slate-50 transition-colors cursor-pointer">
-                        <td className="px-3 py-2.5 text-sm font-mono">
-                          <span className="text-slate-900 hover:text-emerald-600 transition-colors font-medium">{order.orderNumber}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-sm text-slate-600">{order.channel}</td>
-                        <td className="px-3 py-2.5 text-sm whitespace-nowrap">
-                          <p className="font-medium text-slate-900">{order.customerName}</p>
-                          {(order.customerPhone || order.city) && (
-                            <p className="text-xs text-slate-400">{[order.customerPhone, order.city].filter(Boolean).join(' · ')}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-sm text-slate-600 whitespace-nowrap">{formatDateTime(order.createdAt)}</td>
-                        <td className="px-3 py-2.5 text-sm text-right font-semibold text-slate-900 whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
-                        <td className="px-3 py-2.5 text-sm text-center">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${order.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                            {order.paymentStatus === 'Paid' ? 'Payé' : 'Non payé'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-sm text-center">
-                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${meta.className}`}>{meta.label}</span>
-                          {order.trackingNumber && (
-                            <span className="block mt-1 text-[10px] font-mono text-cyan-600" title={`${order.carrierName ?? 'Colis'} · ${order.trackingNumber}`}>
-                              📦 {order.trackingNumber}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-sm text-center" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1">
-                            <WhatsAppConfirmMenu order={order} compact />
-                            {next && (
-                              <button onClick={() => handleUpdateStatus(order, next)} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium px-1.5 py-1 rounded hover:bg-emerald-50" title={`Passer à: ${STATUS_META[next].label}`}>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                              </button>
-                            )}
-                            {order.paymentStatus !== 'Paid' && (
-                              <button onClick={() => handleMarkPaid(order)} className="text-xs text-blue-600 hover:text-blue-800 font-medium px-1.5 py-1 rounded hover:bg-blue-50" title="Marquer payé">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                              </button>
-                            )}
-                            {['Pending', 'Processing', 'Confirmed', 'Packing', 'ReadyToShip'].includes(order.status) && (
-                              <button onClick={() => setShowShip(order)} className="text-xs text-cyan-600 hover:text-cyan-800 font-medium px-1.5 py-1 rounded hover:bg-cyan-50" title="Assigner la livraison">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1" /></svg>
-                              </button>
-                            )}
-                            {order.status !== 'Cancelled' && order.status !== 'Delivered' && order.status !== 'Refunded' && (
-                              <button onClick={() => handleCancel(order)} className="text-xs text-red-500 hover:text-red-700 font-medium px-1.5 py-1 rounded hover:bg-red-50" title="Annuler">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {orderPageCount > 1 && (
-              <div className="flex items-center justify-center gap-2 py-3 border-t border-slate-100">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={orderCurrentPage === 1} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Précédent</button>
-                <span className="text-sm text-slate-500 px-2">Page {orderCurrentPage} / {orderPageCount}</span>
-                <button onClick={() => setPage((p) => Math.min(orderPageCount, p + 1))} disabled={orderCurrentPage === orderPageCount} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Suivant</button>
-              </div>
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      render: (o) => <span className="whitespace-nowrap text-fg-muted">{formatDateTime(o.createdAt)}</span>,
+    },
+    {
+      key: 'total',
+      header: 'Total',
+      numeric: true,
+      render: (o) => <span className="font-semibold text-fg">{formatCurrency(o.totalAmount)}</span>,
+    },
+    {
+      key: 'payment',
+      header: 'Paiement',
+      align: 'center',
+      render: (o) => <StatusBadge domain="payment" value={o.paymentStatus} animate={false} showIcon={false} size="xs" />,
+    },
+    {
+      key: 'status',
+      header: 'Statut',
+      align: 'center',
+      render: (o) => (
+        <div>
+          <StatusBadge domain="onlineOrder" value={o.status} size="xs" />
+          {o.trackingNumber && (
+            <span
+              className="mt-1 flex items-center justify-center gap-1 text-[10px] text-fg-subtle"
+              title={`${o.carrierName ?? 'Colis'} · ${o.trackingNumber}`}
+            >
+              <Package className="h-3 w-3" />
+              <span className="num">{o.trackingNumber}</span>
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'center',
+      width: '11rem',
+      render: (o) => {
+        const next = NEXT_STATUS[o.status]
+        return (
+          <div className="flex items-center justify-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+            <WhatsAppConfirmMenu order={o} compact />
+            {next && (
+              <IconButton
+                icon={<ArrowRight className="h-3.5 w-3.5" />}
+                label={`Passer à: ${getStatus('onlineOrder', next).label ?? next}`}
+                size="xs"
+                onClick={() => handleUpdateStatus(o, next)}
+              />
+            )}
+            {o.paymentStatus !== 'Paid' && (
+              <IconButton
+                icon={<CircleDollarSign className="h-3.5 w-3.5" />}
+                label="Marquer payé"
+                size="xs"
+                onClick={() => handleMarkPaid(o)}
+              />
+            )}
+            {['Pending', 'Processing', 'Confirmed', 'Packing', 'ReadyToShip'].includes(o.status) && (
+              <IconButton
+                icon={<Truck className="h-3.5 w-3.5" />}
+                label="Assigner la livraison"
+                size="xs"
+                onClick={() => setShowShip(o)}
+              />
+            )}
+            {o.status !== 'Cancelled' && o.status !== 'Delivered' && o.status !== 'Refunded' && (
+              <IconButton
+                icon={<X className="h-3.5 w-3.5" />}
+                label="Annuler"
+                size="xs"
+                variant="danger-ghost"
+                onClick={() => handleCancel(o)}
+              />
             )}
           </div>
+        )
+      },
+    },
+  ]
+
+  return (
+    <Page
+      section="onlineOrders"
+      title="Commandes en ligne"
+      actions={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <span
+            className="hidden items-center gap-1.5 text-xs text-fg-subtle md:inline-flex"
+            title="Les commandes Shopify se synchronisent automatiquement toutes les ~10 secondes"
+          >
+            <StatusDot tone="positive" pulse />
+            Sync auto
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<RefreshCw className="h-4 w-4" />}
+            loading={syncing}
+            onClick={handleSyncNow}
+          >
+            {syncing ? 'Synchronisation…' : 'Synchroniser'}
+          </Button>
+          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreate(true)}>
+            Nouvelle commande
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <Tabs
+          variant="underline"
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          items={TABS.map((tb) => ({ value: tb.key, label: tb.label }))}
+        />
+
+        <Toolbar>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher n°, client, téléphone, ville..."
+            leading={<Search />}
+            size="sm"
+            wrapperClassName="w-full sm:w-72"
+          />
+          <Badge tone="neutral" size="sm" className="ml-auto">
+            <span className="num">{filteredOrders.length}</span>&nbsp;commande(s)
+          </Badge>
+        </Toolbar>
+
+        {loading ? (
+          <SkeletonTable rows={10} cols={8} />
+        ) : filteredOrders.length === 0 ? (
+          <div className="surface-glass">
+            <EmptyState
+              variant={search ? 'search' : 'default'}
+              title={search ? 'Aucune commande ne correspond' : 'Aucune commande'}
+              description={
+                search
+                  ? 'Essayez un autre numéro, client, téléphone ou ville.'
+                  : 'Les commandes apparaîtront ici une fois passées.'
+              }
+              action={
+                search ? (
+                  <Button size="sm" variant="outline" onClick={() => setSearch('')}>
+                    Effacer la recherche
+                  </Button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <DataTable<OnlineOrder>
+              columns={columns}
+              data={pagedOrders}
+              keyField={(o) => o.id}
+              onRowClick={(o) => setDetail(o)}
+              activeKey={detail?.id ?? null}
+            />
+            <Pagination
+              page={orderCurrentPage}
+              pageCount={orderPageCount}
+              total={filteredOrders.length}
+              pageSize={ORDERS_PAGE_SIZE}
+              onChange={setPage}
+            />
+          </>
         )}
       </div>
 
@@ -412,7 +456,7 @@ export default function OnlineOrdersPage() {
           onAssigned={() => { setShowShip(null); load() }}
         />
       )}
-    </div>
+    </Page>
   )
 }
 
@@ -511,154 +555,178 @@ function CreateOrderModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-[720px] max-h-[90vh] overflow-auto border border-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900 mb-5">Nouvelle commande en ligne</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Canal</label>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setChannel('WhatsApp')} className={`flex-1 py-2 text-sm font-medium rounded-md border-2 transition-colors ${channel === 'WhatsApp' ? 'bg-teal-50 border-teal-300 text-teal-700' : 'border-slate-200 text-slate-600'}`}>WhatsApp</button>
-                <button type="button" onClick={() => setChannel('Manual')} className={`flex-1 py-2 text-sm font-medium rounded-md border-2 transition-colors ${channel === 'Manual' ? 'bg-slate-100 border-slate-300 text-slate-700' : 'border-slate-200 text-slate-600'}`}>Manuelle</button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Mode de paiement</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as OnlinePaymentMethod)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                <option value="COD">Paiement à la livraison</option>
-                <option value="Manual">Paiement manuel</option>
-                <option value="BankTransfer">Virement bancaire</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Nom du client *</label>
-              <input required value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Téléphone</label>
-              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="06XXXXXXXX" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Email</label>
-              <input value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-400 -mt-2">Le téléphone/email sont utilisés pour rattacher la commande à une fiche client existante (fidélité incluse), sinon une nouvelle fiche est créée.</p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Adresse de livraison</label>
-              <input value={addressLine} onChange={(e) => setAddressLine(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Ville</label>
-              <input value={city} onChange={(e) => setCity(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-          </div>
-
-          {/* Item picker */}
-          <div className="border-t border-slate-100 pt-4">
-            <label className="block text-xs font-medium text-slate-500 mb-2">Articles</label>
-            <div className="grid grid-cols-[1fr_1fr_80px_auto] gap-2 items-end mb-3">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={productSearch}
-                  onChange={(e) => { setProductSearch(e.target.value); setPick({ ...emptyItem }) }}
-                  placeholder="Rechercher un produit..."
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-                {productSearch && !pick.productId && (
-                  <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
-                    {searchedProducts.map((p) => (
-                      <button key={p.id} type="button" onClick={() => { setPick({ ...emptyItem, productId: p.id }); setProductSearch(p.name) }} className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50">
-                        {p.name}
-                      </button>
-                    ))}
-                    {searchedProducts.length === 0 && <p className="px-3 py-2 text-xs text-slate-400">Aucun produit</p>}
-                  </div>
-                )}
-              </div>
-              <select
-                value={pick.variantId}
-                onChange={(e) => setPick({ ...pick, variantId: parseInt(e.target.value) })}
-                disabled={!selectedProduct}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-50"
-              >
-                <option value={0}>Couleur / Taille</option>
-                {selectedProduct?.variants.map((v) => (
-                  <option key={v.id} value={v.id}>{v.colorName} / {v.sizeValue} ({v.stockQuantity} dispo)</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                min={1}
-                value={pick.quantity}
-                onChange={(e) => setPick({ ...pick, quantity: parseInt(e.target.value) || 1 })}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-              <button type="button" onClick={addItem} disabled={!pick.variantId} className="px-3 py-2 text-sm font-medium text-white bg-slate-900 rounded-md hover:bg-slate-800 disabled:opacity-40">
-                Ajouter
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {items.map((item) => (
-                <div key={item.productVariantId} className="grid grid-cols-[1fr_60px_90px_90px_auto] gap-2 items-center bg-slate-50 rounded-md p-2">
-                  <div className="text-sm">
-                    <p className="font-medium text-slate-900">{item.productName}</p>
-                    <p className="text-xs text-slate-500">{item.colorName} / {item.sizeValue} · {item.sku}</p>
-                  </div>
-                  <input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(item.productVariantId, { quantity: parseInt(e.target.value) || 1 })} className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md" />
-                  <input type="number" min={0} step="0.01" value={item.unitPrice} onChange={(e) => updateItem(item.productVariantId, { unitPrice: parseFloat(e.target.value) || 0 })} className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md" />
-                  <span className="text-sm font-medium text-slate-700 text-right">{formatCurrency(item.quantity * item.unitPrice - item.discountAmount)}</span>
-                  <button type="button" onClick={() => removeItem(item.productVariantId)} className="text-red-500 hover:text-red-700 px-1">✕</button>
-                </div>
-              ))}
-              {items.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Aucun article ajouté</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Remise (MAD)</label>
-              <input type="number" min={0} step="0.01" value={discountAmount} onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">Frais de livraison (MAD)</label>
-              <input type="number" min={0} step="0.01" value={deliveryFee} onChange={(e) => setDeliveryFee(parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-          </div>
-
+    <Modal open onClose={onClose} size="xl" title="Nouvelle commande en ligne">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <label className="mb-1.5 block text-xs font-medium text-fg-muted">Canal</label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={channel === 'WhatsApp' ? 'soft' : 'outline'}
+                className="flex-1"
+                onClick={() => setChannel('WhatsApp')}
+              >
+                WhatsApp
+              </Button>
+              <Button
+                type="button"
+                variant={channel === 'Manual' ? 'soft' : 'outline'}
+                className="flex-1"
+                onClick={() => setChannel('Manual')}
+              >
+                Manuelle
+              </Button>
+            </div>
+          </div>
+          <Select
+            label="Mode de paiement"
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as OnlinePaymentMethod)}
+          >
+            <option value="COD">Paiement à la livraison</option>
+            <option value="Manual">Paiement manuel</option>
+            <option value="BankTransfer">Virement bancaire</option>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <Input label="Nom du client" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+          <Input label="Téléphone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="06XXXXXXXX" />
+          <Input label="Email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+        </div>
+        <p className="-mt-2 text-[11px] text-fg-subtle">
+          Le téléphone/email sont utilisés pour rattacher la commande à une fiche client existante (fidélité incluse), sinon une nouvelle fiche est créée.
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Adresse de livraison" value={addressLine} onChange={(e) => setAddressLine(e.target.value)} />
+          <Input label="Ville" value={city} onChange={(e) => setCity(e.target.value)} />
+        </div>
+
+        {/* Item picker */}
+        <div className="border-t border-border pt-4">
+          <label className="mb-2 block text-xs font-medium text-fg-muted">Articles</label>
+          <div className="mb-3 grid grid-cols-[1fr_1fr_80px_auto] items-end gap-2">
+            <div className="relative">
+              <Input
+                value={productSearch}
+                onChange={(e) => { setProductSearch(e.target.value); setPick({ ...emptyItem }) }}
+                placeholder="Rechercher un produit..."
+              />
+              {productSearch && !pick.productId && (
+                <div className="absolute top-full right-0 left-0 z-10 mt-1 max-h-48 overflow-y-auto rounded-field border border-border bg-surface shadow-e2">
+                  {searchedProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => { setPick({ ...emptyItem, productId: p.id }); setProductSearch(p.name) }}
+                      className="w-full px-3 py-2 text-left text-sm text-fg hover:bg-surface-2"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                  {searchedProducts.length === 0 && <p className="px-3 py-2 text-xs text-fg-subtle">Aucun produit</p>}
+                </div>
+              )}
+            </div>
+            <Select
+              value={pick.variantId}
+              onChange={(e) => setPick({ ...pick, variantId: parseInt(e.target.value) })}
+              disabled={!selectedProduct}
+            >
+              <option value={0}>Couleur / Taille</option>
+              {selectedProduct?.variants.map((v) => (
+                <option key={v.id} value={v.id}>{v.colorName} / {v.sizeValue} ({v.stockQuantity} dispo)</option>
+              ))}
+            </Select>
+            <Input
+              type="number"
+              min={1}
+              value={pick.quantity}
+              onChange={(e) => setPick({ ...pick, quantity: parseInt(e.target.value) || 1 })}
+            />
+            <Button type="button" variant="outline" onClick={addItem} disabled={!pick.variantId}>
+              Ajouter
+            </Button>
           </div>
 
-          <div className="bg-slate-50 rounded-md p-4 space-y-1.5">
-            <div className="flex justify-between text-sm"><span className="text-slate-500">Sous-total</span><span className="text-slate-700">{formatCurrency(subTotal)}</span></div>
-            {discountAmount > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Remise</span><span className="text-red-600">-{formatCurrency(discountAmount)}</span></div>}
-            {deliveryFee > 0 && <div className="flex justify-between text-sm"><span className="text-slate-500">Livraison</span><span className="text-slate-700">{formatCurrency(deliveryFee)}</span></div>}
-            <div className="flex justify-between font-semibold text-base border-t border-slate-200 pt-1.5"><span>Total</span><span>{formatCurrency(total)}</span></div>
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div key={item.productVariantId} className="grid grid-cols-[1fr_60px_90px_90px_auto] items-center gap-2 rounded-field bg-sunken p-2">
+                <div className="text-sm">
+                  <p className="font-medium text-fg">{item.productName}</p>
+                  <p className="text-xs text-fg-subtle">{item.colorName} / {item.sizeValue} · {item.sku}</p>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  size="sm"
+                  value={item.quantity}
+                  onChange={(e) => updateItem(item.productVariantId, { quantity: parseInt(e.target.value) || 1 })}
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  size="sm"
+                  value={item.unitPrice}
+                  onChange={(e) => updateItem(item.productVariantId, { unitPrice: parseFloat(e.target.value) || 0 })}
+                />
+                <span className="num text-right text-sm font-medium text-fg-muted">
+                  {formatCurrency(item.quantity * item.unitPrice - item.discountAmount)}
+                </span>
+                <IconButton
+                  icon={<X className="h-3.5 w-3.5" />}
+                  label="Supprimer"
+                  size="xs"
+                  variant="danger-ghost"
+                  onClick={() => removeItem(item.productVariantId)}
+                />
+              </div>
+            ))}
+            {items.length === 0 && <p className="py-3 text-center text-xs text-fg-subtle">Aucun article ajouté</p>}
           </div>
+        </div>
 
-          <div className="flex gap-2 justify-end pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-            <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50">
-              {submitting ? 'Création...' : 'Créer la commande'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            label="Remise (MAD)"
+            value={discountAmount}
+            onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
+          />
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            label="Frais de livraison (MAD)"
+            value={deliveryFee}
+            onChange={(e) => setDeliveryFee(parseFloat(e.target.value) || 0)}
+          />
+        </div>
+
+        <Textarea label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+
+        <div className="space-y-1.5 rounded-field bg-sunken p-4">
+          <div className="flex justify-between text-sm"><span className="text-fg-subtle">Sous-total</span><span className="num text-fg">{formatCurrency(subTotal)}</span></div>
+          {discountAmount > 0 && <div className="flex justify-between text-sm"><span className="text-fg-subtle">Remise</span><span className="num text-[var(--negative)]">-{formatCurrency(discountAmount)}</span></div>}
+          {deliveryFee > 0 && <div className="flex justify-between text-sm"><span className="text-fg-subtle">Livraison</span><span className="num text-fg">{formatCurrency(deliveryFee)}</span></div>}
+          <div className="flex justify-between border-t border-border pt-1.5 text-base font-semibold"><span>Total</span><span className="num">{formatCurrency(total)}</span></div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+          <Button type="submit" loading={submitting}>Créer la commande</Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
-// ── Order Detail Modal ──
+// ── Order Detail Sheet ──
 function OrderDetailModal({ order, onClose, onUpdateStatus, onConfirmShip, onOpenBonDeLivraison, onCancel, onMarkPaid, onShip, onPrintPackingSlip }: {
   order: OnlineOrder
   onClose: () => void
@@ -670,157 +738,148 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onConfirmShip, onOpe
   onShip: () => void
   onPrintPackingSlip: () => void
 }) {
-  const meta = STATUS_META[order.status]
   const next = NEXT_STATUS[order.status]
   const navigate = useNavigate()
   const [showOzon, setShowOzon] = useState(false)
   const canConfirmShip = ['Pending', 'Processing', 'InventoryConflict'].includes(order.status) && !order.trackingNumber
 
+  const itemColumns: Column<OnlineOrder['items'][number]>[] = [
+    {
+      key: 'product',
+      header: 'Produit',
+      render: (it) => (
+        <div>
+          <p className="font-medium text-fg">{it.productName}</p>
+          <p className="text-xs text-fg-subtle">{it.colorName} / {it.sizeValue}</p>
+        </div>
+      ),
+    },
+    { key: 'qty', header: 'Qté', numeric: true, render: (it) => <span className="text-fg-muted">{it.quantity}</span> },
+    { key: 'unit', header: 'P.U.', numeric: true, render: (it) => <span className="text-fg-muted">{formatCurrency(it.unitPrice)}</span> },
+    { key: 'total', header: 'Total', numeric: true, render: (it) => <span className="font-medium text-fg">{formatCurrency(it.lineTotal)}</span> },
+  ]
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-auto border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">{order.orderNumber}</h3>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-slate-500">{order.channel}</span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${meta.className}`}>{meta.label}</span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${order.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                {order.paymentStatus === 'Paid' ? 'Payé' : 'Non payé'}
-              </span>
+    <Sheet
+      open
+      onClose={onClose}
+      side="right"
+      size="lg"
+      title={
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{order.orderNumber}</span>
+          <StatusBadge domain="onlineOrder" value={order.status} size="xs" />
+          <StatusBadge domain="payment" value={order.paymentStatus} size="xs" />
+        </div>
+      }
+      description={order.channel}
+    >
+      <div className="space-y-5">
+        {/* Who ordered — prominent client card */}
+        <div className="rounded-card border border-border bg-sunken p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar name={order.customerName} size="md" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-fg">{order.customerName}</p>
+                <p className="text-xs text-fg-subtle">Client de la commande</p>
+              </div>
+            </div>
+            {order.clientId && (
+              <button
+                onClick={() => navigate(`/online/clients?client=${order.clientId}`)}
+                className="shrink-0 whitespace-nowrap text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+              >
+                Voir la fiche client →
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-[11px] uppercase tracking-wide text-fg-subtle">Téléphone</span>
+              <p className="font-medium text-fg">{order.customerPhone || '—'}</p>
+            </div>
+            <div>
+              <span className="text-[11px] uppercase tracking-wide text-fg-subtle">Email</span>
+              <p className="truncate font-medium text-fg">{order.customerEmail || '—'}</p>
+            </div>
+            <div className="col-span-2">
+              <span className="text-[11px] uppercase tracking-wide text-fg-subtle">Adresse de livraison</span>
+              <p className="font-medium text-fg">
+                {order.addressLine || order.city ? [order.addressLine, order.city].filter(Boolean).join(', ') : '—'}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <span className="text-[11px] uppercase tracking-wide text-fg-subtle">Transporteur</span>
+              <p className="font-medium text-fg">{order.carrierName ? `${order.carrierName} · ${order.trackingNumber ?? 'sans suivi'}` : 'Non assignée'}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
         </div>
 
-        <div className="p-6 space-y-5">
-          {/* Who ordered — prominent client card */}
-          <div className="bg-slate-50 border border-slate-100 rounded-lg p-4">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-600 flex-shrink-0">
-                  {order.customerName.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">{order.customerName}</p>
-                  <p className="text-xs text-slate-400">Client de la commande</p>
-                </div>
-              </div>
-              {order.clientId && (
-                <button
-                  onClick={() => navigate(`/online/clients?client=${order.clientId}`)}
-                  className="text-xs text-emerald-600 hover:text-emerald-800 font-medium whitespace-nowrap flex-shrink-0"
-                >
-                  Voir la fiche client →
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-slate-500 text-[11px] uppercase tracking-wide">Téléphone</span>
-                <p className="font-medium text-slate-900">{order.customerPhone || '—'}</p>
-              </div>
-              <div>
-                <span className="text-slate-500 text-[11px] uppercase tracking-wide">Email</span>
-                <p className="font-medium text-slate-900 truncate">{order.customerEmail || '—'}</p>
-              </div>
-              <div className="col-span-2">
-                <span className="text-slate-500 text-[11px] uppercase tracking-wide">Adresse de livraison</span>
-                <p className="font-medium text-slate-900">
-                  {order.addressLine || order.city ? [order.addressLine, order.city].filter(Boolean).join(', ') : '—'}
-                </p>
-              </div>
-              <div className="col-span-2">
-                <span className="text-slate-500 text-[11px] uppercase tracking-wide">Transporteur</span>
-                <p className="font-medium text-slate-900">{order.carrierName ? `${order.carrierName} · ${order.trackingNumber ?? 'sans suivi'}` : 'Non assignée'}</p>
-              </div>
-            </div>
+        <DataTable<OnlineOrder['items'][number]>
+          columns={itemColumns}
+          data={order.items}
+          keyField={(it) => it.id}
+          sticky={false}
+        />
+
+        <div className="space-y-1 border-t border-border pt-3 text-right text-sm">
+          <p className="text-fg-subtle">Sous-total: <span className="num text-fg-muted">{formatCurrency(order.subTotal)}</span></p>
+          {order.discountAmount > 0 && <p className="text-fg-subtle">Remise: <span className="num text-[var(--negative)]">-{formatCurrency(order.discountAmount)}</span></p>}
+          {order.shippingFee > 0 && <p className="text-fg-subtle">Livraison: <span className="num text-fg-muted">{formatCurrency(order.shippingFee)}</span></p>}
+          <p className="border-t border-border pt-1 text-base font-semibold text-fg">Total: <span className="num">{formatCurrency(order.totalAmount)}</span></p>
+          <p className="text-[var(--positive)]">Payé: <span className="num">{formatCurrency(order.amountPaid)}</span></p>
+        </div>
+
+        {order.notes && (
+          <div className="rounded-card bg-sunken p-3">
+            <p className="mb-1 text-xs font-medium text-fg-subtle">Notes</p>
+            <p className="whitespace-pre-wrap text-sm text-fg">{order.notes}</p>
           </div>
+        )}
 
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase">
-                <th className="text-left py-2">Produit</th>
-                <th className="text-right py-2">Qté</th>
-                <th className="text-right py-2">P.U.</th>
-                <th className="text-right py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {order.items.map((it) => (
-                <tr key={it.id}>
-                  <td className="py-2">
-                    <p className="font-medium text-slate-900">{it.productName}</p>
-                    <p className="text-xs text-slate-400">{it.colorName} / {it.sizeValue}</p>
-                  </td>
-                  <td className="py-2 text-right">{it.quantity}</td>
-                  <td className="py-2 text-right">{formatCurrency(it.unitPrice)}</td>
-                  <td className="py-2 text-right font-medium">{formatCurrency(it.lineTotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="text-right text-sm space-y-1 border-t border-slate-100 pt-3">
-            <p className="text-slate-500">Sous-total: <span className="text-slate-700">{formatCurrency(order.subTotal)}</span></p>
-            {order.discountAmount > 0 && <p className="text-slate-500">Remise: <span className="text-red-600">-{formatCurrency(order.discountAmount)}</span></p>}
-            {order.shippingFee > 0 && <p className="text-slate-500">Livraison: <span className="text-slate-700">{formatCurrency(order.shippingFee)}</span></p>}
-            <p className="font-semibold text-base text-slate-900 border-t border-slate-100 pt-1">Total: {formatCurrency(order.totalAmount)}</p>
-            <p className="text-emerald-600">Payé: {formatCurrency(order.amountPaid)}</p>
-          </div>
-
-          {order.notes && (
-            <div className="bg-slate-50 rounded-md p-3">
-              <p className="text-xs font-medium text-slate-500 mb-1">Notes</p>
-              <p className="text-sm text-slate-700 whitespace-pre-wrap">{order.notes}</p>
-            </div>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <WhatsAppConfirmMenu order={order} />
+          {canConfirmShip && (
+            <Button variant="success" size="sm" icon={<CheckCircle2 className="h-4 w-4" />} onClick={onConfirmShip}>
+              Confirmer &amp; créer colis
+            </Button>
           )}
-
-          <div className="flex flex-wrap gap-2 pt-2">
-            <WhatsAppConfirmMenu order={order} />
-            {canConfirmShip && (
-              <button onClick={onConfirmShip} className="px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-                ✅ Confirmer &amp; créer colis
-              </button>
-            )}
-            {order.trackingNumber && (
-              <button onClick={onOpenBonDeLivraison} className="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">
-                🖨 Bon de Livraison (OzonExpress)
-              </button>
-            )}
-            {next && (
-              <button onClick={() => onUpdateStatus(next)} className="px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-                Passer à: {STATUS_META[next].label}
-              </button>
-            )}
-            {order.paymentStatus !== 'Paid' && (
-              <button onClick={onMarkPaid} className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100">
-                Marquer payé
-              </button>
-            )}
-            {['Pending', 'Processing', 'Confirmed', 'Packing', 'ReadyToShip'].includes(order.status) && (
-              <button onClick={onShip} className="px-3 py-2 text-sm font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-md hover:bg-cyan-100">
-                Assigner la livraison
-              </button>
-            )}
-            {order.status !== 'Cancelled' && order.status !== 'InventoryConflict' && !order.trackingNumber && (
-              <button onClick={() => setShowOzon(true)} className="px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100">
-                📦 Créer colis OzonExpress
-              </button>
-            )}
-            {order.status !== 'Cancelled' && order.status !== 'InventoryConflict' && (
-              <button onClick={onPrintPackingSlip} className="px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">
-                Imprimer le bon de préparation
-              </button>
-            )}
-            {order.status !== 'Cancelled' && order.status !== 'Delivered' && order.status !== 'Refunded' && (
-              <button onClick={onCancel} className="px-3 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100">
-                Annuler la commande
-              </button>
-            )}
-          </div>
+          {order.trackingNumber && (
+            <Button variant="outline" size="sm" icon={<Printer className="h-4 w-4" />} onClick={onOpenBonDeLivraison}>
+              Bon de Livraison (OzonExpress)
+            </Button>
+          )}
+          {next && (
+            <Button size="sm" icon={<ArrowRight className="h-4 w-4" />} onClick={() => onUpdateStatus(next)}>
+              Passer à: {getStatus('onlineOrder', next).label ?? next}
+            </Button>
+          )}
+          {order.paymentStatus !== 'Paid' && (
+            <Button variant="soft" size="sm" icon={<CircleDollarSign className="h-4 w-4" />} onClick={onMarkPaid}>
+              Marquer payé
+            </Button>
+          )}
+          {['Pending', 'Processing', 'Confirmed', 'Packing', 'ReadyToShip'].includes(order.status) && (
+            <Button variant="outline" size="sm" icon={<Truck className="h-4 w-4" />} onClick={onShip}>
+              Assigner la livraison
+            </Button>
+          )}
+          {order.status !== 'Cancelled' && order.status !== 'InventoryConflict' && !order.trackingNumber && (
+            <Button variant="outline" size="sm" icon={<Package className="h-4 w-4" />} onClick={() => setShowOzon(true)}>
+              Créer colis OzonExpress
+            </Button>
+          )}
+          {order.status !== 'Cancelled' && order.status !== 'InventoryConflict' && (
+            <Button variant="outline" size="sm" icon={<Printer className="h-4 w-4" />} onClick={onPrintPackingSlip}>
+              Imprimer le bon de préparation
+            </Button>
+          )}
+          {order.status !== 'Cancelled' && order.status !== 'Delivered' && order.status !== 'Refunded' && (
+            <Button variant="danger" size="sm" onClick={onCancel}>
+              Annuler la commande
+            </Button>
+          )}
         </div>
       </div>
 
@@ -838,7 +897,7 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onConfirmShip, onOpe
           onCreated={() => { setShowOzon(false); onClose() }}
         />
       )}
-    </div>
+    </Sheet>
   )
 }
 
@@ -870,35 +929,36 @@ function AssignShippingModal({ order, onClose, onAssigned }: { order: OnlineOrde
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-96 border border-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">Assigner la livraison</h2>
-        <p className="text-sm text-slate-500 mb-5">{order.orderNumber} — {order.customerName}</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Transporteur</label>
-            <input required value={carrierName} onChange={(e) => setCarrierName(e.target.value)} placeholder="Ozonexpress, Sendit..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">N° de suivi</label>
-            <input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Frais de livraison</label>
-            <input type="number" min={0} step="0.01" value={deliveryFee} onChange={(e) => setDeliveryFee(parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">Date de livraison prévue</label>
-            <input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-          </div>
-          <div className="flex gap-2 justify-end pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-            <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium text-white bg-cyan-600 rounded-md hover:bg-cyan-700 disabled:opacity-50">
-              {submitting ? 'Enregistrement...' : 'Assigner'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title="Assigner la livraison"
+      description={`${order.orderNumber} — ${order.customerName}`}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Transporteur"
+          required
+          value={carrierName}
+          onChange={(e) => setCarrierName(e.target.value)}
+          placeholder="Ozonexpress, Sendit..."
+        />
+        <Input label="N° de suivi" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} />
+        <Input
+          type="number"
+          min={0}
+          step="0.01"
+          label="Frais de livraison"
+          value={deliveryFee}
+          onChange={(e) => setDeliveryFee(parseFloat(e.target.value) || 0)}
+        />
+        <Input type="date" label="Date de livraison prévue" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+          <Button type="submit" loading={submitting}>Assigner</Button>
+        </div>
+      </form>
+    </Modal>
   )
 }

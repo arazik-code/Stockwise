@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Plus, Trash2 } from 'lucide-react'
 import { productsApi } from '../../api/products'
 import { fournisseursApi } from '../../api/fournisseurs'
 import { showToast } from '../shared/Toast'
+import { Button, IconButton, Input, Modal, Select } from '../ui'
 import type { Product } from '../../types/product'
 import type { Fournisseur } from '../../types/fournisseur'
 
@@ -128,179 +130,153 @@ export default function ReceiveDeliveryDialog({ fournisseurId, fournisseurName, 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-[600px] max-h-[85vh] overflow-auto border border-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">
-          {t('fournisseurs.receiveDelivery')}
-        </h2>
-        <p className="text-sm text-slate-500 mb-5">{fournisseurName}</p>
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title={t('fournisseurs.receiveDelivery')}
+      description={fournisseurName}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="success"
+            onClick={handleSubmit}
+            disabled={lineItems.length === 0 || submitting}
+            loading={submitting}
+          >
+            {t('fournisseurs.confirmDelivery')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Select
+          label={t('fournisseurs.name')}
+          value={selectedFournisseurId}
+          onChange={(e) => setSelectedFournisseurId(Number(e.target.value))}
+        >
+          {fournisseurs.map((f) => (
+            <option key={f.id} value={f.id}>{f.nom}</option>
+          ))}
+        </Select>
 
-        <div className="space-y-4 mb-5">
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('fournisseurs.name')}</label>
-            <select
-              value={selectedFournisseurId}
-              onChange={(e) => setSelectedFournisseurId(Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label={t('invoices.reference')}
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="Bon de livraison..."
+          />
+          <Input
+            label={t('invoices.notes')}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes..."
+          />
+        </div>
+
+        <div className="space-y-3 rounded-card border border-border p-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">{t('fournisseurs.addItem')}</h4>
+
+          <div className="grid grid-cols-4 gap-3">
+            <Select
+              wrapperClassName="col-span-2"
+              label={t('products.name')}
+              value={selectedProductId}
+              onChange={(e) => {
+                setSelectedProductId(Number(e.target.value) || '')
+                setSelectedColorId('')
+                setSelectedSizeId('')
+              }}
             >
-              {fournisseurs.map((f) => (
-                <option key={f.id} value={f.id}>{f.nom}</option>
+              <option value="">-- {t('invoices.selectProduct')} --</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-            </select>
+            </Select>
+            <Select
+              label={t('products.color')}
+              value={selectedColorId}
+              onChange={(e) => {
+                setSelectedColorId(Number(e.target.value) || '')
+                setSelectedSizeId('')
+              }}
+              disabled={!selectedProductId}
+            >
+              <option value="">-- {t('products.selectColor')} --</option>
+              {availableColors.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+            <Select
+              label={t('products.size')}
+              value={selectedSizeId}
+              onChange={(e) => setSelectedSizeId(Number(e.target.value) || '')}
+              disabled={!selectedColorId}
+            >
+              <option value="">-- {t('products.selectSize')} --</option>
+              {availableSizes.map((s) => (
+                <option key={s.id} value={s.id}>EU {s.value}</option>
+              ))}
+            </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.reference')}</label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder="Bon de livraison..."
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.notes')}</label>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes..."
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
-              />
-            </div>
+          <div className="flex items-end gap-3">
+            <Input
+              wrapperClassName="flex-1"
+              label={t('common.quantity')}
+              type="number"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="0"
+            />
+            <Button
+              type="button"
+              onClick={handleAddItem}
+              disabled={!selectedVariant || !quantity || parseInt(quantity) <= 0}
+              icon={<Plus className="h-3.5 w-3.5" />}
+            >
+              {t('common.add')}
+            </Button>
           </div>
 
-          <div className="border border-slate-200 rounded-md p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{t('fournisseurs.addItem')}</h4>
-
-            <div className="grid grid-cols-4 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.name')}</label>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => {
-                    setSelectedProductId(Number(e.target.value) || '')
-                    setSelectedColorId('')
-                    setSelectedSizeId('')
-                  }}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">-- {t('invoices.selectProduct')} --</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.color')}</label>
-                <select
-                  value={selectedColorId}
-                  onChange={(e) => {
-                    setSelectedColorId(Number(e.target.value) || '')
-                    setSelectedSizeId('')
-                  }}
-                  disabled={!selectedProductId}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="">-- {t('products.selectColor')} --</option>
-                  {availableColors.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.size')}</label>
-                <select
-                  value={selectedSizeId}
-                  onChange={(e) => setSelectedSizeId(Number(e.target.value) || '')}
-                  disabled={!selectedColorId}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="">-- {t('products.selectSize')} --</option>
-                  {availableSizes.map((s) => (
-                    <option key={s.id} value={s.id}>EU {s.value}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-3 items-end">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('common.quantity')}</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  placeholder="0"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleAddItem}
-                disabled={!selectedVariant || !quantity || parseInt(quantity) <= 0}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {t('common.add')}
-              </button>
-            </div>
-
-            {selectedVariant && (
-              <p className="text-xs text-slate-500">
-                {t('stock.onHand')}: <span className="font-medium text-slate-700">{selectedVariant.stockQuantity}</span>
-                {' · '}SKU: <span className="font-mono text-slate-700">{selectedVariant.sku}</span>
-              </p>
-            )}
-          </div>
+          {selectedVariant && (
+            <p className="text-xs text-fg-subtle">
+              {t('stock.onHand')}: <span className="num font-medium text-fg">{selectedVariant.stockQuantity}</span>
+              {' · '}SKU: <span className="num text-fg">{selectedVariant.sku}</span>
+            </p>
+          )}
         </div>
 
         {lineItems.length > 0 && (
-          <div className="mb-5">
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-              {t('fournisseurs.deliveryItems')} ({lineItems.length})
+          <div>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-fg-subtle">
+              {t('fournisseurs.deliveryItems')} (<span className="num">{lineItems.length}</span>)
             </h4>
-            <div className="border border-slate-200 rounded-md divide-y divide-slate-100">
+            <div className="divide-y divide-border rounded-card border border-border">
               {lineItems.map((item) => (
                 <div key={item.productVariantId} className="flex items-center justify-between px-3 py-2">
-                  <span className="text-sm text-slate-700">{getVariantLabel(item.productVariantId)}</span>
+                  <span className="text-sm text-fg">{getVariantLabel(item.productVariantId)}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-slate-900">+{item.quantity}</span>
-                    <button
+                    <span className="num text-sm font-medium text-fg">+{item.quantity}</span>
+                    <IconButton
+                      icon={<Trash2 className="h-4 w-4" />}
+                      label={t('common.delete')}
+                      size="xs"
+                      variant="danger-ghost"
                       onClick={() => handleRemoveItem(item.productVariantId)}
-                      className="text-slate-400 hover:text-red-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    />
                   </div>
                 </div>
               ))}
             </div>
           </div>
         )}
-
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={lineItems.length === 0 || submitting}
-            className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? t('pos.processing') : t('fournisseurs.confirmDelivery')}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

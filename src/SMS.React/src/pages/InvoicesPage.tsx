@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import Header from '../components/layout/Header'
+import {
+  AlertTriangle, Ban, CheckCircle2, Clock, Copy, FileText, Pencil, Plus, Printer,
+  Search, Tags, Trash2, Wallet,
+} from 'lucide-react'
 import { invoicesApi } from '../api/invoices'
 import { fournisseursApi } from '../api/fournisseurs'
 import { productsApi } from '../api/products'
@@ -12,7 +15,12 @@ import { formatCurrency, formatDate } from '../utils/format'
 import { useTableSelection } from '../hooks/useTableSelection'
 import { printLabels } from '../components/products/BarcodeLabel'
 import { printInvoice, type InvoicePrintData } from '../utils/printInvoice'
-import type { Invoice, CreateInvoiceRequest, CreateInvoiceLineItemRequest, InvoiceStatus, PaymentTerms, InvoiceSummary } from '../types/invoice'
+import {
+  Button, DataTable, EmptyState, IconButton, Input, Modal, Page, Select,
+  SkeletonTable, StatCard, StatusBadge, Textarea, Toolbar, cn,
+  type Column,
+} from '../components/ui'
+import type { Invoice, CreateInvoiceRequest, CreateInvoiceLineItemRequest, PaymentTerms, InvoiceSummary } from '../types/invoice'
 import type { Fournisseur } from '../types/fournisseur'
 import type { Product, ProductVariant } from '../types/product'
 import type { Color } from '../types/color'
@@ -41,26 +49,6 @@ function calcDueDate(invoiceDate: string, terms: PaymentTerms): string | undefin
   const d = new Date(invoiceDate)
   d.setDate(d.getDate() + days)
   return d.toISOString().split('T')[0]
-}
-
-function statusBadge(status: InvoiceStatus, t: (k: string) => string) {
-  const map: Record<InvoiceStatus, string> = {
-    Pending: 'bg-amber-50 text-amber-700 border border-amber-200',
-    Paid: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    PartiallyPaid: 'bg-blue-50 text-blue-700 border border-blue-200',
-    Overdue: 'bg-red-50 text-red-700 border border-red-200',
-    Cancelled: 'bg-slate-100 text-slate-500 border border-slate-200',
-    Received: 'bg-cyan-50 text-cyan-700 border border-cyan-200',
-  }
-  const key: Record<InvoiceStatus, string> = {
-    Pending: 'invoices.statuses.pending',
-    Paid: 'invoices.statuses.paid',
-    PartiallyPaid: 'invoices.statuses.partiallyPaid',
-    Overdue: 'invoices.statuses.overdue',
-    Cancelled: 'invoices.statuses.cancelled',
-    Received: 'invoices.statuses.received',
-  }
-  return <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${map[status]}`}>{t(key[status])}</span>
 }
 
 const paymentTermsOptions: { value: PaymentTerms; labelKey: string }[] = [
@@ -591,64 +579,91 @@ export default function InvoicesPage() {
     printInvoice(invoiceTemplate, printData)
   }
 
-  return (
-    <div className="flex flex-col flex-1">
-      <Header
-        title={t('invoices.title')}
-        actions={
-          <button
-            onClick={openCreate}
-            disabled={loadingFormData}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-60"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {t('invoices.add')}
-          </button>
-        }
-      />
-      <div className="p-6 flex-1 space-y-6">
+  const columns: Column<Invoice>[] = [
+    {
+      key: 'invoiceNumber',
+      header: t('invoices.invoiceNumber'),
+      render: (inv) => (
+        <button
+          type="button"
+          onClick={() => setDetail(inv)}
+          className="num font-medium text-fg-muted transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] rounded-inset"
+        >
+          {inv.invoiceNumber}
+        </button>
+      ),
+    },
+    { key: 'fournisseur', header: t('invoices.fournisseur'), render: (inv) => <span className="font-medium text-fg">{inv.fournisseurNom}</span> },
+    { key: 'date', header: t('invoices.date'), render: (inv) => <span className="text-fg-muted">{formatDate(inv.invoiceDate)}</span> },
+    { key: 'terms', header: t('invoices.paymentTerms'), render: (inv) => <span className="text-fg-muted">{t(`invoices.terms.${inv.paymentTerms.toLowerCase()}`)}</span> },
+    { key: 'total', header: t('invoices.total'), numeric: true, render: (inv) => <span className="text-fg-muted">{formatCurrency(inv.totalAmount)}</span> },
+    { key: 'balance', header: t('invoices.balanceDue'), numeric: true, render: (inv) => <span className="font-semibold text-fg">{formatCurrency(inv.balanceDue)}</span> },
+    {
+      key: 'status',
+      header: t('invoices.status'),
+      align: 'center',
+      render: (inv) => <StatusBadge domain="invoice" value={inv.status} size="xs" showIcon={false} animate={false} />,
+    },
+    {
+      key: 'actions',
+      header: t('common.actions'),
+      align: 'center',
+      width: '13rem',
+      render: (inv) => (
+        <div className="flex flex-wrap items-center justify-center gap-0.5">
+          {inv.status === 'Pending' && (
+            <IconButton icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={t('invoices.receive')} size="xs" onClick={() => handleReceive(inv)} />
+          )}
+          {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
+            <IconButton icon={<Wallet className="h-3.5 w-3.5" />} label={t('invoices.pay')} size="xs" onClick={() => openPay(inv)} />
+          )}
+          {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
+            <>
+              <IconButton icon={<Pencil className="h-3.5 w-3.5" />} label={t('common.edit')} size="xs" onClick={() => openEdit(inv)} />
+              <IconButton icon={<Ban className="h-3.5 w-3.5" />} label={t('invoices.cancel')} size="xs" variant="danger-ghost" onClick={() => setShowCancel(inv)} />
+            </>
+          )}
+          {inv.status === 'Received' && (
+            <IconButton icon={<Tags className="h-3.5 w-3.5" />} label="Imprimer les étiquettes" size="xs" onClick={() => handlePrintLabels(inv.id)} />
+          )}
+          <IconButton icon={<Printer className="h-3.5 w-3.5" />} label="Imprimer la facture" size="xs" onClick={() => handlePrintInvoice(inv)} />
+          <IconButton icon={<FileText className="h-3.5 w-3.5" />} label={t('invoices.summary')} size="xs" onClick={() => setDetail(inv)} />
+          <IconButton icon={<Ban className="h-3.5 w-3.5" />} label={t('invoices.cancel')} size="xs" variant="danger-ghost" onClick={() => setShowCancel(inv)} />
+        </div>
+      ),
+    },
+  ]
 
+  return (
+    <Page
+      section="invoices"
+      title={t('invoices.title')}
+      actions={
+        <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={openCreate} disabled={loadingFormData} loading={loadingFormData}>
+          {t('invoices.add')}
+        </Button>
+      }
+    >
+      <div className="space-y-6">
         {summary && (
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-medium text-slate-500 uppercase">{t('invoices.summaryCards.totalOwed')}</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{formatCurrency(summary.totalOwed)}</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-medium text-slate-500 uppercase">{t('invoices.summaryCards.totalOverdue')}</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(summary.totalOverdue)}</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-medium text-slate-500 uppercase">{t('invoices.summaryCards.pendingCount')}</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{summary.pendingCount}</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-medium text-slate-500 uppercase">{t('invoices.summaryCards.paidCount')}</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{summary.paidCount}</p>
-            </div>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard label={t('invoices.summaryCards.totalOwed')} value={formatCurrency(summary.totalOwed)} icon={Wallet} />
+            <StatCard label={t('invoices.summaryCards.totalOverdue')} value={formatCurrency(summary.totalOverdue)} tone="negative" icon={AlertTriangle} />
+            <StatCard label={t('invoices.summaryCards.pendingCount')} value={summary.pendingCount.toString()} tone="caution" icon={Clock} />
+            <StatCard label={t('invoices.summaryCards.paidCount')} value={summary.paidCount.toString()} tone="positive" icon={CheckCircle2} />
           </div>
         )}
 
-        <div className="flex gap-3 items-center">
-          <div className="flex-1 relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('invoices.search')}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
+        <Toolbar>
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('invoices.search')}
+            leading={<Search />}
+            size="sm"
+            wrapperClassName="w-full sm:w-72"
+          />
+          <Select size="sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} wrapperClassName="w-44">
             <option value="All">{t('invoices.allStatuses')}</option>
             <option value="Pending">{t('invoices.statuses.pending')}</option>
             <option value="Received">{t('invoices.statuses.received')}</option>
@@ -656,769 +671,646 @@ export default function InvoicesPage() {
             <option value="PartiallyPaid">{t('invoices.statuses.partiallyPaid')}</option>
             <option value="Overdue">{t('invoices.statuses.overdue')}</option>
             <option value="Cancelled">{t('invoices.statuses.cancelled')}</option>
-          </select>
-          <select
+          </Select>
+          <Select
+            size="sm"
             value={filterFournisseur}
             onChange={(e) => setFilterFournisseur(parseInt(e.target.value))}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            wrapperClassName="w-44 ml-auto sm:ml-0"
           >
             <option value={0}>{t('invoices.allFournisseurs')}</option>
             {fournisseurs.map((f) => (
               <option key={f.id} value={f.id}>{f.nom}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Toolbar>
 
         {selection.someSelected && (
-          <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
-            <span className="text-sm font-medium text-red-700">
-              {selection.count} facture(s) sélectionnée(s)
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-3 rounded-card border px-4 py-2.5',
+              'border-[color-mix(in_oklab,var(--negative)_28%,transparent)] bg-[var(--negative-soft)]'
+            )}
+          >
+            <span className="text-sm font-medium text-[var(--negative-ink)]">
+              <span className="num">{selection.count}</span> facture(s) sélectionnée(s)
             </span>
-            <button
-              onClick={handleBulkCancel}
-              className="px-3 py-1.5 text-xs font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 transition-colors"
-            >
+            <Button size="xs" variant="danger" onClick={handleBulkCancel}>
               {t('invoices.cancel')}
-            </button>
-            <button
-              onClick={selection.clear}
-              className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
-            >
+            </Button>
+            <Button size="xs" variant="ghost" className="ml-auto" onClick={selection.clear}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-sm text-slate-500">{t('common.loading')}</span>
+          <SkeletonTable rows={10} cols={8} />
+        ) : filteredInvoices.length === 0 ? (
+          <div className="surface-glass">
+            <EmptyState
+              icon={FileText}
+              variant={searchQuery ? 'search' : 'default'}
+              title={t('invoices.noInvoices')}
+            />
           </div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="w-10 px-3 py-2.5">
-                      <input
-                        type="checkbox"
-                        checked={selection.allSelected(filteredInvoices)}
-                        onChange={() => selection.toggleAll(filteredInvoices)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.invoiceNumber')}</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.fournisseur')}</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.date')}</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.paymentTerms')}</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.total')}</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.balanceDue')}</th>
-                    <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider whitespace-nowrap">{t('invoices.status')}</th>
-                    <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider w-20">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredInvoices.length === 0 && (
-                    <tr><td colSpan={9} className="text-center py-8 text-sm text-slate-400">{t('invoices.noInvoices')}</td></tr>
-                  )}
-                  {filteredInvoices.map((inv) => (
-                    <tr key={inv.id} className={`transition-colors ${selection.isSelected(inv.id) ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
-                      <td className="px-3 py-2.5">
-                        <input
-                          type="checkbox"
-                          checked={selection.isSelected(inv.id)}
-                          onChange={() => selection.toggle(inv.id)}
-                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                      <td className="px-3 py-2.5 text-sm font-mono text-slate-600 whitespace-nowrap">
-                        <button onClick={() => setDetail(inv)} className="hover:text-blue-600 transition-colors font-medium">{inv.invoiceNumber}</button>
-                      </td>
-                      <td className="px-3 py-2.5 text-sm font-medium text-slate-900 whitespace-nowrap">{inv.fournisseurNom}</td>
-                      <td className="px-3 py-2.5 text-sm text-slate-600 whitespace-nowrap">{formatDate(inv.invoiceDate)}</td>
-                      <td className="px-3 py-2.5 text-sm text-slate-600 whitespace-nowrap">{t(`invoices.terms.${inv.paymentTerms.toLowerCase()}`)}</td>
-                      <td className="px-3 py-2.5 text-sm text-right text-slate-600 whitespace-nowrap">{formatCurrency(inv.totalAmount)}</td>
-                      <td className="px-3 py-2.5 text-sm text-right font-semibold text-slate-900 whitespace-nowrap">{formatCurrency(inv.balanceDue)}</td>
-                      <td className="px-3 py-2.5 text-sm text-center whitespace-nowrap">{statusBadge(inv.status, t)}</td>
-                      <td className="px-3 py-2.5 text-sm text-center">
-                        <div className="flex items-center justify-center gap-0.5">
-                          {inv.status === 'Pending' && (
-                            <button onClick={() => handleReceive(inv)} className="text-xs text-cyan-600 hover:text-cyan-800 font-medium transition-colors px-1.5 py-1 rounded hover:bg-cyan-50" title={t('invoices.receive')}>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                            </button>
-                          )}
-                          {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
-                            <button onClick={() => openPay(inv)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors px-1.5 py-1 rounded hover:bg-blue-50" title={t('invoices.pay')}>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            </button>
-                          )}
-                          {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
-                            <>
-                              <button onClick={() => openEdit(inv)} className="text-xs text-slate-500 hover:text-slate-700 font-medium transition-colors px-1.5 py-1 rounded hover:bg-slate-100" title={t('common.edit')}>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                              </button>
-                              <button onClick={() => setShowCancel(inv)} className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors px-1.5 py-1 rounded hover:bg-red-50" title={t('invoices.cancel')}>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                              </button>
-                            </>
-                          )}
-                          {inv.status === 'Received' && (
-                            <button onClick={() => handlePrintLabels(inv.id)} className="text-xs text-cyan-600 hover:text-cyan-800 font-medium transition-colors px-1.5 py-1 rounded hover:bg-cyan-50" title="Imprimer les étiquettes">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                            </button>
-                          )}
-                          <button onClick={() => handlePrintInvoice(inv)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors px-1.5 py-1 rounded hover:bg-blue-50" title="Imprimer la facture">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 0h8v6H6v-6z" /></svg>
-                          </button>
-                          <button onClick={() => setDetail(inv)} className="text-xs text-slate-500 hover:text-slate-700 font-medium transition-colors px-1.5 py-1 rounded hover:bg-slate-100" title={t('invoices.summary')}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          </button>
-                          <button onClick={() => setShowCancel(inv)} className="text-xs text-amber-600 hover:text-amber-800 font-medium transition-colors px-1.5 py-1 rounded hover:bg-amber-50" title={t('invoices.cancel')}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable<Invoice>
+            columns={columns}
+            data={filteredInvoices}
+            keyField={(inv) => inv.id}
+            selection={{
+              selected: selection.selected as Set<string | number>,
+              onToggle: (key) => selection.toggle(Number(key)),
+              onToggleAll: () => selection.toggleAll(filteredInvoices),
+              allSelected: selection.allSelected(filteredInvoices),
+              someSelected: selection.someSelected,
+            }}
+          />
         )}
       </div>
 
       {/* Create / Edit Modal */}
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-[800px] max-h-[90vh] overflow-auto border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-5">
-              {editingInvoice ? t('invoices.edit') : t('invoices.add')}
-            </h2>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.fournisseur')} *</label>
-                  <select
-                    required
-                    value={form.fournisseurId}
-                    onChange={(e) => handleFournisseurChange(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value={0}>{t('invoices.fournisseur')}</option>
-                    {fournisseurs.map((f) => (
-                      <option key={f.id} value={f.id}>{f.nom}</option>
-                    ))}
-                  </select>
-                  {selectedFournisseur && (
-                    <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
-                      {selectedFournisseur.contact && <span>{selectedFournisseur.contact}</span>}
-                      {selectedFournisseur.telephone && <span>· {selectedFournisseur.telephone}</span>}
-                    </div>
-                  )}
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        size="2xl"
+        title={editingInvoice ? t('invoices.edit') : t('invoices.add')}
+      >
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Select
+                required
+                label={`${t('invoices.fournisseur')} *`}
+                value={form.fournisseurId}
+                onChange={(e) => handleFournisseurChange(parseInt(e.target.value))}
+              >
+                <option value={0}>{t('invoices.fournisseur')}</option>
+                {fournisseurs.map((f) => (
+                  <option key={f.id} value={f.id}>{f.nom}</option>
+                ))}
+              </Select>
+              {selectedFournisseur && (
+                <div className="mt-1.5 flex items-center gap-2 text-xs text-fg-subtle">
+                  {selectedFournisseur.contact && <span>{selectedFournisseur.contact}</span>}
+                  {selectedFournisseur.telephone && <span>· {selectedFournisseur.telephone}</span>}
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.reference')}</label>
-                  <input
-                    type="text"
-                    value={form.reference}
-                    onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                    placeholder="BC-2026-001"
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.date')}</label>
-                  <input
-                    type="date"
-                    value={form.invoiceDate ?? ''}
-                    onChange={(e) => setForm({ ...form, invoiceDate: e.target.value || undefined })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+              )}
+            </div>
+            <Input
+              label={t('invoices.reference')}
+              value={form.reference}
+              onChange={(e) => setForm({ ...form, reference: e.target.value })}
+              placeholder="BC-2026-001"
+            />
+            <Input
+              type="date"
+              label={t('invoices.date')}
+              value={form.invoiceDate ?? ''}
+              onChange={(e) => setForm({ ...form, invoiceDate: e.target.value || undefined })}
+            />
+          </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.paymentTerms')}</label>
-                  <select
-                    value={form.paymentTerms}
-                    onChange={(e) => {
-                      const terms = e.target.value as PaymentTerms
-                      const invoiceDate = form.invoiceDate || todayStr()
-                      setForm({
-                        ...form,
-                        paymentTerms: terms,
-                        invoiceDate,
-                        dueDate: calcDueDate(invoiceDate, terms),
-                      })
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {paymentTermsOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.dueDate')}</label>
-                  <input
-                    type="date"
-                    value={form.dueDate ?? ''}
-                    onChange={(e) => setForm({ ...form, dueDate: e.target.value || undefined })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.taxRate')} (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    max={100}
-                    value={form.taxRate}
-                    onChange={(e) => setForm({ ...form, taxRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+          <div className="grid grid-cols-3 gap-4">
+            <Select
+              label={t('invoices.paymentTerms')}
+              value={form.paymentTerms}
+              onChange={(e) => {
+                const terms = e.target.value as PaymentTerms
+                const invoiceDate = form.invoiceDate || todayStr()
+                setForm({
+                  ...form,
+                  paymentTerms: terms,
+                  invoiceDate,
+                  dueDate: calcDueDate(invoiceDate, terms),
+                })
+              }}
+            >
+              {paymentTermsOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
+              ))}
+            </Select>
+            <Input
+              type="date"
+              label={t('invoices.dueDate')}
+              value={form.dueDate ?? ''}
+              onChange={(e) => setForm({ ...form, dueDate: e.target.value || undefined })}
+            />
+            <Input
+              type="number"
+              step="0.1"
+              min={0}
+              max={100}
+              label={`${t('invoices.taxRate')} (%)`}
+              value={form.taxRate}
+              onChange={(e) => setForm({ ...form, taxRate: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
 
-              {/* Line Items with cascading dropdowns */}
-              <div>
-                <div className="relative mb-2">
-                  <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    type="text"
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    placeholder={t('common.search')}
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-slate-500">{t('products.variants')}</label>
-                  <div className="flex items-center gap-3">
-                    {form.fournisseurId > 0 && (
-                      <div className="relative" ref={importDropdownRef}>
-                        <button
-                          type="button"
-                          onClick={() => setShowImportDropdown(!showImportDropdown)}
-                          className="text-xs text-emerald-600 hover:text-emerald-800 font-medium"
-                        >
-                          {t('invoices.importFournisseurProducts')} ({selectedImportProducts.size > 0 ? `${selectedImportProducts.size} sélectionné(s)` : fournisseurProducts.length})
-                        </button>
-                        {showImportDropdown && (
-                          <div className="absolute right-0 top-8 z-20 w-72 bg-white border border-slate-200 rounded-xl shadow-xl">
-                            <div className="p-2 border-b border-slate-100">
-                              <div className="relative">
-                                <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                                <input
-                                  type="text"
-                                  value={importSearch}
-                                  onChange={(e) => setImportSearch(e.target.value)}
-                                  placeholder="Rechercher un produit..."
-                                  className="w-full pl-7 pr-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                  autoFocus
-                                />
-                              </div>
-                            </div>
-                            <div className="max-h-48 overflow-y-auto">
-                              {filteredImportProducts.length === 0 ? (
-                                <p className="px-3 py-4 text-xs text-slate-400 text-center">Aucun produit trouvé</p>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={selectAllImportProducts}
-                                    className="w-full px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 text-left flex items-center gap-2 border-b border-slate-100"
-                                  >
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedImportProducts.size === filteredImportProducts.length ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
-                                      {selectedImportProducts.size === filteredImportProducts.length && (
-                                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                        </svg>
-                                      )}
-                                    </div>
-                                    Tout sélectionner
-                                  </button>
-                                  {filteredImportProducts.map((product) => (
-                                    <button
-                                      key={product.id}
-                                      type="button"
-                                      onClick={() => toggleImportProduct(product.id)}
-                                      className="w-full px-3 py-2 text-xs text-slate-700 hover:bg-emerald-50 text-left flex items-center gap-2 transition-colors"
-                                    >
-                                      <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${selectedImportProducts.has(product.id) ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
-                                        {selectedImportProducts.has(product.id) && (
-                                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                          </svg>
-                                        )}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="font-medium truncate">{product.name}</p>
-                                        <p className="text-slate-400">{product.variants.filter(v => v.isActive).length} variante(s)</p>
-                                      </div>
-                                    </button>
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                            <div className="p-2 border-t border-slate-100 flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => { setShowImportDropdown(false); setImportSearch(''); setSelectedImportProducts(new Set()) }}
-                                className="flex-1 px-3 py-1.5 text-xs text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-                              >
-                                Annuler
-                              </button>
-                              <button
-                                type="button"
-                                onClick={importSelectedProducts}
-                                disabled={selectedImportProducts.size === 0}
-                                className="flex-1 px-3 py-1.5 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                              >
-                                Importer ({selectedImportProducts.size})
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+          {/* Line Items with cascading dropdowns */}
+          <div>
+            <Input
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              placeholder={t('common.search')}
+              leading={<Search />}
+              size="sm"
+              wrapperClassName="mb-2"
+            />
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-xs font-medium text-fg-subtle">{t('products.variants')}</label>
+              <div className="flex items-center gap-3">
+                {form.fournisseurId > 0 && (
+                  <div className="relative" ref={importDropdownRef}>
                     <button
                       type="button"
-                      onClick={addItem}
-                      disabled={!form.fournisseurId}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                      onClick={() => setShowImportDropdown(!showImportDropdown)}
+                      className="text-xs font-medium text-[var(--positive)] hover:brightness-110"
                     >
-                      + {t('invoices.addProduct')}
+                      {t('invoices.importFournisseurProducts')} ({selectedImportProducts.size > 0 ? `${selectedImportProducts.size} sélectionné(s)` : fournisseurProducts.length})
                     </button>
-                  </div>
-                </div>
-                {!form.fournisseurId && (
-                  <p className="text-xs text-amber-600 mb-2">{t('invoices.selectFournisseurFirst')}</p>
-                )}
-                <div className="grid grid-cols-[1fr_1fr_1fr_auto_80px_90px_70px_70px_auto] gap-2 mb-1 px-1">
-                  <span className="text-xs font-medium text-slate-400">{t('products.name')}</span>
-                  <span className="text-xs font-medium text-slate-400">{t('products.color')}</span>
-                  <span className="text-xs font-medium text-slate-400">{t('products.size')}</span>
-                  <span className="w-[50px]"></span>
-                  <span className="text-xs font-medium text-slate-400">{t('common.quantity')}</span>
-                  <span className="text-xs font-medium text-slate-400" title="Prix d'achat du fournisseur (même valeur que 'Prix de revient' du produit)">{t('invoices.unitCost')}</span>
-                  <span className="text-xs font-medium text-slate-400">Remise %</span>
-                  <span className="text-xs font-medium text-slate-400 text-right">{t('invoices.lineTotal')}</span>
-                  <span className="w-[24px]"></span>
-                </div>
-                <div className="space-y-2">
-                  {lineItems.map((item, idx) => {
-                    const colors = getAvailableColors(item.productId)
-                    const sizes = getAvailableSizes(item.productId, item.colorId)
-                    return (
-                      <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto_80px_90px_70px_70px_auto] gap-2 items-center">
-                        <select
-                          value={item.productId}
-                          onChange={(e) => updateLineItem(idx, { productId: parseInt(e.target.value) })}
-                          disabled={!form.fournisseurId}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
-                        >
-                          <option value={0}>{t('invoices.selectProduct')}</option>
-                          {searchedProducts.map((p) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                        <select
-                          value={item.colorId}
-                          onChange={(e) => updateLineItem(idx, { colorId: parseInt(e.target.value) })}
-                          disabled={!item.productId}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
-                        >
-                          <option value={0}>{t('products.selectColor')}</option>
-                          {colors.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                        <select
-                          value={item.sizeId}
-                          onChange={(e) => updateLineItem(idx, { sizeId: parseInt(e.target.value) })}
-                          disabled={!item.colorId}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
-                        >
-                          <option value={0}>{t('products.selectSize')}</option>
-                          {sizes.map((s) => (
-                            <option key={s.id} value={s.id}>{s.value}</option>
-                          ))}
-                        </select>
-                        {item.productId > 0 && item.colorId > 0 && (
-                          <button
+                    {showImportDropdown && (
+                      <div className="absolute right-0 top-8 z-20 w-72 rounded-card border border-border bg-surface shadow-e4">
+                        <div className="border-b border-border p-2">
+                          <Input
+                            value={importSearch}
+                            onChange={(e) => setImportSearch(e.target.value)}
+                            placeholder="Rechercher un produit..."
+                            leading={<Search />}
+                            size="sm"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          {filteredImportProducts.length === 0 ? (
+                            <p className="px-3 py-4 text-center text-xs text-fg-subtle">Aucun produit trouvé</p>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={selectAllImportProducts}
+                                className="flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-2"
+                              >
+                                <span className={cn(
+                                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border',
+                                  selectedImportProducts.size === filteredImportProducts.length
+                                    ? 'border-[var(--positive)] bg-[var(--positive)] text-white'
+                                    : 'border-border-strong'
+                                )}>
+                                  {selectedImportProducts.size === filteredImportProducts.length && <CheckCircle2 className="h-3 w-3" />}
+                                </span>
+                                Tout sélectionner
+                              </button>
+                              {filteredImportProducts.map((product) => (
+                                <button
+                                  key={product.id}
+                                  type="button"
+                                  onClick={() => toggleImportProduct(product.id)}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-fg transition-colors hover:bg-[var(--positive-soft)]"
+                                >
+                                  <span className={cn(
+                                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border',
+                                    selectedImportProducts.has(product.id)
+                                      ? 'border-[var(--positive)] bg-[var(--positive)] text-white'
+                                      : 'border-border-strong'
+                                  )}>
+                                    {selectedImportProducts.has(product.id) && <CheckCircle2 className="h-3 w-3" />}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <p className="truncate font-medium">{product.name}</p>
+                                    <p className="text-fg-subtle">{product.variants.filter(v => v.isActive).length} variante(s)</p>
+                                  </span>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                        <div className="flex gap-2 border-t border-border p-2">
+                          <Button
                             type="button"
-                            onClick={() => generateAllSizes(idx)}
-                            className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap px-1 font-medium"
-                            title="Generer toutes les tailles"
+                            size="xs"
+                            variant="ghost"
+                            fullWidth
+                            onClick={() => { setShowImportDropdown(false); setImportSearch(''); setSelectedImportProducts(new Set()) }}
                           >
-                            +Toutes
-                          </button>
-                        )}
-                        <input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => updateLineItem(idx, { quantity: parseInt(e.target.value) || 1 })}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          value={item.unitCost}
-                          onChange={(e) => updateLineItem(idx, { unitCost: parseFloat(e.target.value) || 0 })}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                          type="number"
-                          step="0.1"
-                          min={0}
-                          max={100}
-                          value={item.discountPercent}
-                          onChange={(e) => updateLineItem(idx, { discountPercent: parseFloat(e.target.value) || 0 })}
-                          className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-right text-slate-600 font-medium">
-                          {formatCurrency((item.quantity * item.unitCost) - (item.discountPercent > 0 ? item.quantity * item.unitCost * item.discountPercent / 100 : 0))}
-                        </span>
-                        <button 
-                          type="button" 
-                          onClick={() => duplicateItem(idx)} 
-                          className="text-xs text-slate-400 hover:text-blue-600 px-1" 
-                          title={t('common.duplicate') || 'Dupliquer'}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        <button type="button" onClick={() => removeItem(idx)} className="text-xs text-red-500 hover:text-red-700 px-1">
-                          ✕
-                        </button>
+                            Annuler
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="success"
+                            fullWidth
+                            disabled={selectedImportProducts.size === 0}
+                            onClick={importSelectedProducts}
+                          >
+                            Importer ({selectedImportProducts.size})
+                          </Button>
+                        </div>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.discount')} ({t('common.total')})</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={form.discountAmount}
-                    onChange={(e) => setForm({ ...form, discountAmount: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.notes')}</label>
-                  <input
-                    type="text"
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-slate-50 rounded-md p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{t('invoices.subTotal')}</span>
-                  <span className="text-slate-700">{formatCurrency(calcSubTotal())}</span>
-                </div>
-                {form.discountAmount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">{t('invoices.discount')}</span>
-                    <span className="text-red-600">-{formatCurrency(form.discountAmount)}</span>
+                    )}
                   </div>
                 )}
-                {form.taxRate > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">{t('invoices.taxRate')} ({form.taxRate}%)</span>
-                    <span className="text-slate-700">{formatCurrency(calcTax())}</span>
+                <Button type="button" size="xs" variant="ghost" icon={<Plus className="h-3.5 w-3.5" />} disabled={!form.fournisseurId} onClick={addItem}>
+                  {t('invoices.addProduct')}
+                </Button>
+              </div>
+            </div>
+            {!form.fournisseurId && (
+              <p className="mb-2 text-xs text-[var(--caution)]">{t('invoices.selectFournisseurFirst')}</p>
+            )}
+            <div className="mb-1 grid grid-cols-[1fr_1fr_1fr_auto_80px_90px_70px_70px_auto] gap-2 px-1">
+              <span className="text-xs font-medium text-fg-subtle">{t('products.name')}</span>
+              <span className="text-xs font-medium text-fg-subtle">{t('products.color')}</span>
+              <span className="text-xs font-medium text-fg-subtle">{t('products.size')}</span>
+              <span className="w-[50px]"></span>
+              <span className="text-xs font-medium text-fg-subtle">{t('common.quantity')}</span>
+              <span className="text-xs font-medium text-fg-subtle" title="Prix d'achat du fournisseur (même valeur que 'Prix de revient' du produit)">{t('invoices.unitCost')}</span>
+              <span className="text-xs font-medium text-fg-subtle">Remise %</span>
+              <span className="text-right text-xs font-medium text-fg-subtle">{t('invoices.lineTotal')}</span>
+              <span className="w-[24px]"></span>
+            </div>
+            <div className="space-y-2">
+              {lineItems.map((item, idx) => {
+                const colors = getAvailableColors(item.productId)
+                const sizes = getAvailableSizes(item.productId, item.colorId)
+                return (
+                  <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto_80px_90px_70px_70px_auto] items-center gap-2">
+                    <Select
+                      size="sm"
+                      value={item.productId}
+                      onChange={(e) => updateLineItem(idx, { productId: parseInt(e.target.value) })}
+                      disabled={!form.fournisseurId}
+                    >
+                      <option value={0}>{t('invoices.selectProduct')}</option>
+                      {searchedProducts.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </Select>
+                    <Select
+                      size="sm"
+                      value={item.colorId}
+                      onChange={(e) => updateLineItem(idx, { colorId: parseInt(e.target.value) })}
+                      disabled={!item.productId}
+                    >
+                      <option value={0}>{t('products.selectColor')}</option>
+                      {colors.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </Select>
+                    <Select
+                      size="sm"
+                      value={item.sizeId}
+                      onChange={(e) => updateLineItem(idx, { sizeId: parseInt(e.target.value) })}
+                      disabled={!item.colorId}
+                    >
+                      <option value={0}>{t('products.selectSize')}</option>
+                      {sizes.map((s) => (
+                        <option key={s.id} value={s.id}>{s.value}</option>
+                      ))}
+                    </Select>
+                    {item.productId > 0 && item.colorId > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => generateAllSizes(idx)}
+                        className="whitespace-nowrap px-1 text-xs font-medium text-[var(--accent)] hover:brightness-110"
+                        title="Generer toutes les tailles"
+                      >
+                        +Toutes
+                      </button>
+                    )}
+                    <Input
+                      size="sm"
+                      type="number"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(e) => updateLineItem(idx, { quantity: parseInt(e.target.value) || 1 })}
+                    />
+                    <Input
+                      size="sm"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={item.unitCost}
+                      onChange={(e) => updateLineItem(idx, { unitCost: parseFloat(e.target.value) || 0 })}
+                    />
+                    <Input
+                      size="sm"
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={100}
+                      value={item.discountPercent}
+                      onChange={(e) => updateLineItem(idx, { discountPercent: parseFloat(e.target.value) || 0 })}
+                    />
+                    <span className="num text-right text-sm font-medium text-fg-muted">
+                      {formatCurrency((item.quantity * item.unitCost) - (item.discountPercent > 0 ? item.quantity * item.unitCost * item.discountPercent / 100 : 0))}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <IconButton
+                        icon={<Copy className="h-3.5 w-3.5" />}
+                        label={t('common.duplicate') || 'Dupliquer'}
+                        size="xs"
+                        onClick={() => duplicateItem(idx)}
+                      />
+                      <IconButton
+                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                        label={t('common.delete')}
+                        size="xs"
+                        variant="danger-ghost"
+                        onClick={() => removeItem(idx)}
+                      />
+                    </div>
                   </div>
-                )}
-                <div className="flex justify-between font-semibold text-base border-t border-slate-200 pt-2">
-                  <span className="text-slate-900">{t('invoices.total')}</span>
-                  <span className="text-slate-900">{formatCurrency(calcTotal())}</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2 justify-end pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
-                  {editingInvoice ? t('common.update') : t('common.save')}
-                </button>
-              </div>
-            </form>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              label={`${t('invoices.discount')} (${t('common.total')})`}
+              value={form.discountAmount}
+              onChange={(e) => setForm({ ...form, discountAmount: parseFloat(e.target.value) || 0 })}
+            />
+            <Input
+              label={t('invoices.notes')}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2 rounded-card bg-sunken p-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-fg-subtle">{t('invoices.subTotal')}</span>
+              <span className="num text-fg-muted">{formatCurrency(calcSubTotal())}</span>
+            </div>
+            {form.discountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-fg-subtle">{t('invoices.discount')}</span>
+                <span className="num text-[var(--negative)]">-{formatCurrency(form.discountAmount)}</span>
+              </div>
+            )}
+            {form.taxRate > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-fg-subtle">{t('invoices.taxRate')} ({form.taxRate}%)</span>
+                <span className="num text-fg-muted">{formatCurrency(calcTax())}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
+              <span className="text-fg">{t('invoices.total')}</span>
+              <span className="num text-fg">{formatCurrency(calcTotal())}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit">
+              {editingInvoice ? t('common.update') : t('common.save')}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Pay Modal */}
-      {showPay && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('invoices.pay')}</h2>
-            <p className="text-sm text-slate-500 mb-5">{showPay.invoiceNumber} — {showPay.fournisseurNom}</p>
-            <form onSubmit={handlePay} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.paymentAmount')}</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  max={showPay.balanceDue}
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-slate-400 mt-1">{t('invoices.balanceDue')}: {formatCurrency(showPay.balanceDue)}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.paymentMethod')}</label>
-                <select
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="Cash">{t('sales.payments.cash')}</option>
-                  <option value="Card">{t('sales.payments.card')}</option>
-                  <option value="Transfer">Virement</option>
-                  <option value="Cheque">Cheque</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.paymentReference')}</label>
-                <input
-                  type="text"
-                  value={payReference}
-                  onChange={(e) => setPayReference(e.target.value)}
-                  placeholder="CHQ-001, VIR-002..."
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div className="flex gap-2 justify-end pt-2">
-                <button type="button" onClick={() => setShowPay(null)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
-                  {t('common.confirm')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!showPay}
+        onClose={() => setShowPay(null)}
+        size="sm"
+        title={t('invoices.pay')}
+        description={showPay ? `${showPay.invoiceNumber} — ${showPay.fournisseurNom}` : undefined}
+      >
+        {showPay && (
+          <form onSubmit={handlePay} className="space-y-4">
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              max={showPay.balanceDue}
+              label={t('invoices.paymentAmount')}
+              hint={`${t('invoices.balanceDue')}: ${formatCurrency(showPay.balanceDue)}`}
+              value={payAmount}
+              onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)}
+            />
+            <Select label={t('invoices.paymentMethod')} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+              <option value="Cash">{t('sales.payments.cash')}</option>
+              <option value="Card">{t('sales.payments.card')}</option>
+              <option value="Transfer">Virement</option>
+              <option value="Cheque">Cheque</option>
+            </Select>
+            <Input
+              label={t('invoices.paymentReference')}
+              value={payReference}
+              onChange={(e) => setPayReference(e.target.value)}
+              placeholder="CHQ-001, VIR-002..."
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowPay(null)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit">
+                {t('common.confirm')}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       {/* Cancel Modal */}
-      {showCancel && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('invoices.cancel')}</h2>
-            <p className="text-sm text-slate-500 mb-4">{showCancel.invoiceNumber}</p>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('invoices.cancelReason')}</label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div className="flex gap-2 justify-end pt-4">
-              <button onClick={() => { setShowCancel(null); setCancelReason('') }} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
-                {t('common.cancel')}
-              </button>
-              <button onClick={handleCancel} className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors">
-                {t('common.confirm')}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={!!showCancel}
+        onClose={() => { setShowCancel(null); setCancelReason('') }}
+        size="sm"
+        title={t('invoices.cancel')}
+        description={showCancel?.invoiceNumber}
+      >
+        <Textarea
+          label={t('invoices.cancelReason')}
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          rows={3}
+        />
+        <div className="flex justify-end gap-2 pt-4">
+          <Button variant="outline" onClick={() => { setShowCancel(null); setCancelReason('') }}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" onClick={handleCancel}>
+            {t('common.confirm')}
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* Cancel Confirmation Modal */}
-      {showCancel && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('invoices.cancel')}</h2>
-            <p className="text-sm text-slate-500 mb-4">{showCancel.invoiceNumber}</p>
-            <p className="text-sm text-slate-600 mb-5">{t('invoices.cancelConfirm')}</p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowCancel(null)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
-                {t('common.cancel')}
-              </button>
-              <button onClick={handleCancel} className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 transition-colors">
-                {t('invoices.cancel')}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={!!showCancel}
+        onClose={() => setShowCancel(null)}
+        size="sm"
+        title={t('invoices.cancel')}
+        description={showCancel?.invoiceNumber}
+      >
+        <p className="mb-5 text-sm text-fg-muted">{t('invoices.cancelConfirm')}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowCancel(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="soft" onClick={handleCancel}>
+            {t('invoices.cancel')}
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* Receive Confirmation Modal */}
-      {showReceive && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 border border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">{t('invoices.receive')}</h2>
-            <p className="text-sm text-slate-500 mb-4">{showReceive.invoiceNumber} — {showReceive.fournisseurNom}</p>
-            <p className="text-sm text-slate-600 mb-5">{t('invoices.receiveConfirm')}</p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowReceive(null)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors">
-                {t('common.cancel')}
-              </button>
-              <button onClick={confirmReceive} className="px-4 py-2 text-sm font-medium text-white bg-cyan-600 rounded-md hover:bg-cyan-700 transition-colors">
-                {t('common.confirm')}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={!!showReceive}
+        onClose={() => setShowReceive(null)}
+        size="sm"
+        title={t('invoices.receive')}
+        description={showReceive ? `${showReceive.invoiceNumber} — ${showReceive.fournisseurNom}` : undefined}
+      >
+        <p className="mb-5 text-sm text-fg-muted">{t('invoices.receiveConfirm')}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowReceive(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={confirmReceive}>
+            {t('common.confirm')}
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* Detail Modal */}
-      {detail && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-[680px] max-h-[85vh] overflow-auto border border-slate-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+      <Modal
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        size="2xl"
+        title={detail?.invoiceNumber}
+        description={detail?.fournisseurNom}
+        footer={
+          detail ? (
+            <>
+              {detail.status === 'Received' && (
+                <Button
+                  size="sm"
+                  variant="soft"
+                  icon={<Tags className="h-3.5 w-3.5" />}
+                  onClick={() => { handlePrintLabels(detail.id); setDetail(null) }}
+                >
+                  Imprimer les étiquettes
+                </Button>
+              )}
+              <Button size="sm" variant="soft" icon={<Printer className="h-3.5 w-3.5" />} onClick={() => handlePrintInvoice(detail)}>
+                Imprimer la facture
+              </Button>
+            </>
+          ) : undefined
+        }
+      >
+        {detail && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">{detail.invoiceNumber}</h3>
-                <p className="text-xs text-slate-500">{detail.fournisseurNom}</p>
+                <span className="text-xs text-fg-subtle">{t('invoices.date')}</span>
+                <p className="font-medium text-fg">{formatDate(detail.invoiceDate)}</p>
               </div>
-              <div className="flex items-center gap-2">
-                {detail.status === 'Received' && (
-                  <button onClick={() => { handlePrintLabels(detail.id); setDetail(null) }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-md hover:bg-cyan-100 transition-colors" title="Imprimer les étiquettes">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Imprimer les étiquettes
-                  </button>
-                )}
-                <button onClick={() => handlePrintInvoice(detail)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors" title="Imprimer la facture">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-8 0h8v6H6v-6z" /></svg>
-                  Imprimer la facture
-                </button>
-                <button onClick={() => setDetail(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+              <div>
+                <span className="text-xs text-fg-subtle">{t('invoices.status')}</span>
+                <div className="mt-1">
+                  <StatusBadge domain="invoice" value={detail.status} size="sm" />
+                </div>
+              </div>
+              <div>
+                <span className="text-xs text-fg-subtle">{t('invoices.paymentTerms')}</span>
+                <p className="font-medium text-fg">{t(`invoices.terms.${detail.paymentTerms.toLowerCase()}`)}</p>
               </div>
             </div>
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-slate-500 text-xs">{t('invoices.date')}</span>
-                  <p className="font-medium text-slate-900">{formatDate(detail.invoiceDate)}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-xs">{t('invoices.status')}</span>
-                  <div className="mt-1">{statusBadge(detail.status, t)}</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-xs">{t('invoices.paymentTerms')}</span>
-                  <p className="font-medium text-slate-900">{t(`invoices.terms.${detail.paymentTerms.toLowerCase()}`)}</p>
-                </div>
+            {detail.dueDate && (
+              <div className="text-sm">
+                <span className="text-fg-subtle">{t('invoices.dueDate')}: </span>
+                <span className="font-medium text-fg">{formatDate(detail.dueDate)}</span>
               </div>
-              {detail.dueDate && (
-                <div className="text-sm">
-                  <span className="text-slate-500">{t('invoices.dueDate')}: </span>
-                  <span className="font-medium text-slate-900">{formatDate(detail.dueDate)}</span>
-                </div>
-              )}
-              {detail.reference && (
-                <div className="text-sm">
-                  <span className="text-slate-500">{t('invoices.reference')}: </span>
-                  <span className="font-medium text-slate-900">{detail.reference}</span>
-                </div>
-              )}
-
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase">
-                    <th className="text-left py-2">{t('products.name')}</th>
-                    <th className="text-left py-2">{t('products.color')}</th>
-                    <th className="text-left py-2">{t('products.size')}</th>
-                    <th className="text-right py-2">{t('common.quantity')}</th>
-                    <th className="text-right py-2">{t('invoices.unitCost')}</th>
-                    <th className="text-right py-2">{t('invoices.discount')}</th>
-                    <th className="text-right py-2">{t('invoices.lineTotal')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {detail.items.map((it) => (
-                    <tr key={it.id}>
-                      <td className="py-2">
-                        <p className="font-medium text-slate-900">{it.productName}</p>
-                        {it.variantSku && <p className="text-xs text-slate-400">{it.variantSku}</p>}
-                      </td>
-                      <td className="py-2 text-slate-600">{it.colorName ?? '-'}</td>
-                      <td className="py-2 text-slate-600">{it.sizeValue ?? '-'}</td>
-                      <td className="py-2 text-right">{it.quantity}</td>
-                      <td className="py-2 text-right">{formatCurrency(it.unitCost)}</td>
-                      <td className="py-2 text-right">
-                        {it.discountPercent > 0 ? (
-                          <span className="text-red-600">-{it.discountPercent}%</span>
-                        ) : '-'}
-                      </td>
-                      <td className="py-2 text-right font-medium">{formatCurrency(it.lineTotal)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div className="text-right text-sm space-y-1 border-t border-slate-100 pt-3">
-                <p className="text-slate-500">{t('invoices.subTotal')}: <span className="text-slate-700">{formatCurrency(detail.subTotal)}</span></p>
-                {detail.discountAmount > 0 && (
-                  <p className="text-slate-500">{t('invoices.discount')}: <span className="text-red-600">-{formatCurrency(detail.discountAmount)}</span></p>
-                )}
-                {detail.taxAmount > 0 && (
-                  <p className="text-slate-500">{t('invoices.taxRate')} ({detail.taxRate}%): <span className="text-slate-700">{formatCurrency(detail.taxAmount)}</span></p>
-                )}
-                <p className="font-semibold text-base text-slate-900 border-t border-slate-100 pt-1">{t('invoices.total')}: {formatCurrency(detail.totalAmount)}</p>
-                <p className="text-emerald-600">{t('invoices.paid')}: {formatCurrency(detail.paidAmount)}</p>
-                <p className="font-semibold text-slate-900">{t('invoices.balanceDue')}: {formatCurrency(detail.balanceDue)}</p>
+            )}
+            {detail.reference && (
+              <div className="text-sm">
+                <span className="text-fg-subtle">{t('invoices.reference')}: </span>
+                <span className="font-medium text-fg">{detail.reference}</span>
               </div>
+            )}
 
-              {detail.payments.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-slate-500 mb-2 uppercase">{t('invoices.pay')} ({detail.payments.length})</p>
-                  <div className="space-y-1.5">
-                    {detail.payments.map((p) => (
-                      <div key={p.id} className="flex justify-between items-center text-sm bg-slate-50 rounded px-3 py-2">
-                        <div>
-                          <span className="text-slate-600">{formatDate(p.paymentDate)}</span>
-                          <span className="text-slate-400 mx-2">—</span>
-                          <span className="text-slate-700">{p.paymentMethod}</span>
-                          {p.reference && <span className="text-slate-400 ml-2">({p.reference})</span>}
-                        </div>
-                        <span className="font-medium text-slate-900">{formatCurrency(p.amount)}</span>
+            <DataTable
+              sticky={false}
+              columns={[
+                {
+                  key: 'product',
+                  header: t('products.name'),
+                  render: (it: Invoice['items'][number]) => (
+                    <div>
+                      <p className="font-medium text-fg">{it.productName}</p>
+                      {it.variantSku && <p className="num text-xs text-fg-subtle">{it.variantSku}</p>}
+                    </div>
+                  ),
+                },
+                { key: 'color', header: t('products.color'), render: (it: Invoice['items'][number]) => <span className="text-fg-muted">{it.colorName ?? '-'}</span> },
+                { key: 'size', header: t('products.size'), render: (it: Invoice['items'][number]) => <span className="text-fg-muted">{it.sizeValue ?? '-'}</span> },
+                { key: 'qty', header: t('common.quantity'), numeric: true, render: (it: Invoice['items'][number]) => <span className="text-fg-muted">{it.quantity}</span> },
+                { key: 'unitCost', header: t('invoices.unitCost'), numeric: true, render: (it: Invoice['items'][number]) => <span className="text-fg-muted">{formatCurrency(it.unitCost)}</span> },
+                {
+                  key: 'discount',
+                  header: t('invoices.discount'),
+                  numeric: true,
+                  render: (it: Invoice['items'][number]) => it.discountPercent > 0 ? <span className="text-[var(--negative)]">-{it.discountPercent}%</span> : <span className="text-fg-subtle">-</span>,
+                },
+                { key: 'lineTotal', header: t('invoices.lineTotal'), numeric: true, render: (it: Invoice['items'][number]) => <span className="font-medium text-fg">{formatCurrency(it.lineTotal)}</span> },
+              ]}
+              data={detail.items}
+              keyField={(it) => it.id}
+            />
+
+            <div className="space-y-1 border-t border-border pt-3 text-right text-sm">
+              <p className="text-fg-subtle">{t('invoices.subTotal')}: <span className="num text-fg-muted">{formatCurrency(detail.subTotal)}</span></p>
+              {detail.discountAmount > 0 && (
+                <p className="text-fg-subtle">{t('invoices.discount')}: <span className="num text-[var(--negative)]">-{formatCurrency(detail.discountAmount)}</span></p>
+              )}
+              {detail.taxAmount > 0 && (
+                <p className="text-fg-subtle">{t('invoices.taxRate')} ({detail.taxRate}%): <span className="num text-fg-muted">{formatCurrency(detail.taxAmount)}</span></p>
+              )}
+              <p className="border-t border-border pt-1 text-base font-semibold text-fg">{t('invoices.total')}: <span className="num">{formatCurrency(detail.totalAmount)}</span></p>
+              <p className="text-[var(--positive)]">{t('invoices.paid')}: <span className="num">{formatCurrency(detail.paidAmount)}</span></p>
+              <p className="font-semibold text-fg">{t('invoices.balanceDue')}: <span className="num">{formatCurrency(detail.balanceDue)}</span></p>
+            </div>
+
+            {detail.payments.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase text-fg-subtle">{t('invoices.pay')} (<span className="num">{detail.payments.length}</span>)</p>
+                <div className="space-y-1.5">
+                  {detail.payments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between rounded-inset bg-sunken px-3 py-2 text-sm">
+                      <div>
+                        <span className="text-fg-muted">{formatDate(p.paymentDate)}</span>
+                        <span className="mx-2 text-fg-subtle">—</span>
+                        <span className="text-fg">{p.paymentMethod}</span>
+                        {p.reference && <span className="ml-2 text-fg-subtle">({p.reference})</span>}
                       </div>
-                    ))}
-                  </div>
+                      <span className="num font-medium text-fg">{formatCurrency(p.amount)}</span>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {detail.notes && (
-                <div className="bg-slate-50 rounded-md p-3">
-                  <p className="text-xs font-medium text-slate-500 mb-1">{t('invoices.notes')}</p>
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{detail.notes}</p>
-                </div>
-              )}
-            </div>
+            {detail.notes && (
+              <div className="rounded-card bg-sunken p-3">
+                <p className="mb-1 text-xs font-medium text-fg-subtle">{t('invoices.notes')}</p>
+                <p className="whitespace-pre-wrap text-sm text-fg">{detail.notes}</p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </Modal>
+    </Page>
   )
 }

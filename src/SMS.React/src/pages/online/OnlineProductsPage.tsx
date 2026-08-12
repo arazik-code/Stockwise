@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import Header from '../../components/layout/Header'
+import {
+  AlertTriangle, Award, ImageOff, Info, Package, PackageX, Plus, RefreshCw,
+  Search, Trash2, TrendingUp, X,
+} from 'lucide-react'
 import ProductForm from '../../components/products/ProductForm'
 import { showToast } from '../../components/shared/Toast'
 import { shopifyApi, type ShopifyProductMapping } from '../../api/shopify'
@@ -7,6 +10,11 @@ import { productsApi, type OnlineProductStats } from '../../api/products'
 import { categoriesApi, type Category } from '../../api/categories'
 import type { Product, CreateProductRequest } from '../../types/product'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import {
+  Badge, Button, Card, Checkbox, DataTable, EmptyState, IconButton, Input,
+  Modal, Page, Pagination, ProgressBar, Select, SkeletonTable,
+  StatCard, StatusBadge, Tabs, Toolbar, type Column,
+} from '../../components/ui'
 
 type MainTab = 'catalog' | 'mapping'
 type SortKey = 'revenue' | 'units' | 'stock' | 'name'
@@ -19,35 +27,29 @@ function totalStock(p: Product): number {
   return p.variants.reduce((sum, v) => sum + v.stockQuantity, 0)
 }
 
+const placeholderIcon = <ImageOff className="h-6 w-6 text-fg-subtle" aria-hidden="true" />
+
 export default function OnlineProductsPage() {
   const [tab, setTab] = useState<MainTab>('catalog')
 
   return (
-    <div className="flex flex-col flex-1">
-      <Header title="Produits en ligne" />
-      <div className="px-6 pt-5">
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-          <button
-            onClick={() => setTab('catalog')}
-            className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              tab === 'catalog' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Catalogue &amp; Analytique
-          </button>
-          <button
-            onClick={() => setTab('mapping')}
-            className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              tab === 'mapping' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Association manuelle Shopify
-          </button>
-        </div>
+    <Page section="onlineProducts" title="Produits en ligne">
+      <div className="mb-5">
+        <Tabs<MainTab>
+          variant="segmented"
+          size="sm"
+          layoutGroupId="online-products-main"
+          value={tab}
+          onChange={setTab}
+          items={[
+            { value: 'catalog', label: 'Catalogue & Analytique' },
+            { value: 'mapping', label: 'Association manuelle Shopify' },
+          ]}
+        />
       </div>
 
       {tab === 'catalog' ? <CatalogAnalyticsView /> : <ManualMappingView />}
-    </div>
+    </Page>
   )
 }
 
@@ -151,59 +153,112 @@ function CatalogAnalyticsView() {
   }, [])
 
   return (
-    <div className="flex-1 flex flex-col">
-      {/* Hero / KPI band — visually distinct from the local store's plain white grid */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 px-6 py-6 mt-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiTile label="Chiffre d'affaires en ligne" value={formatCurrency(kpis.totalRevenue)} accent="emerald" />
-          <KpiTile label="Unités vendues en ligne" value={String(kpis.totalUnits)} accent="cyan" />
-          <KpiTile label="Meilleure catégorie" value={kpis.topCategory ? kpis.topCategory[0] : '—'} sub={kpis.topCategory ? formatCurrency(kpis.topCategory[1]) : undefined} accent="violet" />
-          <KpiTile label="Jamais vendus en ligne" value={String(kpis.neverSold)} accent="amber" />
-        </div>
+    <div className="space-y-5">
+      {/* KPI band — section hue + glass already make this read as "online", no
+          bespoke gradient chrome needed. */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard
+          label="Chiffre d'affaires en ligne"
+          value={formatCurrency(kpis.totalRevenue)}
+          icon={TrendingUp}
+          tone="positive"
+          loading={loading}
+        />
+        <StatCard
+          label="Unités vendues en ligne"
+          value={kpis.totalUnits.toLocaleString('fr-FR')}
+          icon={Package}
+          tone="info"
+          loading={loading}
+        />
+        <StatCard
+          label="Meilleure catégorie"
+          value={kpis.topCategory ? kpis.topCategory[0] : '—'}
+          sub={kpis.topCategory ? formatCurrency(kpis.topCategory[1]) : undefined}
+          icon={Award}
+          tone="special"
+          loading={loading}
+        />
+        <StatCard
+          label="Jamais vendus en ligne"
+          value={kpis.neverSold.toLocaleString('fr-FR')}
+          icon={PackageX}
+          tone="caution"
+          loading={loading}
+        />
       </div>
 
-      <div className="p-6 flex-1 space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="text"
-            placeholder="Rechercher un produit..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 min-w-[220px] max-w-md px-3.5 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="all">Toutes catégories</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="revenue">Trier: Revenu en ligne</option>
-            <option value="units">Trier: Unités vendues</option>
-            <option value="stock">Trier: Stock disponible</option>
-            <option value="name">Trier: Nom</option>
-          </select>
-          <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer select-none">
-            <input type="checkbox" checked={soldOnlineOnly} onChange={(e) => setSoldOnlineOnly(e.target.checked)} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-            Vendus en ligne uniquement
-          </label>
-          <span className="text-xs text-slate-400 ml-auto">{filtered.length} produit(s)</span>
-        </div>
+      <Toolbar>
+        <Input
+          type="text"
+          placeholder="Rechercher un produit..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          leading={<Search />}
+          size="sm"
+          wrapperClassName="min-w-[220px] max-w-md flex-1"
+          trailing={
+            search ? (
+              <button
+                onClick={() => setSearch('')}
+                aria-label="Effacer"
+                className="pointer-events-auto text-fg-subtle transition-colors hover:text-fg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : undefined
+          }
+        />
+        <Select
+          size="sm"
+          wrapperClassName="w-full sm:w-52"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+        >
+          <option value="all">Toutes catégories</option>
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </Select>
+        <Select
+          size="sm"
+          wrapperClassName="w-full sm:w-56"
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as SortKey)}
+        >
+          <option value="revenue">Trier: Revenu en ligne</option>
+          <option value="units">Trier: Unités vendues</option>
+          <option value="stock">Trier: Stock disponible</option>
+          <option value="name">Trier: Nom</option>
+        </Select>
+        <Checkbox
+          checked={soldOnlineOnly}
+          onChange={(e) => setSoldOnlineOnly(e.target.checked)}
+          label="Vendus en ligne uniquement"
+        />
+        {!loading && (
+          <Badge tone="neutral" size="sm" className="ml-auto">
+            <span className="num">{filtered.length.toLocaleString('fr-FR')}</span>
+            &nbsp;produit(s)
+          </Badge>
+        )}
+      </Toolbar>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-slate-400 bg-white border border-slate-200 rounded-lg">Aucun produit</div>
-        ) : (
-          <>
+      {loading ? (
+        <SkeletonTable rows={10} cols={6} />
+      ) : filtered.length === 0 ? (
+        <div className="surface-glass">
+          <EmptyState
+            icon={Package}
+            variant={(search || categoryFilter !== 'all' || soldOnlineOnly) ? 'search' : 'default'}
+            title={(search || categoryFilter !== 'all' || soldOnlineOnly) ? 'Aucun produit trouvé' : 'Aucun produit'}
+            description={
+              (search || categoryFilter !== 'all' || soldOnlineOnly)
+                ? 'Essayez un autre nom, marque ou catégorie.'
+                : 'Les produits apparaîtront ici une fois ajoutés au catalogue.'
+            }
+          />
+        </div>
+      ) : (
+        <>
           <div className="space-y-2">
             {paged.map((p, idx) => {
               const rank = (currentPage - 1) * CATALOG_PAGE_SIZE + idx
@@ -212,76 +267,80 @@ function CatalogAnalyticsView() {
               const revenuePct = s ? Math.round((s.revenue / maxRevenue) * 100) : 0
 
               return (
-                <div
+                <Card
                   key={p.id}
+                  interactive
+                  padded={false}
                   onClick={() => setEditingProduct(p)}
-                  className="group bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-sm transition-all"
+                  className="group flex items-center gap-4 p-3"
                 >
                   <div className="relative flex-shrink-0">
-                    <div className="w-16 h-16 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center">
+                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-card border border-border bg-sunken">
                       {p.imageUrl ? (
-                        <img src={p.imageUrl} alt={p.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                      ) : (
-                        <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      )}
+                        <img src={p.imageUrl} alt={p.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                      ) : placeholderIcon}
                     </div>
                     {rank < 3 && s && (
-                      <span className={`absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white ${
-                        rank === 0 ? 'bg-amber-500' : rank === 1 ? 'bg-slate-400' : 'bg-orange-700'
-                      }`}>
+                      <Badge
+                        tone={rank === 0 ? 'caution' : rank === 1 ? 'neutral' : 'special'}
+                        size="xs"
+                        className="absolute -left-1.5 -top-1.5 h-5 w-5 justify-center rounded-chip p-0 shadow-e1"
+                      >
                         {rank + 1}
-                      </span>
+                      </Badge>
                     )}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{p.name}</p>
-                      {p.shopifyProductId && (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">Shopify</span>
-                      )}
+                      <p className="truncate text-sm font-semibold text-fg">{p.name}</p>
+                      {p.shopifyProductId && <Badge tone="special" size="xs">Shopify</Badge>}
                     </div>
-                    <p className="text-xs text-slate-400">{p.categoryName} {p.brand ? `· ${p.brand}` : ''}</p>
-                    <div className="mt-1.5 h-1.5 w-full max-w-xs bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full" style={{ width: `${revenuePct}%` }} />
-                    </div>
+                    <p className="text-xs text-fg-subtle">{p.categoryName} {p.brand ? `· ${p.brand}` : ''}</p>
+                    <ProgressBar value={revenuePct} tone="positive" size="sm" className="mt-1.5 max-w-xs" />
                   </div>
 
-                  <div className="flex items-center gap-6 flex-shrink-0 text-right">
+                  <div className="flex flex-shrink-0 items-center gap-6 text-right">
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Revenu en ligne</p>
-                      <p className="text-sm font-semibold text-slate-900">{s ? formatCurrency(s.revenue) : '—'}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Revenu en ligne</p>
+                      <p className="num text-sm font-semibold text-fg">{s ? formatCurrency(s.revenue) : '—'}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Unités</p>
-                      <p className="text-sm font-medium text-slate-700">{s?.unitsSold ?? 0}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Unités</p>
+                      <p className="num text-sm font-medium text-fg-muted">{s?.unitsSold ?? 0}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Stock</p>
-                      <p className={`text-sm font-medium ${stock <= 0 ? 'text-red-600' : stock <= 10 ? 'text-amber-600' : 'text-slate-700'}`}>{stock}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Stock</p>
+                      {/* Predicate unchanged from the old inline text-colour logic: <=0 out, <=10 low. */}
+                      <StatusBadge
+                        domain="stockLevel"
+                        value={stock <= 0 ? 'out' : stock <= 10 ? 'low' : 'ok'}
+                        size="xs"
+                        showIcon={false}
+                        animate={false}
+                      />
                     </div>
                     <div className="hidden lg:block">
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Dernière commande</p>
-                      <p className="text-sm text-slate-500">{s?.lastOrderAt ? formatDateTime(s.lastOrderAt) : '—'}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Dernière commande</p>
+                      <p className="text-sm text-fg-subtle">{s?.lastOrderAt ? formatDateTime(s.lastOrderAt) : '—'}</p>
                     </div>
                   </div>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {pageCount > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Précédent</button>
-              <span className="text-sm text-slate-500 px-2">Page {currentPage} / {pageCount}</span>
-              <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={currentPage === pageCount} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Suivant</button>
-            </div>
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              total={filtered.length}
+              pageSize={CATALOG_PAGE_SIZE}
+              onChange={setPage}
+            />
           )}
-          </>
-        )}
-      </div>
+        </>
+      )}
 
       {editingProduct && (
         <ProductForm
@@ -291,23 +350,6 @@ function CatalogAnalyticsView() {
           onProductUpdated={() => refreshProduct(editingProduct.id)}
         />
       )}
-    </div>
-  )
-}
-
-function KpiTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: 'emerald' | 'cyan' | 'violet' | 'amber' }) {
-  const ring = {
-    emerald: 'from-emerald-400/20 to-emerald-400/0 ring-emerald-400/30',
-    cyan: 'from-cyan-400/20 to-cyan-400/0 ring-cyan-400/30',
-    violet: 'from-violet-400/20 to-violet-400/0 ring-violet-400/30',
-    amber: 'from-amber-400/20 to-amber-400/0 ring-amber-400/30',
-  }[accent]
-
-  return (
-    <div className={`rounded-xl p-4 bg-gradient-to-br ${ring} ring-1 backdrop-blur-sm`}>
-      <p className="text-[11px] font-medium text-slate-300 uppercase tracking-wide">{label}</p>
-      <p className="text-xl font-bold text-white mt-1 truncate">{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }
@@ -425,195 +467,249 @@ function ManualMappingView() {
   const currentPage = Math.min(page, pageCount)
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
+  const columns: Column<ShopifyProductMapping>[] = [
+    {
+      key: 'title',
+      header: 'Produit Shopify',
+      render: (m) => <span className="font-medium text-fg">{m.title}</span>,
+    },
+    {
+      key: 'sku',
+      header: 'SKU',
+      width: '8rem',
+      render: (m) => <span className="num text-fg-muted">{m.sku || '—'}</span>,
+    },
+    {
+      key: 'price',
+      header: 'Prix Shopify',
+      numeric: true,
+      width: '9rem',
+      render: (m) => (
+        <span className="inline-flex items-center justify-end gap-1.5">
+          <span className="num text-fg">{formatCurrency(m.price)}</span>
+          {m.priceMismatch && (
+            <span title="Différent du prix local">
+              <AlertTriangle className="h-3.5 w-3.5 text-[var(--caution)]" />
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'local',
+      header: 'Produit local',
+      width: '16rem',
+      render: (m) => (
+        <Select size="sm" value={m.localProductId ?? ''} onChange={(e) => handleLink(m, e.target.value)}>
+          <option value="">— Non associé —</option>
+          {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </Select>
+      ),
+    },
+    {
+      key: 'synced',
+      header: 'Synchronisé',
+      width: '10rem',
+      render: (m) => <span className="text-fg-subtle">{formatDateTime(m.syncedAt)}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'Action',
+      align: 'center',
+      width: '6rem',
+      render: (m) => (
+        <div className="flex justify-center">
+          <IconButton
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+            label="Supprimer"
+            size="xs"
+            variant="danger-ghost"
+            onClick={() => handleDelete(m)}
+          />
+        </div>
+      ),
+    },
+  ]
+
   return (
-    <div className="p-6 flex-1 space-y-4">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
-        Le catalogue complet (images, couleurs, tailles, stock) est géré depuis l'onglet <span className="font-medium">Catalogue &amp; Analytique</span> ci-dessus.
-        Cette table sert uniquement à l'association manuelle fine par référence Shopify brute.
+    <div className="space-y-4">
+      <div
+        role="status"
+        data-tone="info"
+        className="flex items-start gap-3 rounded-card border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] px-4 py-3 text-sm text-[var(--tone-ink)]"
+      >
+        <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <p>
+          Le catalogue complet (images, couleurs, tailles, stock) est géré depuis l'onglet{' '}
+          <span className="font-medium">Catalogue &amp; Analytique</span> ci-dessus.
+          Cette table sert uniquement à l'association manuelle fine par référence Shopify brute.
+        </p>
       </div>
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <p className="text-sm text-slate-500">{mappings.length} produit(s) Shopify référencé(s)</p>
+          <p className="text-sm text-fg-subtle">
+            <span className="num">{mappings.length}</span> produit(s) Shopify référencé(s)
+          </p>
           {unlinkedCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-              {unlinkedCount} non associé(s)
-            </span>
+            <Badge tone="caution" size="sm">
+              <span className="num">{unlinkedCount}</span>&nbsp;non associé(s)
+            </Badge>
           )}
         </div>
         <div className="flex gap-2">
-          <button
+          <Button
+            size="sm"
+            variant="soft"
             onClick={handleImport}
             disabled={importing}
-            className="px-3.5 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 disabled:opacity-50"
+            loading={importing}
+            icon={<RefreshCw className="h-3.5 w-3.5" />}
           >
-            {importing ? 'Import en cours…' : '↻ Importer depuis Shopify'}
-          </button>
-          <button
+            {importing ? 'Import en cours…' : 'Importer depuis Shopify'}
+          </Button>
+          <Button
+            size="sm"
             onClick={() => setShowAdd(true)}
-            className="px-3.5 py-2 text-sm font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+            icon={<Plus className="h-4 w-4" />}
           >
-            + Associer un produit Shopify
-          </button>
+            Associer un produit Shopify
+          </Button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <input
+      <Toolbar>
+        <Input
           type="text"
           placeholder="Rechercher par titre ou SKU..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[240px] max-w-md px-3.5 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          leading={<Search />}
+          size="sm"
+          wrapperClassName="min-w-[240px] max-w-md flex-1"
         />
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-          {([
-            { key: 'all', label: 'Tous' },
-            { key: 'linked', label: 'Associés' },
-            { key: 'unlinked', label: 'Non associés' },
-          ] as { key: LinkFilter; label: string }[]).map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setLinkFilter(f.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                linkFilter === f.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <span className="text-xs text-slate-400 ml-auto">{filtered.length} résultat(s)</span>
-      </div>
+        <Tabs<LinkFilter>
+          variant="segmented"
+          size="sm"
+          layoutGroupId="online-products-mapping-filter"
+          value={linkFilter}
+          onChange={setLinkFilter}
+          items={[
+            { value: 'all', label: 'Tous' },
+            { value: 'linked', label: 'Associés' },
+            { value: 'unlinked', label: 'Non associés' },
+          ]}
+        />
+        <Badge tone="neutral" size="sm" className="ml-auto">
+          <span className="num">{filtered.length.toLocaleString('fr-FR')}</span>
+          &nbsp;résultat(s)
+        </Badge>
+      </Toolbar>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-        </div>
+        <SkeletonTable rows={8} cols={6} />
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-slate-200 rounded-lg">
-          <p className="text-sm text-slate-500 mb-1">
-            {mappings.length === 0 ? 'Aucun produit Shopify associé pour le moment.' : 'Aucun résultat pour ces filtres.'}
-          </p>
+        <div className="surface-glass">
+          <EmptyState
+            icon={Package}
+            variant={search || linkFilter !== 'all' ? 'search' : 'default'}
+            title={mappings.length === 0 ? 'Aucun produit Shopify associé' : 'Aucun résultat pour ces filtres'}
+            description={
+              mappings.length === 0
+                ? "Importez votre catalogue Shopify ou créez une association manuelle."
+                : 'Essayez un autre titre, SKU ou filtre.'
+            }
+          />
         </div>
       ) : (
         <>
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Produit Shopify</th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">SKU</th>
-                <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Prix Shopify</th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Produit local</th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Synchronisé</th>
-                <th className="text-center px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {paged.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 text-sm font-medium text-slate-900">{m.title}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600 font-mono">{m.sku || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-right text-slate-900">
-                    {formatCurrency(m.price)}
-                    {m.priceMismatch && <span className="ml-1.5 text-[10px] text-amber-600" title="Différent du prix local">⚠</span>}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <select
-                      value={m.localProductId ?? ''}
-                      onChange={(e) => handleLink(m, e.target.value)}
-                      className="text-sm border border-slate-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="">— Non associé —</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-500">{formatDateTime(m.syncedAt)}</td>
-                  <td className="px-4 py-3 text-sm text-center">
-                    <button onClick={() => handleDelete(m)} className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50">
-                      Supprimer
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {pageCount > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Précédent</button>
-            <span className="text-sm text-slate-500 px-2">Page {currentPage} / {pageCount}</span>
-            <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={currentPage === pageCount} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Suivant</button>
-          </div>
-        )}
+          <DataTable<ShopifyProductMapping>
+            columns={columns}
+            data={paged}
+            keyField={(m) => m.id}
+          />
+          {pageCount > 1 && (
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              total={filtered.length}
+              pageSize={PAGE_SIZE}
+              onChange={setPage}
+            />
+          )}
         </>
       )}
 
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-[480px] border border-slate-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-base font-semibold text-slate-900">Associer un produit Shopify</h3>
-              <button onClick={() => { setShowAdd(false); resetForm() }} className="text-slate-400 hover:text-slate-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="p-6 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">ID produit Shopify</label>
-                  <input type="number" value={form.shopifyProductId} onChange={(e) => setForm({ ...form, shopifyProductId: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">ID variante Shopify</label>
-                  <input type="number" value={form.shopifyVariantId} onChange={(e) => setForm({ ...form, shopifyVariantId: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Titre</label>
-                <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">SKU</label>
-                  <input type="text" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Prix Shopify</label>
-                  <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Produit local (optionnel)</label>
-                <select value={form.localProductId} onChange={(e) => setForm({ ...form, localProductId: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                  <option value="">— Non associé —</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-              <button onClick={() => { setShowAdd(false); resetForm() }} className="px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-md">
-                Annuler
-              </button>
-              <button onClick={handleAdd} disabled={saving} className="px-3.5 py-2 text-sm font-medium bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50">
-                {saving ? 'Création…' : 'Créer l\'association'}
-              </button>
-            </div>
+      {/* closeOnEsc stays false: this page binds no Escape handler of its own,
+          and this modal has no in-flight state that a stray Escape could corrupt. */}
+      <Modal
+        open={showAdd}
+        onClose={() => { setShowAdd(false); resetForm() }}
+        size="md"
+        title="Associer un produit Shopify"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => { setShowAdd(false); resetForm() }}>
+              Annuler
+            </Button>
+            <Button size="sm" onClick={handleAdd} disabled={saving} loading={saving}>
+              {saving ? 'Création…' : "Créer l'association"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="ID produit Shopify"
+              type="number"
+              size="sm"
+              value={form.shopifyProductId}
+              onChange={(e) => setForm({ ...form, shopifyProductId: e.target.value })}
+            />
+            <Input
+              label="ID variante Shopify"
+              type="number"
+              size="sm"
+              value={form.shopifyVariantId}
+              onChange={(e) => setForm({ ...form, shopifyVariantId: e.target.value })}
+            />
           </div>
+          <Input
+            label="Titre"
+            type="text"
+            size="sm"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="SKU"
+              type="text"
+              size="sm"
+              value={form.sku}
+              onChange={(e) => setForm({ ...form, sku: e.target.value })}
+            />
+            <Input
+              label="Prix Shopify"
+              type="number"
+              step="0.01"
+              size="sm"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
+            />
+          </div>
+          <Select
+            label="Produit local (optionnel)"
+            size="sm"
+            value={form.localProductId}
+            onChange={(e) => setForm({ ...form, localProductId: e.target.value })}
+          >
+            <option value="">— Non associé —</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }
