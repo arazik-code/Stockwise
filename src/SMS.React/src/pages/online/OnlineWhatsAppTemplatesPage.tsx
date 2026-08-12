@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import Header from '../../components/layout/Header'
+import { Plus, Star, Trash2 } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import { whatsappTemplatesApi, type WhatsAppTemplate } from '../../api/whatsappTemplates'
 import { renderWhatsAppTemplate } from '../../utils/whatsapp'
+import {
+  Button, EmptyState, Input, Page, Skeleton, Textarea, cn,
+} from '../../components/ui'
 
 const PLACEHOLDERS: { token: string; label: string }[] = [
   { token: '{clientName}', label: 'Nom du client' },
@@ -129,43 +132,41 @@ export default function OnlineWhatsAppTemplatesPage() {
   const preview = body ? renderWhatsAppTemplate(body, PREVIEW_ORDER) : ''
 
   return (
-    <div className="flex flex-col flex-1">
-      <Header
-        title="Modèles WhatsApp"
-        actions={
-          <button
-            onClick={openNew}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Nouveau modèle
-          </button>
-        }
-      />
-
-      <div className="flex-1 overflow-hidden flex">
+    <Page
+      section="onlineWhatsApp"
+      title="Modèles WhatsApp"
+      bare
+      fill
+      actions={
+        <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={openNew}>
+          Nouveau modèle
+        </Button>
+      }
+    >
+      <div className="flex min-h-0 flex-1">
         {/* Template list */}
-        <div className="w-64 border-r border-slate-200 overflow-y-auto bg-white">
+        <div className="w-64 shrink-0 overflow-y-auto border-r border-border bg-surface">
           {loading ? (
-            <div className="p-4 text-center text-sm text-slate-400">Chargement...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 4 }, (_, i) => <Skeleton key={i} variant="text" />)}
+            </div>
           ) : templates.length === 0 ? (
-            <div className="p-4 text-center text-sm text-slate-400">Aucun modèle</div>
+            <div className="p-4 text-center text-sm text-fg-subtle">Aucun modèle</div>
           ) : (
             templates.map((t) => (
               <button
                 key={t.id}
                 onClick={() => openTemplate(t)}
-                className={`w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors ${
-                  selected?.id === t.id && !isNew ? 'bg-emerald-50 border-l-2 border-l-emerald-500' : ''
-                }`}
+                className={cn(
+                  'w-full border-b border-border px-4 py-3 text-left transition-colors hover:bg-surface-2',
+                  selected?.id === t.id && !isNew && 'bg-[var(--accent-soft)] shadow-[inset_2px_0_0_var(--accent)]'
+                )}
               >
-                <p className="text-sm font-medium text-slate-900 truncate flex items-center gap-1">
-                  {t.isDefault && <span className="text-amber-500">★</span>}
+                <p className="flex items-center gap-1 truncate text-sm font-medium text-fg">
+                  {t.isDefault && <Star className="h-3 w-3 fill-[var(--caution)] text-[var(--caution)]" />}
                   {t.name}
                 </p>
-                <p className="text-xs text-slate-400 truncate mt-0.5">{t.body.replace(/\n/g, ' ')}</p>
+                <p className="mt-0.5 truncate text-xs text-fg-subtle">{t.body.replace(/\n/g, ' ')}</p>
               </button>
             ))
           )}
@@ -174,40 +175,28 @@ export default function OnlineWhatsAppTemplatesPage() {
         {/* Editor */}
         <div className="flex-1 overflow-y-auto p-6">
           {!selected && !isNew ? (
-            <div className="text-center py-16 text-slate-400 text-sm">
-              Sélectionnez un modèle ou créez-en un nouveau.
-            </div>
+            <EmptyState title="Aucun modèle sélectionné" description="Sélectionnez un modèle ou créez-en un nouveau." compact />
           ) : (
             <div className="max-w-2xl space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Nom du modèle</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex : Confirmation express"
-                  className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400"
-                />
-              </div>
+              <Input label="Nom du modèle" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Confirmation express" />
+
+              <Textarea
+                label="Message"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={10}
+                className="font-mono"
+              />
 
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Message</label>
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={10}
-                  className="w-full px-3 py-2 text-sm font-mono border-2 border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400 resize-none"
-                />
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-slate-500 mb-1.5">Insérer une variable</p>
+                <p className="mb-1.5 text-xs font-medium text-fg-subtle">Insérer une variable</p>
                 <div className="flex flex-wrap gap-1.5">
                   {PLACEHOLDERS.map((p) => (
                     <button
                       key={p.token}
                       onClick={() => insertPlaceholder(p.token)}
                       title={p.label}
-                      className="px-2 py-1 text-xs font-mono bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors"
+                      className="rounded-inset bg-sunken px-2 py-1 font-mono text-xs text-fg-muted transition-colors hover:bg-surface-3"
                     >
                       {p.token}
                     </button>
@@ -216,37 +205,30 @@ export default function OnlineWhatsAppTemplatesPage() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                >
-                  {saving ? '...' : isNew ? 'Créer le modèle' : 'Enregistrer'}
-                </button>
+                <Button onClick={handleSave} loading={saving}>
+                  {isNew ? 'Créer le modèle' : 'Enregistrer'}
+                </Button>
                 {!isNew && selected && (
                   <>
                     {!selected.isDefault && (
-                      <button
-                        onClick={handleSetDefault}
-                        className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-                      >
+                      <Button variant="outline" onClick={handleSetDefault}>
                         Définir par défaut
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      onClick={handleDelete}
-                      className="px-4 py-2 text-sm font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                    >
+                    <Button variant="danger-ghost" icon={<Trash2 className="h-4 w-4" />} onClick={handleDelete}>
                       Supprimer
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
 
               {body && (
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  <p className="text-xs font-medium text-slate-500 mb-2">Aperçu (avec des données d'exemple)</p>
-                  <div className="bg-[#e7ffdb] rounded-xl rounded-tl-none p-3 text-sm text-slate-800 whitespace-pre-wrap font-sans max-w-sm shadow-sm">
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="mb-2 text-xs font-medium text-fg-subtle">Aperçu (avec des données d'exemple)</p>
+                  {/* WhatsApp's own message-bubble green - a brand recreation,
+                      not a design-system colour, so it stays a literal value
+                      like the print-preview islands elsewhere in the app. */}
+                  <div className="max-w-sm whitespace-pre-wrap rounded-xl rounded-tl-none bg-[#e7ffdb] p-3 font-sans text-sm text-slate-800 shadow-sm">
                     {preview}
                   </div>
                 </div>
@@ -255,6 +237,6 @@ export default function OnlineWhatsAppTemplatesPage() {
           )}
         </div>
       </div>
-    </div>
+    </Page>
   )
 }

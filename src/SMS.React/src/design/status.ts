@@ -41,8 +41,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle, Ban, CheckCircle2, Clock, CreditCard, Hourglass, Package,
-  PackageCheck, PackageX, PauseCircle, PiggyBank, RefreshCw, RotateCcw, Send,
-  ShieldCheck, ShoppingBag, Sparkles, Truck, Undo2, UserPlus, Wallet, XCircle,
+  PackageCheck, PackageX, PauseCircle, PhoneOff, PiggyBank, RefreshCw,
+  RotateCcw, Send, ShieldCheck, ShoppingBag, Sparkles, Truck, Undo2, UserPlus,
+  Wallet, XCircle,
 } from 'lucide-react'
 
 export type Tone =
@@ -219,6 +220,18 @@ const payment: Domain = {
   Unpaid: { tone: 'muted',    label: 'Non payé', icon: Clock,       rank: 0 },
 }
 
+/** Outcome of a single order-confirmation call attempt. Not a lifecycle - no ranks. */
+const confirmationOutcome: Domain = {
+  Confirmed:     { tone: 'positive', label: 'Confirmée',            icon: CheckCircle2 },
+  NoAnswer:      { tone: 'caution',  label: 'Pas de réponse',       icon: Clock },
+  Busy:          { tone: 'caution',  label: 'Occupé',               icon: PhoneOff },
+  Refused:       { tone: 'negative', label: 'Refusée',              icon: XCircle },
+  WrongNumber:   { tone: 'muted',    label: 'Mauvais numéro',       icon: AlertTriangle },
+  Postponed:     { tone: 'progress', label: 'Reporté',              icon: Clock },
+  Duplicate:     { tone: 'muted',    label: 'Doublon',              icon: AlertTriangle },
+  AskedToChange: { tone: 'special',  label: 'Modification demandée', icon: RefreshCw },
+}
+
 export const STATUS = {
   invoice,
   onlineOrder,
@@ -236,6 +249,7 @@ export const STATUS = {
   syncPhase,
   channel,
   payment,
+  confirmationOutcome,
 } as const
 
 export type StatusDomain = keyof typeof STATUS

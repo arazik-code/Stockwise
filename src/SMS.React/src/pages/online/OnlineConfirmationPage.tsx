@@ -1,21 +1,26 @@
 import { useState, useEffect, useCallback } from 'react'
-import Header from '../../components/layout/Header'
+import { AlertTriangle, CheckCircle2, MapPin, Phone } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import { confirmationApi, type ConfirmationQueueItem, type ConfirmationOutcome, type ConfirmationStats } from '../../api/confirmation'
 import { onlineApi } from '../../api/online'
 import { openWhatsApp, buildOrderConfirmationMessage, hasWhatsApp } from '../../utils/whatsapp'
 import { formatCurrency } from '../../utils/format'
+import {
+  Button, Card, EmptyState, KeyHint, Page, Skeleton, SkeletonStats,
+  StatCard, Textarea,
+} from '../../components/ui'
+import { STATUS } from '../../design/status'
 import type { OnlineOrder } from '../../types/onlineOrder'
 
-const OUTCOME_BUTTONS: { outcome: ConfirmationOutcome; label: string; shortcut: string; className: string }[] = [
-  { outcome: 'Confirmed', label: 'Confirmee', shortcut: '1', className: 'bg-emerald-600 hover:bg-emerald-700 text-white' },
-  { outcome: 'NoAnswer', label: 'Pas de reponse', shortcut: '2', className: 'bg-amber-100 hover:bg-amber-200 text-amber-800' },
-  { outcome: 'Busy', label: 'Occupe', shortcut: '3', className: 'bg-amber-100 hover:bg-amber-200 text-amber-800' },
-  { outcome: 'Refused', label: 'Refusee', shortcut: '4', className: 'bg-red-600 hover:bg-red-700 text-white' },
-  { outcome: 'WrongNumber', label: 'Mauvais numero', shortcut: '5', className: 'bg-slate-200 hover:bg-slate-300 text-slate-700' },
-  { outcome: 'Postponed', label: 'Reporte', shortcut: '6', className: 'bg-sky-100 hover:bg-sky-200 text-sky-800' },
-  { outcome: 'Duplicate', label: 'Doublon', shortcut: '7', className: 'bg-slate-200 hover:bg-slate-300 text-slate-700' },
-  { outcome: 'AskedToChange', label: 'Modification demandee', shortcut: '8', className: 'bg-violet-100 hover:bg-violet-200 text-violet-800' },
+const OUTCOME_BUTTONS: { outcome: ConfirmationOutcome; shortcut: string }[] = [
+  { outcome: 'Confirmed', shortcut: '1' },
+  { outcome: 'NoAnswer', shortcut: '2' },
+  { outcome: 'Busy', shortcut: '3' },
+  { outcome: 'Refused', shortcut: '4' },
+  { outcome: 'WrongNumber', shortcut: '5' },
+  { outcome: 'Postponed', shortcut: '6' },
+  { outcome: 'Duplicate', shortcut: '7' },
+  { outcome: 'AskedToChange', shortcut: '8' },
 ]
 
 export default function OnlineConfirmationPage() {
@@ -90,130 +95,154 @@ export default function OnlineConfirmationPage() {
   }
 
   return (
-    <div className="flex flex-col flex-1">
-      <Header title="File de confirmation" />
+    <Page section="onlineConfirm" title="File de confirmation">
+      <div className="space-y-6">
+        {loading && !stats ? (
+          <SkeletonStats count={4} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard label="En attente" value={stats?.queueCount ?? '-'} />
+            <StatCard label="Rappels dus" value={stats?.dueCallbacks ?? '-'} tone="caution" />
+            <StatCard label="Confirmées aujourd'hui" value={stats?.confirmedToday ?? '-'} tone="positive" />
+            <StatCard label="Taux de confirmation" value={`${stats?.confirmationRatePercent ?? '-'}%`} />
+          </div>
+        )}
 
-      <div className="px-6 pt-4 grid grid-cols-4 gap-3">
-        <div className="bg-white border border-slate-200 rounded-lg p-3">
-          <p className="text-xs text-slate-400 uppercase tracking-wide">En attente</p>
-          <p className="text-lg font-semibold text-slate-900">{stats?.queueCount ?? '-'}</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-3">
-          <p className="text-xs text-slate-400 uppercase tracking-wide">Rappels dus</p>
-          <p className="text-lg font-semibold text-amber-600">{stats?.dueCallbacks ?? '-'}</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-3">
-          <p className="text-xs text-slate-400 uppercase tracking-wide">Confirmees aujourd'hui</p>
-          <p className="text-lg font-semibold text-emerald-600">{stats?.confirmedToday ?? '-'}</p>
-        </div>
-        <div className="bg-white border border-slate-200 rounded-lg p-3">
-          <p className="text-xs text-slate-400 uppercase tracking-wide">Taux de confirmation</p>
-          <p className="text-lg font-semibold text-slate-900">{stats?.confirmationRatePercent ?? '-'}%</p>
-        </div>
-      </div>
-
-      <div className="p-6 flex-1">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+          <div className="mx-auto max-w-2xl space-y-4">
+            <Skeleton className="h-96" />
           </div>
         ) : queue.length === 0 ? (
-          <div className="text-center py-16">
-            <svg className="w-12 h-12 mx-auto mb-3 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-sm text-slate-500">File de confirmation vide - tout est a jour.</p>
+          <div className="surface-glass">
+            <EmptyState
+              icon={CheckCircle2}
+              title="File de confirmation vide"
+              description="Tout est à jour."
+            />
           </div>
         ) : currentLoading || !current ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+          <div className="mx-auto max-w-2xl">
+            <Skeleton className="h-96" />
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto space-y-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
+          <div className="mx-auto max-w-2xl space-y-4">
+            <Card>
+              <div className="mb-4 flex items-start justify-between">
                 <div>
-                  <p className="text-lg font-semibold text-slate-900">{current.customerName}</p>
-                  <p className="text-sm font-mono text-slate-500">{current.orderNumber}</p>
+                  <p className="text-lg font-semibold text-fg">{current.customerName}</p>
+                  <p className="num text-sm text-fg-subtle">{current.orderNumber}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-semibold text-slate-900">{formatCurrency(current.totalAmount)}</p>
-                  <p className="text-xs text-slate-400">{queue[0]?.attemptCount ?? 0} tentative(s) precedente(s)</p>
+                  <p className="num text-lg font-semibold text-fg">{formatCurrency(current.totalAmount)}</p>
+                  <p className="num text-xs text-fg-subtle">{queue[0]?.attemptCount ?? 0} tentative(s) précédente(s)</p>
                 </div>
               </div>
 
               {queue[0]?.duplicateOrderWarning && (
-                <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800">
-                  ⚠ Ce numero a une autre commande en attente dans la file - verifier avant de confirmer.
+                <div
+                  data-tone="caution"
+                  className="mb-3 flex items-start gap-2 rounded-inset border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] px-3 py-2 text-xs text-[var(--tone-ink)]"
+                >
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Ce numéro a une autre commande en attente dans la file — vérifier avant de confirmer.
                 </div>
               )}
               {queue[0]?.priorDeliveredOrders > 0 && (
-                <div className="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800">
-                  ✓ Client fidele : {queue[0].priorDeliveredOrders} commande(s) deja livree(s).
+                <div
+                  data-tone="positive"
+                  className="mb-3 flex items-start gap-2 rounded-inset border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] px-3 py-2 text-xs text-[var(--tone-ink)]"
+                >
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Client fidèle : {queue[0].priorDeliveredOrders} commande(s) déjà livrée(s).
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+              <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-slate-400 uppercase tracking-wide">Telephone</p>
-                  <a href={`tel:${current.customerPhone}`} className="text-blue-600 font-medium hover:underline">{current.customerPhone || '-'}</a>
+                  <p className="text-xs uppercase tracking-wide text-fg-subtle">Téléphone</p>
+                  <a
+                    href={`tel:${current.customerPhone}`}
+                    className="inline-flex items-center gap-1 font-medium text-[var(--accent)] hover:underline"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    {current.customerPhone || '-'}
+                  </a>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400 uppercase tracking-wide">Ville</p>
-                  <p className="text-slate-900">{current.city || '-'}</p>
+                  <p className="text-xs uppercase tracking-wide text-fg-subtle">Ville</p>
+                  <p className="inline-flex items-center gap-1 text-fg">
+                    <MapPin className="h-3.5 w-3.5 text-fg-subtle" />
+                    {current.city || '-'}
+                  </p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-xs text-slate-400 uppercase tracking-wide">Adresse</p>
-                  <p className="text-slate-900">{current.addressLine || '-'}</p>
+                  <p className="text-xs uppercase tracking-wide text-fg-subtle">Adresse</p>
+                  <p className="text-fg">{current.addressLine || '-'}</p>
                 </div>
               </div>
 
-              <div className="border border-slate-100 rounded-lg divide-y divide-slate-100 mb-4">
+              <div className="mb-4 divide-y divide-border rounded-field border border-border">
                 {current.items.map((i) => (
-                  <div key={i.id} className="px-3 py-2 flex items-center justify-between text-sm">
-                    <span className="text-slate-700">{i.productName} {[i.colorName, i.sizeValue].filter(Boolean).join(' / ')}</span>
-                    <span className="text-slate-500">×{i.quantity}</span>
+                  <div key={i.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="text-fg">{i.productName} {[i.colorName, i.sizeValue].filter(Boolean).join(' / ')}</span>
+                    <span className="num text-fg-muted">×{i.quantity}</span>
                   </div>
                 ))}
               </div>
 
               {hasWhatsApp(current.customerPhone) && (
-                <div className="flex gap-2 mb-4">
-                  <button onClick={() => handleWhatsApp('darija')} className="flex-1 px-3 py-2 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600">
+                <div className="mb-4 flex gap-2">
+                  <Button
+                    fullWidth
+                    size="sm"
+                    className="text-white"
+                    style={{ background: 'var(--brand-whatsapp)' }}
+                    onClick={() => handleWhatsApp('darija')}
+                  >
                     🇲🇦 WhatsApp Darija
-                  </button>
-                  <button onClick={() => handleWhatsApp('fr')} className="flex-1 px-3 py-2 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600">
-                    🇫🇷 WhatsApp Francais
-                  </button>
+                  </Button>
+                  <Button
+                    fullWidth
+                    size="sm"
+                    className="text-white"
+                    style={{ background: 'var(--brand-whatsapp)' }}
+                    onClick={() => handleWhatsApp('fr')}
+                  >
+                    🇫🇷 WhatsApp Français
+                  </Button>
                 </div>
               )}
 
-              <textarea
+              <Textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Note (optionnel)"
                 rows={2}
-                className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm mb-4"
+                wrapperClassName="mb-4"
               />
 
-              <div className="grid grid-cols-4 gap-2">
-                {OUTCOME_BUTTONS.map((b) => (
-                  <button
-                    key={b.outcome}
-                    onClick={() => handleOutcome(b.outcome)}
-                    disabled={submitting}
-                    className={`px-2 py-2.5 text-xs font-medium rounded-md disabled:opacity-50 ${b.className}`}
-                  >
-                    {b.label} <span className="opacity-60">({b.shortcut})</span>
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {OUTCOME_BUTTONS.map((b) => {
+                  const def = STATUS.confirmationOutcome[b.outcome]
+                  return (
+                    <button
+                      key={b.outcome}
+                      data-tone={def.tone}
+                      onClick={() => handleOutcome(b.outcome)}
+                      disabled={submitting}
+                      className="rounded-field bg-[var(--tone-soft)] px-2 py-2.5 text-xs font-medium text-[var(--tone-ink)] transition-colors hover:brightness-95 disabled:opacity-50"
+                    >
+                      {def.label} <KeyHint keys={[b.shortcut]} className="ml-1 opacity-70" />
+                    </button>
+                  )
+                })}
               </div>
-            </div>
+            </Card>
 
-            <p className="text-center text-xs text-slate-400">{queue.length} commande(s) restante(s) dans la file</p>
+            <p className="num text-center text-xs text-fg-subtle">{queue.length} commande(s) restante(s) dans la file</p>
           </div>
         )}
       </div>
-    </div>
+    </Page>
   )
 }
