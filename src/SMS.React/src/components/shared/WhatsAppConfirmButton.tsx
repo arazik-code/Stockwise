@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { Star } from 'lucide-react'
 import { openWhatsApp, hasWhatsApp, renderWhatsAppTemplate } from '../../utils/whatsapp'
 import { whatsappTemplatesApi, type WhatsAppTemplate } from '../../api/whatsappTemplates'
 import { showToast } from './Toast'
+import { Popover } from '../ui/Popover'
+import { cn } from '../ui/cn'
 import type { OnlineOrder } from '../../types/onlineOrder'
 
 export const WhatsAppIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
@@ -27,66 +30,74 @@ function sendWithTemplate(order: OnlineOrder, template: WhatsAppTemplate) {
  * Green WhatsApp button offering every saved template (see /online/whatsapp-templates) before
  * launching the chat. Templates are user-editable and saveable - this used to be two hardcoded
  * FR/Darija messages baked into the frontend with no way to change the wording.
+ *
+ * The only file in the app using WhatsApp brand green instead of the accent/positive scale -
+ * that is legitimate, matching a third party's mark is the whole point. See --brand-whatsapp-*
+ * in src/design/semantic.css.
  */
 export function WhatsAppConfirmMenu({ order, compact = false }: { order: OnlineOrder; compact?: boolean }) {
   const [open, setOpen] = useState(false)
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([])
   const [loaded, setLoaded] = useState(false)
 
-  useEffect(() => {
-    if (!open || loaded) return
-    whatsappTemplatesApi.getAll()
-      .then(setTemplates)
-      .catch(() => showToast('Impossible de charger les modèles WhatsApp', 'error'))
-      .finally(() => setLoaded(true))
-  }, [open, loaded])
-
   if (!hasWhatsApp(order.customerPhone)) return null
 
   const pick = (template: WhatsAppTemplate) => { setOpen(false); sendWithTemplate(order, template) }
 
   return (
-    <div className="relative inline-block">
-      {compact ? (
-        <button
-          onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
-          title="Confirmer via WhatsApp"
-          className="text-green-600 hover:text-green-800 px-1.5 py-1 rounded hover:bg-green-50"
-        >
-          <WhatsAppIcon />
-        </button>
-      ) : (
-        <button
-          onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600"
-        >
-          <WhatsAppIcon /> Confirmer sur WhatsApp
-        </button>
-      )}
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setOpen(false) }} />
-          <div className="absolute right-0 z-20 mt-1 w-52 bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden">
-            {!loaded ? (
-              <div className="px-3 py-3 text-xs text-slate-400 text-center">Chargement...</div>
-            ) : templates.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-slate-400 text-center">Aucun modèle enregistré</div>
-            ) : (
-              templates.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={(e) => { e.stopPropagation(); pick(t) }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 text-slate-700 truncate"
-                  title={t.name}
-                >
-                  {t.isDefault && <span className="text-amber-500 mr-1">★</span>}
-                  {t.name}
-                </button>
-              ))
+    <Popover
+      placement="bottom-end"
+      className="w-52 py-1"
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next && !loaded) {
+          whatsappTemplatesApi.getAll()
+            .then(setTemplates)
+            .catch(() => showToast('Impossible de charger les modèles WhatsApp', 'error'))
+            .finally(() => setLoaded(true))
+        }
+      }}
+      trigger={
+        compact ? (
+          <button
+            title="Confirmer via WhatsApp"
+            className="rounded-inset px-1.5 py-1 text-[var(--brand-whatsapp-ink)] transition-colors hover:bg-[var(--brand-whatsapp-soft)]"
+          >
+            <WhatsAppIcon />
+          </button>
+        ) : (
+          <button
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-field px-3 py-2 text-sm font-medium text-white shadow-e1',
+              'transition-colors hover:brightness-95'
             )}
-          </div>
-        </>
+            style={{ background: 'var(--brand-whatsapp)' }}
+          >
+            <WhatsAppIcon /> Confirmer sur WhatsApp
+          </button>
+        )
+      }
+    >
+      {!loaded ? (
+        <div className="px-3 py-3 text-center text-xs text-fg-subtle">Chargement…</div>
+      ) : templates.length === 0 ? (
+        <div className="px-3 py-3 text-center text-xs text-fg-subtle">Aucun modèle enregistré</div>
+      ) : (
+        templates.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => pick(t)}
+            className="w-full truncate px-3 py-2 text-left text-sm text-fg transition-colors hover:bg-[var(--brand-whatsapp-soft)]"
+            title={t.name}
+          >
+            {t.isDefault && (
+              <Star className="mr-1 inline h-3 w-3 fill-[var(--caution)] text-[var(--caution)]" aria-hidden="true" />
+            )}
+            {t.name}
+          </button>
+        ))
       )}
-    </div>
+    </Popover>
   )
 }

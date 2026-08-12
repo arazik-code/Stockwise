@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { Check, Search } from 'lucide-react'
 import { ozonApi, ozonDeliveryNotePdfUrl, type OzonCity, type OzonParcel } from '../../api/ozon'
 import { showToast } from '../shared/Toast'
 import { formatCurrency } from '../../utils/format'
+import { Button, Checkbox, Input, Modal, Textarea } from '../ui'
 
 interface Prefill {
   onlineOrderId?: number
@@ -72,96 +74,147 @@ export default function CreateOzonParcelModal({ prefill, onClose, onCreated }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg max-h-[88vh] overflow-auto border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">Nouveau colis OzonExpress</h3>
-            {prefill?.onlineOrderId && <p className="text-xs text-slate-400">Depuis une commande en ligne</p>}
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
+    /*
+      closeOnEsc stays FALSE.
+      This modal is also mounted INSIDE OnlineOrdersPage's order-detail sheet.
+      Modal/Sheet each attach their own document-level keydown listener, and
+      stopPropagation does not stop sibling listeners on the same node - so an
+      Escape press with both open would close the sheet out from under a
+      half-filled parcel form. Neither surface opts in.
+
+      No `required` is added to any field either: validation lives in
+      handleSubmit above, and a native constraint would change when the form
+      submits. The asterisks are label text, exactly as before.
+    */
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Nouveau colis OzonExpress"
+      description={prefill?.onlineOrderId ? 'Depuis une commande en ligne' : undefined}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>Annuler</Button>
+          <Button
+            type="submit"
+            form="ozon-parcel-form"
+            size="sm"
+            loading={submitting}
+          >
+            {submitting ? 'Création…' : 'Créer le colis'}
+          </Button>
+        </>
+      }
+    >
+      <form id="ozon-parcel-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Destinataire *"
+            value={receiver}
+            onChange={(e) => setReceiver(e.target.value)}
+            size="sm"
+          />
+          <Input
+            label="Téléphone *"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="06XXXXXXXX"
+            size="sm"
+            className="num"
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Destinataire *</label>
-              <input value={receiver} onChange={(e) => setReceiver(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        <div className="relative">
+          <Input
+            label="Ville de destination *"
+            value={cityQuery}
+            onChange={(e) => { setCityQuery(e.target.value); setCity(null); setCityOpen(true) }}
+            onFocus={() => setCityOpen(true)}
+            placeholder="Rechercher une ville..."
+            leading={<Search />}
+            size="sm"
+            hint={
+              city ? (
+                <span className="inline-flex items-center gap-1 text-positive">
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                  {city.name} — livraison <span className="num">{formatCurrency(city.deliveredPrice)}</span>
+                  {' · retour '}
+                  <span className="num">{formatCurrency(city.returnedPrice)}</span>
+                </span>
+              ) : undefined
+            }
+          />
+          {cityOpen && cityResults.length > 0 && (
+            <div className="absolute inset-x-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-card border border-border bg-surface shadow-e3">
+              {cityResults.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => pickCity(c)}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-fg transition-colors duration-fast hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
+                >
+                  <span className="truncate">{c.name}</span>
+                  <span className="num shrink-0 text-xs text-fg-subtle">{formatCurrency(c.deliveredPrice)}</span>
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Téléphone *</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="06XXXXXXXX" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-          </div>
+          )}
+        </div>
 
-          <div className="relative">
-            <label className="block text-xs font-medium text-slate-600 mb-1">Ville de destination *</label>
-            <input
-              value={cityQuery}
-              onChange={(e) => { setCityQuery(e.target.value); setCity(null); setCityOpen(true) }}
-              onFocus={() => setCityOpen(true)}
-              placeholder="Rechercher une ville..."
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        <Input
+          label="Adresse complète *"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          size="sm"
+        />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Prix à encaisser (COD, MAD)"
+            type="number"
+            min={0}
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+            size="sm"
+            className="num"
+          />
+          <Input
+            label="Nature du contenu"
+            value={nature}
+            onChange={(e) => setNature(e.target.value)}
+            placeholder="ex: Chaussures"
+            size="sm"
+          />
+        </div>
+
+        <Textarea
+          label="Note / instructions"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+        />
+
+        <div className="flex flex-wrap gap-x-6 gap-y-3 border-t border-border pt-4">
+          <span title="Activez uniquement si vos produits sont stockés chez OzonExpress (nécessite des références produits). Sinon, ramassage depuis votre boutique.">
+            <Checkbox
+              label="Stock OzonExpress"
+              checked={isStock}
+              onChange={(e) => setIsStock(e.target.checked)}
             />
-            {city && <p className="text-[11px] text-emerald-600 mt-1">✓ {city.name} — livraison {formatCurrency(city.deliveredPrice)} · retour {formatCurrency(city.returnedPrice)}</p>}
-            {cityOpen && cityResults.length > 0 && (
-              <div className="absolute z-20 top-full left-0 right-0 bg-white border border-slate-200 rounded-md shadow-lg max-h-52 overflow-y-auto mt-1">
-                {cityResults.map((c) => (
-                  <button key={c.id} type="button" onClick={() => pickCity(c)} className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between">
-                    <span>{c.name}</span>
-                    <span className="text-xs text-slate-400">{formatCurrency(c.deliveredPrice)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Adresse complète *</label>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Prix à encaisser (COD, MAD)</label>
-              <input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(parseFloat(e.target.value) || 0)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Nature du contenu</label>
-              <input value={nature} onChange={(e) => setNature(e.target.value)} placeholder="ex: Chaussures" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Note / instructions</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          </div>
-
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer" title="Activez uniquement si vos produits sont stockés chez OzonExpress (nécessite des références produits). Sinon, ramassage depuis votre boutique.">
-              <input type="checkbox" checked={isStock} onChange={(e) => setIsStock(e.target.checked)} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              Stock OzonExpress
-            </label>
-            <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer">
-              <input type="checkbox" checked={allowOpen} onChange={(e) => setAllowOpen(e.target.checked)} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              Autoriser l'ouverture
-            </label>
-            <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer">
-              <input type="checkbox" checked={fragile} onChange={(e) => setFragile(e.target.checked)} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              Fragile
-            </label>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50">Annuler</button>
-            <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50">
-              {submitting ? 'Création…' : 'Créer le colis'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          </span>
+          <Checkbox
+            label="Autoriser l'ouverture"
+            checked={allowOpen}
+            onChange={(e) => setAllowOpen(e.target.checked)}
+          />
+          <Checkbox
+            label="Fragile"
+            checked={fragile}
+            onChange={(e) => setFragile(e.target.checked)}
+          />
+        </div>
+      </form>
+    </Modal>
   )
 }

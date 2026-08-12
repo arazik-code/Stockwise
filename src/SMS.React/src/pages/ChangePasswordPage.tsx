@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { KeyRound } from 'lucide-react'
 import api from '../api/client'
 import { useAuthStore } from '../store/authStore'
+import { Button, ErrorBanner, Input } from '../components/ui'
+import { sectionProps } from '../design/sections'
 
 export default function ChangePasswordPage() {
   const { user, clearMustChangePassword, logout } = useAuthStore()
@@ -38,78 +41,58 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+    <div {...sectionProps('auth')} className="page-mesh flex min-h-screen items-center justify-center bg-canvas px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-amber-500 mb-4">
-            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+        <div className="mb-8 text-center">
+          <div
+            data-tone="caution"
+            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-surface bg-[var(--tone)] text-white shadow-e2"
+          >
+            <KeyRound className="h-7 w-7" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">Changement de mot de passe requis</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-semibold text-fg">Changement de mot de passe requis</h1>
+          <p className="mt-1 text-sm text-fg-subtle">
             Ce compte utilise encore un mot de passe par defaut. Choisissez-en un nouveau pour continuer.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="surface-glass space-y-4 p-6">
+          {error && <ErrorBanner>{error}</ErrorBanner>}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe actuel</label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              autoFocus
-              required
-            />
-          </div>
+          <Input
+            label="Mot de passe actuel"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            autoFocus
+            required
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              minLength={8}
-              required
-            />
-          </div>
+          <Input
+            label="Nouveau mot de passe"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={8}
+            required
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Confirmer le nouveau mot de passe</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              minLength={8}
-              required
-            />
-          </div>
+          <Input
+            label="Confirmer le nouveau mot de passe"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            minLength={8}
+            required
+          />
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium text-sm py-2.5 rounded-lg transition-colors"
-          >
+          <Button type="submit" fullWidth loading={isLoading}>
             {isLoading ? 'Enregistrement...' : 'Changer le mot de passe'}
-          </button>
+          </Button>
 
-          <button
-            type="button"
-            onClick={() => logout()}
-            className="w-full text-slate-500 hover:text-slate-700 text-sm py-1"
-          >
+          <Button type="button" variant="ghost" fullWidth onClick={() => logout()}>
             Se deconnecter ({user?.username})
-          </button>
+          </Button>
         </form>
       </div>
     </div>

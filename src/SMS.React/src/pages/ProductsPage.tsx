@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import Header from '../components/layout/Header'
+import { Barcode, ImageOff, Package, Plus, Printer, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import ProductForm from '../components/products/ProductForm'
 import { printLabels, type LabelSizeCode } from '../components/products/BarcodeLabel'
 import { productsApi } from '../api/products'
@@ -8,6 +8,11 @@ import { categoriesApi, type Category } from '../api/categories'
 import { shopifyApi } from '../api/shopify'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency } from '../utils/format'
+import {
+  Badge, Button, Card, Checkbox, EmptyState, IconButton, Input, Modal, Page,
+  Pagination, Select, SkeletonCards, StatusBadge, Tabs, Toolbar, cn,
+} from '../components/ui'
+import { listItem } from '../design/variants'
 import type { Product, CreateProductRequest } from '../types/product'
 
 type StockFilter = 'all' | 'inStock' | 'low' | 'out'
@@ -18,18 +23,47 @@ function totalStock(p: Product): number {
   return p.variants.reduce((sum, v) => sum + v.stockQuantity, 0)
 }
 
-function stockBadge(qty: number) {
-  if (qty <= 0) return { label: 'Rupture', className: 'bg-red-50 text-red-700 border-red-200' }
-  if (qty <= 10) return { label: `${qty} en stock`, className: 'bg-amber-50 text-amber-700 border-amber-200' }
-  return { label: `${qty} en stock`, className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
-}
+const placeholderIcon = <ImageOff className="h-10 w-10 text-fg-subtle" aria-hidden="true" />
 
-const placeholderIcon = (
-  <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-  </svg>
-)
-
+/**
+ * ══ CATALOG ARCHETYPE - GOLDEN REFERENCE ════════════════════════════════════
+ *
+ * Copy this page's structure for every image-led grid (OnlineProducts, and any
+ * future browse-by-picture screen).
+ *
+ * The pattern, in order:
+ *   <Page section=… title=… actions=…>     section supplies the accent + hue
+ *     <Toolbar>                            search, category, segmented filters
+ *     loading / empty                      designed states (see the note below)
+ *     grid of <Card interactive>           image first, meta second
+ *     <Pagination>
+ *
+ * Why the card is a <Card interactive> and not a styled div: the spring
+ * hover-lift, the press feedback and the hue-tinted shadow all come free and
+ * identically everywhere. The only motion this page adds on top is the image's
+ * own `group-hover:scale-105`, retimed onto duration-base/ease-out-soft so the
+ * picture and the card lift on the same clock instead of racing each other.
+ *
+ * ── On the entrance stagger ─────────────────────────────────────────────────
+ *
+ * The catalog archetype's entrance is `stagger`, but the page renders 48 cards.
+ * CONTRACT §4 caps animated items at ~12, so only the first row-and-a-bit
+ * animate in and the rest mount plain. The stagger is what the eye reads at the
+ * top of the viewport; below the fold it is pure cost.
+ *
+ * ── On the missing error state ──────────────────────────────────────────────
+ *
+ * CONTRACT §3 wants three states. This page has two, because `loadProducts`
+ * carries no error flag and adding one is a change above `return (`. Same
+ * situation as the golden ledger page. Escalated, not improvised.
+ *
+ * ── On the <=10 "low stock" threshold ───────────────────────────────────────
+ *
+ * The predicate below is byte-for-byte the one the old `stockBadge()` helper
+ * used, and it deliberately DISAGREES with StockPage (per-item reorder level)
+ * and DashboardPage (<=3). Only the LOOK is unified, through the stockLevel
+ * registry. A restyle must never silently redefine a business rule.
+ */
 export default function ProductsPage() {
   const { t } = useTranslation()
   const [products, setProducts] = useState<Product[]>([])
@@ -213,224 +247,242 @@ export default function ProductsPage() {
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   return (
-    <div className="flex flex-col flex-1">
-      <Header
-        title={t('products.title')}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button
-              onClick={handleImportCatalog}
-              disabled={importing}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md hover:bg-emerald-100 transition-colors disabled:opacity-50"
-            >
-              {importing ? (
-                <>
-                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-emerald-600" />
-                  Import en cours…
-                </>
-              ) : (
-                <>↻ Importer depuis Shopify</>
-              )}
-            </button>
-            <button
-              onClick={handleGenerateBarcodes}
-              disabled={generatingBarcodes}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-slate-700 bg-slate-100 border border-slate-200 rounded-md hover:bg-slate-200 transition-colors disabled:opacity-50"
-              title="Générer des codes-barres EAN-13 pour les produits/variantes qui n'en ont pas"
-            >
-              {generatingBarcodes ? 'Génération…' : '▤ Générer codes-barres'}
-            </button>
-            <button
-              onClick={() => { setEditingProduct(null); setShowForm(true) }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {t('products.add')}
-            </button>
-          </div>
-        }
-      />
-      <div className="p-6 flex-1">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[240px] max-w-md">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder={t('products.search')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
-            />
-          </div>
+    <Page
+      section="products"
+      title={t('products.title')}
+      actions={
+        <>
+          <Button
+            size="sm"
+            variant="soft"
+            onClick={handleImportCatalog}
+            disabled={importing}
+            loading={importing}
+            icon={<RefreshCw className="h-3.5 w-3.5" />}
+          >
+            {importing ? 'Import en cours…' : 'Importer depuis Shopify'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleGenerateBarcodes}
+            disabled={generatingBarcodes}
+            loading={generatingBarcodes}
+            icon={<Barcode className="h-3.5 w-3.5" />}
+            title="Générer des codes-barres EAN-13 pour les produits/variantes qui n'en ont pas"
+          >
+            {generatingBarcodes ? 'Génération…' : 'Générer codes-barres'}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => { setEditingProduct(null); setShowForm(true) }}
+            icon={<Plus className="h-4 w-4" />}
+          >
+            {t('products.add')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <Toolbar>
+          <Input
+            type="text"
+            placeholder={t('products.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            leading={<Search />}
+            size="sm"
+            wrapperClassName="min-w-[240px] max-w-md flex-1"
+            trailing={
+              search ? (
+                <button
+                  onClick={() => setSearch('')}
+                  aria-label="Effacer"
+                  className="pointer-events-auto text-fg-subtle transition-colors hover:text-fg"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : undefined
+            }
+          />
 
-          <select
+          <Select
+            size="sm"
+            wrapperClassName="w-full sm:w-52"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="all">Toutes catégories</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
-          </select>
+          </Select>
 
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-            {([
-              { key: 'all', label: 'Tous' },
-              { key: 'inStock', label: 'En stock' },
-              { key: 'low', label: 'Stock bas' },
-              { key: 'out', label: 'Rupture' },
-            ] as { key: StockFilter; label: string }[]).map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setStockFilter(f.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  stockFilter === f.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+          <Tabs<StockFilter>
+            variant="segmented"
+            size="sm"
+            layoutGroupId="products-stock"
+            value={stockFilter}
+            onChange={setStockFilter}
+            items={[
+              { value: 'all', label: 'Tous' },
+              { value: 'inStock', label: 'En stock' },
+              { value: 'low', label: 'Stock bas' },
+              { value: 'out', label: 'Rupture' },
+            ]}
+          />
 
-          <span className="text-xs text-slate-400 ml-auto">{filtered.length} produit(s)</span>
-        </div>
+          {!loading && (
+            <Badge tone="neutral" size="sm" className="ml-auto">
+              <span className="num">{filtered.length.toLocaleString('fr-FR')}</span>
+              &nbsp;produit(s)
+            </Badge>
+          )}
+        </Toolbar>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-sm text-slate-500">{t('common.loading')}</span>
-          </div>
+          <SkeletonCards count={12} className="sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" />
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-slate-400">
-            <svg className="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
-            <p className="text-sm">{search || categoryFilter !== 'all' || stockFilter !== 'all' ? 'Aucun produit trouvé' : 'Aucun produit'}</p>
+          <div className="surface-glass">
+            <EmptyState
+              icon={Package}
+              variant={search || categoryFilter !== 'all' || stockFilter !== 'all' ? 'search' : 'default'}
+              title={search || categoryFilter !== 'all' || stockFilter !== 'all' ? 'Aucun produit trouvé' : t('products.noProducts')}
+              description={
+                search || categoryFilter !== 'all' || stockFilter !== 'all'
+                  ? 'Essayez un autre nom, SKU, catégorie ou niveau de stock.'
+                  : 'Ajoutez un produit ou importez votre catalogue Shopify.'
+              }
+            />
           </div>
         ) : (
           <>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {paged.map((p) => {
+            {paged.map((p, i) => {
               const stock = totalStock(p)
-              const badge = stockBadge(stock)
               const colors = Array.from(new Map(p.variants.map(v => [v.colorId, v])).values()).slice(0, 5)
               const extraColors = new Set(p.variants.map(v => v.colorId)).size - colors.length
               const sizes = Array.from(new Set(p.variants.map(v => v.sizeValue))).slice(0, 6)
               const extraSizes = new Set(p.variants.map(v => v.sizeValue)).size - sizes.length
 
               return (
-                <div
+                <Card
                   key={p.id}
+                  interactive
+                  padded={false}
+                  variants={i < 12 ? listItem : undefined}
+                  initial={i < 12 ? 'initial' : false}
+                  animate={i < 12 ? 'animate' : undefined}
+                  custom={i}
                   onClick={() => { setEditingProduct(p); setShowForm(true) }}
-                  className="group bg-white border border-slate-200 rounded-xl overflow-hidden cursor-pointer hover:shadow-md hover:border-slate-300 transition-all flex flex-col"
+                  className="group flex flex-col overflow-hidden"
                 >
-                  <div className="relative aspect-square bg-slate-50 flex items-center justify-center overflow-hidden">
+                  <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-sunken">
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover transition-transform duration-base ease-out-soft group-hover:scale-105"
+                      />
                     ) : placeholderIcon}
 
                     {p.shopifyProductId && (
-                      <span className="absolute top-2 left-2 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-600/90 text-white backdrop-blur-sm">
+                      <Badge tone="special" size="xs" className="absolute left-2 top-2 shadow-e1">
                         Shopify
-                      </span>
+                      </Badge>
                     )}
                     {!p.isActive && (
-                      <span className="absolute top-2 right-2 inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-800/80 text-white">
+                      <Badge tone="muted" size="xs" className="absolute right-2 top-2 shadow-e1">
                         Inactif
-                      </span>
+                      </Badge>
                     )}
 
-                    <div className="absolute inset-x-0 bottom-0 p-2 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-x-0 bottom-0 flex justify-end gap-1 p-2 opacity-0 transition-opacity duration-base ease-out-soft group-hover:opacity-100">
                       {p.variants.some(v => v.barcode) && (
-                        <button
+                        <IconButton
+                          icon={<Printer className="h-3.5 w-3.5" />}
+                          label={t('products.batchPrintLabels')}
+                          size="xs"
+                          variant="outline"
                           onClick={(e) => { e.stopPropagation(); openBatchPrint(p) }}
-                          className="p-1.5 rounded-md bg-white/90 text-slate-600 hover:text-violet-600 shadow-sm backdrop-blur-sm"
-                          title={t('products.batchPrintLabels')}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                          </svg>
-                        </button>
+                        />
                       )}
-                      <button
+                      <IconButton
+                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                        label={t('common.delete')}
+                        size="xs"
+                        variant="outline"
+                        className="hover:text-[var(--negative)]"
                         onClick={(e) => { e.stopPropagation(); handleDelete(p.id) }}
-                        className="p-1.5 rounded-md bg-white/90 text-slate-600 hover:text-red-600 shadow-sm backdrop-blur-sm"
-                        title={t('common.delete')}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      />
                     </div>
                   </div>
 
-                  <div className="p-3 flex flex-col gap-1.5 flex-1">
-                    <p className="text-xs text-slate-400">{p.categoryName || '—'}</p>
-                    <h3 className="text-sm font-medium text-slate-900 leading-snug line-clamp-2 min-h-[2.5rem]">{p.name}</h3>
+                  <div className="flex flex-1 flex-col gap-1.5 p-3">
+                    <p className="text-xs text-fg-subtle">{p.categoryName || '—'}</p>
+                    <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-medium leading-snug text-fg">{p.name}</h3>
 
-                    <div className="flex items-baseline gap-1.5 mt-0.5">
-                      <span className="text-sm font-semibold text-slate-900">{formatCurrency(p.price)}</span>
+                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                      <span className="num text-sm font-semibold text-fg">{formatCurrency(p.price)}</span>
                       {p.liquidationPrice && (
-                        <span className="text-xs text-slate-400 line-through">{formatCurrency(p.liquidationPrice)}</span>
+                        <span className="num text-xs text-fg-subtle line-through">{formatCurrency(p.liquidationPrice)}</span>
                       )}
                     </div>
 
                     {colors.length > 0 && (
-                      <div className="flex items-center gap-1 mt-1">
+                      <div className="mt-1 flex items-center gap-1">
                         {colors.map((v) => (
                           <span
                             key={v.colorId}
                             title={v.colorName}
-                            className="w-3.5 h-3.5 rounded-full border border-slate-200 flex-shrink-0"
+                            className="h-3.5 w-3.5 flex-shrink-0 rounded-chip border border-border"
+                            /* Real product colours from the database - data, not
+                               design tokens. These stay inline by design. */
                             style={{ backgroundColor: v.colorHexCode }}
                           />
                         ))}
-                        {extraColors > 0 && <span className="text-[10px] text-slate-400">+{extraColors}</span>}
+                        {extraColors > 0 && <span className="num text-[10px] text-fg-subtle">+{extraColors}</span>}
                       </div>
                     )}
 
                     {sizes.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {sizes.map((s) => (
-                          <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{s}</span>
+                          <span key={s} className="num rounded-inset bg-sunken px-1.5 py-0.5 text-[10px] text-fg-muted">{s}</span>
                         ))}
-                        {extraSizes > 0 && <span className="text-[10px] px-1.5 py-0.5 text-slate-400">+{extraSizes}</span>}
+                        {extraSizes > 0 && <span className="num px-1.5 py-0.5 text-[10px] text-fg-subtle">+{extraSizes}</span>}
                       </div>
                     )}
 
-                    <div className="mt-auto pt-2 flex items-center justify-between gap-2">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${badge.className}`}>{badge.label}</span>
-                      <span className="text-[11px] text-slate-400">{p.variants.length} var.</span>
+                    <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+                      {/* Predicate unchanged from the old stockBadge() helper. */}
+                      <StatusBadge
+                        domain="stockLevel"
+                        value={stock <= 0 ? 'out' : stock <= 10 ? 'low' : 'ok'}
+                        size="xs"
+                        showIcon={false}
+                        animate={false}
+                      />
+                      <span className="text-[11px] text-fg-subtle">
+                        <span className="num">{stock}</span> · <span className="num">{p.variants.length}</span> var.
+                      </span>
                     </div>
                   </div>
-                </div>
+                </Card>
               )
             })}
           </div>
 
           {pageCount > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Précédent
-              </button>
-              <span className="text-sm text-slate-500 px-2">Page {currentPage} / {pageCount}</span>
-              <button
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                disabled={currentPage === pageCount}
-                className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Suivant
-              </button>
-            </div>
+            <Pagination
+              page={currentPage}
+              pageCount={pageCount}
+              total={filtered.length}
+              pageSize={PAGE_SIZE}
+              onChange={setPage}
+            />
           )}
           </>
         )}
@@ -445,121 +497,118 @@ export default function ProductsPage() {
         />
       )}
 
-      {batchProduct && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg border border-slate-200 w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-200">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900">{t('products.batchPrintLabels')}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">{batchProduct.name}</p>
-              </div>
-              <button onClick={() => setBatchProduct(null)} className="text-slate-400 hover:text-slate-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
+      {/* closeOnEsc stays false: this page binds no Escape handler of its own,
+          but ProductForm (rendered above from the same page) owns Escape while
+          it is open, and the two are one keypress apart. Left to the explicit
+          close affordances. */}
+      <Modal
+        open={!!batchProduct}
+        onClose={() => setBatchProduct(null)}
+        size="2xl"
+        title={t('products.batchPrintLabels')}
+        description={batchProduct?.name}
+        bodyClassName="p-0"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setBatchProduct(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              icon={<Printer className="h-3.5 w-3.5" />}
+              onClick={handleBatchPrint}
+              disabled={selectedVariants.size === 0}
+            >
+              {t('products.printSelected')} (<span className="num">{selectedVariants.size}</span>)
+            </Button>
+          </>
+        }
+      >
+        {batchProduct && (
+          <>
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-sunken px-5 py-3">
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm text-fg">
+                <Checkbox
                   checked={batchProduct.variants.filter(v => v.barcode).length > 0 && selectedVariants.size === batchProduct.variants.filter(v => v.barcode).length}
                   onChange={toggleAll}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
                 {t('products.allVariantsSelected')}
               </label>
-              <span className="text-xs text-slate-500">
+              <span className="num text-xs text-fg-subtle">
                 {t('products.selectedCount', { count: selectedVariants.size })}
               </span>
             </div>
 
-            <div className="px-6 py-3 border-b border-slate-100 flex items-center flex-wrap gap-3 sm:gap-6 bg-slate-50">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-slate-600">{t('printer.labelSize')}</label>
-                <select
-                  value={labelSize}
-                  onChange={(e) => setLabelSize(e.target.value as LabelSizeCode)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-                >
-                  <option value="50x25">50 x 25 mm</option>
-                  <option value="40x30">40 x 30 mm</option>
-                  <option value="60x40">60 x 40 mm</option>
-                  <option value="70x50">70 x 50 mm</option>
-                  <option value="100x50">100 x 50 mm</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-slate-600">{t('printer.copies')}</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  value={copies}
-                  onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-14 px-2 py-1 text-xs border border-slate-200 rounded bg-white text-center focus:outline-none focus:ring-1 focus:ring-violet-500"
-                />
-              </div>
+            <div className="flex flex-wrap items-end gap-4 border-b border-border bg-sunken px-5 py-3">
+              <Select
+                size="sm"
+                label={t('printer.labelSize')}
+                wrapperClassName="w-40"
+                value={labelSize}
+                onChange={(e) => setLabelSize(e.target.value as LabelSizeCode)}
+              >
+                <option value="50x25">50 x 25 mm</option>
+                <option value="40x30">40 x 30 mm</option>
+                <option value="60x40">60 x 40 mm</option>
+                <option value="70x50">70 x 50 mm</option>
+                <option value="100x50">100 x 50 mm</option>
+              </Select>
+              <Input
+                size="sm"
+                type="number"
+                min={1}
+                max={99}
+                label={t('printer.copies')}
+                wrapperClassName="w-24"
+                className="num text-center"
+                value={copies}
+                onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
+              />
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+            <div className="space-y-2 px-5 py-4">
               {batchProduct.variants.map((v) => {
                 const hasBarcode = !!v.barcode
                 return (
                   <label
                     key={v.id}
-                    className={`flex items-center gap-4 p-3 rounded-lg border transition-colors ${
+                    className={cn(
+                      'flex items-center gap-4 rounded-card border p-3 transition-colors duration-fast ease-out-soft',
                       !hasBarcode
-                        ? 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed'
+                        ? 'cursor-not-allowed border-border bg-sunken opacity-50'
                         : selectedVariants.has(v.id)
-                          ? 'border-violet-200 bg-violet-50/50 cursor-pointer'
-                          : 'border-slate-200 hover:border-slate-300 cursor-pointer'
-                    }`}
+                          ? 'cursor-pointer border-[var(--accent)] bg-[var(--accent-soft)]'
+                          : 'cursor-pointer border-border hover:border-border-strong'
+                    )}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedVariants.has(v.id)}
                       disabled={!hasBarcode}
                       onChange={() => toggleVariant(v.id)}
-                      className="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
                     />
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-3 h-3 rounded-full border border-slate-200 flex-shrink-0" style={{ backgroundColor: v.colorHexCode }} />
-                      <span className="text-sm text-slate-700">{v.colorName}</span>
-                      <span className="text-sm text-slate-400">·</span>
-                      <span className="text-sm text-slate-700">{v.sizeValue}</span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-3 w-3 flex-shrink-0 rounded-chip border border-border"
+                        style={{ backgroundColor: v.colorHexCode }}
+                      />
+                      <span className="text-sm text-fg">{v.colorName}</span>
+                      <span className="text-sm text-fg-subtle">·</span>
+                      <span className="num text-sm text-fg">{v.sizeValue}</span>
                     </div>
-                    <span className="text-xs font-mono text-slate-400 ml-auto">{v.sku}</span>
+                    <span className="num ml-auto text-xs text-fg-subtle">{v.sku}</span>
                     {hasBarcode ? (
-                      <span className="text-xs font-mono text-slate-500">{v.barcode}</span>
+                      <span className="num text-xs text-fg-muted">{v.barcode}</span>
                     ) : (
-                      <span className="text-xs text-red-400">{t('products.noBarcode')}</span>
+                      <span className="text-xs text-[var(--negative)]">{t('products.noBarcode')}</span>
                     )}
-                    <span className="text-sm font-medium text-slate-700 ml-2">{formatCurrency(v.price)}</span>
+                    <span className="num ml-2 text-sm font-medium text-fg">{formatCurrency(v.price)}</span>
                   </label>
                 )
               })}
             </div>
-
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
-              <button
-                onClick={() => setBatchProduct(null)}
-                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleBatchPrint}
-                disabled={selectedVariants.size === 0}
-                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-md hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {t('products.printSelected')} ({selectedVariants.size})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+          </>
+        )}
+      </Modal>
+    </Page>
   )
 }

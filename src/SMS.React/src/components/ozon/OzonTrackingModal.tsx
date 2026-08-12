@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
+import { MapPin, PackageSearch, Phone, Receipt, ScrollText } from 'lucide-react'
 import { ozonApi, OZON_STATUS_META, type OzonTracking, type OzonParcel } from '../../api/ozon'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import {
+  EmptyState, ErrorState, Modal, Skeleton, StatusBadge, StatusDot,
+} from '../ui'
 
 export default function OzonTrackingModal({ parcel, onClose }: { parcel: OzonParcel; onClose: () => void }) {
   const [tracking, setTracking] = useState<OzonTracking | null>(null)
@@ -18,63 +22,123 @@ export default function OzonTrackingModal({ parcel, onClose }: { parcel: OzonPar
   const statusMeta = OZON_STATUS_META[tracking?.status ?? parcel.status]
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg max-h-[85vh] overflow-auto border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900 font-mono">{parcel.trackingNumber}</h3>
-            <p className="text-xs text-slate-500">{parcel.receiver} · {parcel.cityName ?? '—'}</p>
+    /* closeOnEsc: this component owns no keydown listener, and neither does the
+       page that mounts it (OnlineDeliveryPage). Nothing else can claim Escape
+       while it is open, so opting in is safe here. */
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      closeOnEsc
+      title={<span className="num">{parcel.trackingNumber}</span>}
+      description={`${parcel.receiver} · ${parcel.cityName ?? '—'}`}
+    >
+      <div className="space-y-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <StatusBadge
+              domain="ozonParcel"
+              value={tracking?.status ?? parcel.status}
+              size="md"
+              showDot
+            />
+            {/* The courier sometimes returns its own wording; surface it only
+                when it says something the registry label does not. */}
+            {tracking?.statusText && tracking.statusText !== statusMeta.label && (
+              <p className="mt-1.5 text-xs text-fg-subtle">{tracking.statusText}</p>
+            )}
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
+          <div className="shrink-0 text-right">
+            <p className="text-[10px] uppercase tracking-wide text-fg-subtle">COD</p>
+            <p className="num text-sm font-semibold text-fg">{formatCurrency(parcel.price)}</p>
+          </div>
         </div>
 
-        <div className="p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <span className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1 rounded-full ${statusMeta.className}`}>
-              <span className={`w-2 h-2 rounded-full ${statusMeta.dot}`} />
-              {tracking?.statusText || statusMeta.label}
-            </span>
-            <div className="text-right">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wide">COD</p>
-              <p className="text-sm font-semibold text-slate-900">{formatCurrency(parcel.price)}</p>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-emerald-600" />
-            </div>
-          ) : tracking && !tracking.ok ? (
-            <p className="text-sm text-slate-400 text-center py-6">{tracking.error || 'Suivi indisponible pour le moment'}</p>
-          ) : tracking && tracking.events.length > 0 ? (
-            <div>
-              <h4 className="text-sm font-semibold text-slate-900 mb-3">Historique de suivi</h4>
-              <div className="relative pl-5">
-                <div className="absolute left-[7px] top-1 bottom-1 w-px bg-slate-200" />
-                {tracking.events.map((e, i) => (
-                  <div key={i} className="relative pb-4 last:pb-0">
-                    <div className={`absolute -left-[13px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white ${i === 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                    <p className="text-sm font-medium text-slate-800">{e.status}</p>
-                    {e.comment && <p className="text-xs text-slate-500">{e.comment}</p>}
-                    {e.date && <p className="text-[11px] text-slate-400 mt-0.5">{formatDateTime(e.date)}</p>}
-                  </div>
-                ))}
+        {loading ? (
+          /* Layout-identical to the timeline below: dot rail plus two text
+             lines per event, so nothing jumps when the events land. */
+          <div role="status" aria-label="Chargement du suivi" className="space-y-4 pl-5">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="relative">
+                <Skeleton variant="circle" className="absolute -left-[13px] top-1 h-3.5" />
+                <Skeleton variant="text" width={i === 0 ? '52%' : '44%'} />
+                <Skeleton variant="text" className="mt-1.5 h-2.5" width="30%" />
               </div>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-400 text-center py-6">Aucun événement de suivi pour le moment. Le colis vient probablement d'être créé.</p>
-          )}
-
-          <div className="grid grid-cols-2 gap-3 text-sm border-t border-slate-100 pt-4">
-            <div><span className="text-[11px] text-slate-400 uppercase tracking-wide block">Téléphone</span><span className="text-slate-700">{parcel.phone}</span></div>
-            <div><span className="text-[11px] text-slate-400 uppercase tracking-wide block">Adresse</span><span className="text-slate-700">{parcel.address}</span></div>
-            {parcel.orderNumber && <div><span className="text-[11px] text-slate-400 uppercase tracking-wide block">Commande</span><span className="text-slate-700 font-mono">{parcel.orderNumber}</span></div>}
-            {parcel.deliveryNoteRef && <div><span className="text-[11px] text-slate-400 uppercase tracking-wide block">Bon de livraison</span><span className="text-slate-700 font-mono">{parcel.deliveryNoteRef}</span></div>}
+            ))}
           </div>
+        ) : tracking && !tracking.ok ? (
+          <ErrorState
+            compact
+            title="Suivi indisponible"
+            detail={tracking.error || 'OzonExpress n’a pas répondu pour ce colis.'}
+          />
+        ) : tracking && tracking.events.length > 0 ? (
+          <div>
+            <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-fg">
+              <ScrollText className="h-4 w-4 text-fg-subtle" aria-hidden="true" />
+              Historique de suivi
+            </h4>
+            <div className="relative pl-5">
+              <div className="absolute bottom-1 left-[7px] top-1 w-px bg-border" aria-hidden="true" />
+              {tracking.events.map((e, i) => (
+                <div key={i} className="relative pb-4 last:pb-0">
+                  <StatusDot
+                    tone={i === 0 ? 'positive' : 'neutral'}
+                    size="lg"
+                    pulse={i === 0}
+                    className="absolute -left-[13px] top-1 ring-2 ring-surface"
+                  />
+                  <p className="text-sm font-medium text-fg">{e.status}</p>
+                  {e.comment && <p className="text-xs text-fg-muted">{e.comment}</p>}
+                  {e.date && <p className="num mt-0.5 text-[11px] text-fg-subtle">{formatDateTime(e.date)}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            compact
+            icon={PackageSearch}
+            title="Aucun événement de suivi"
+            description="Le colis vient probablement d’être créé. Les événements OzonExpress apparaîtront ici dès le premier scan."
+          />
+        )}
+
+        <div className="grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-2">
+          <DetailCell icon={Phone} label="Téléphone" value={<span className="num">{parcel.phone}</span>} />
+          <DetailCell icon={MapPin} label="Adresse" value={parcel.address} />
+          {parcel.orderNumber && (
+            <DetailCell icon={Receipt} label="Commande" value={<span className="num">{parcel.orderNumber}</span>} />
+          )}
+          {parcel.deliveryNoteRef && (
+            <DetailCell
+              icon={ScrollText}
+              label="Bon de livraison"
+              value={<span className="num">{parcel.deliveryNoteRef}</span>}
+            />
+          )}
         </div>
       </div>
+    </Modal>
+  )
+}
+
+function DetailCell({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Phone
+  label: string
+  value: React.ReactNode
+}) {
+  return (
+    <div className="min-w-0">
+      <span className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-fg-subtle">
+        <Icon className="h-3 w-3" aria-hidden="true" />
+        {label}
+      </span>
+      <span className="mt-0.5 block text-sm text-fg">{value}</span>
     </div>
   )
 }

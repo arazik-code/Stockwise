@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Search } from 'lucide-react'
 import { playScanSuccess } from '../../utils/sound'
+import { Input, cn } from '../ui'
 
 // ponytail: scanner heuristic — real scanners emit each char faster than a human can type
 const SCANNER_MAX_GAP_MS = 50
@@ -81,27 +83,32 @@ const ProductSearch = forwardRef<ProductSearchHandle, ProductSearchProps>(({ onS
     if (autoScanTimerRef.current) clearTimeout(autoScanTimerRef.current)
   }, [])
 
+  /* A REAL <input>, via the kit's <Input>. PosPage's global key handler gates on
+     e.target.tagName === 'INPUT' - this is the element that gate is protecting,
+     and it is also the scanner's landing pad. The ref still points at the native
+     node, so the useImperativeHandle focus() above is unchanged.
+
+     scanFlash is the one glow on this component: a state signal confirming a
+     scan landed, not ambient decoration. */
   return (
-    <div className="relative">
-      <input
+    <div className="relative" data-tone="positive">
+      <Input
         ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={t('pos.searchPlaceholder')}
-        className={`w-full px-4 py-3 pl-10 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400 transition-colors ${
-          scanFlash ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'
-        }`}
+        aria-label={t('pos.searchPlaceholder')}
+        size="density"
+        leading={<Search />}
+        autoComplete="off"
+        spellCheck={false}
+        className={cn(
+          scanFlash &&
+            'border-[var(--tone)] bg-[var(--tone-soft)] shadow-[0_0_0_3px_color-mix(in_oklab,var(--tone)_25%,transparent)]'
+        )}
       />
-      <svg
-        className="absolute left-3 top-3.5 h-4 w-4 text-slate-400"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
     </div>
   )
 })

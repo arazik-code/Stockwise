@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import { Check } from 'lucide-react'
+import { Badge } from '../ui'
+import type { Tone } from '../../design/status'
 
 type Channel = 'shopify' | 'whatsapp'
 
@@ -10,51 +13,66 @@ interface OnlineComingSoonProps {
   channels?: Channel[]
 }
 
-const CHANNEL_META: Record<Channel, { label: string; className: string; dot: string }> = {
-  shopify: { label: 'Shopify', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  whatsapp: { label: 'WhatsApp', className: 'bg-teal-50 text-teal-700 border-teal-200', dot: 'bg-teal-500' },
+const CHANNEL_TONE: Record<Channel, Tone> = {
+  shopify: 'positive',
+  // WhatsApp is a brand colour handled by StatusBadge's tone escape - here we
+  // reuse "positive" for the pill's tone geometry but override the dot/label
+  // colour with the dedicated brand token so it reads as WhatsApp, not generic
+  // success green.
+  whatsapp: 'positive',
 }
 
 export default function OnlineComingSoon({ title, description, icon, features, channels = [] }: OnlineComingSoonProps) {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="max-w-lg w-full text-center">
-        <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+    <div className="flex flex-1 items-center justify-center p-8">
+      <div className="w-full max-w-lg text-center">
+        <div
+          className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-surface text-[var(--accent-fg)] shadow-glow"
+          style={{ background: 'var(--accent)' }}
+        >
           {icon}
         </div>
 
         {channels.length > 0 && (
-          <div className="flex items-center justify-center gap-2 mb-4">
-            {channels.map((c) => (
-              <span
-                key={c}
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${CHANNEL_META[c].className}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${CHANNEL_META[c].dot}`} />
-                {CHANNEL_META[c].label}
-              </span>
-            ))}
+          <div className="mb-4 flex items-center justify-center gap-2">
+            {channels.map((c) =>
+              c === 'whatsapp' ? (
+                <span
+                  key={c}
+                  className="inline-flex items-center gap-1.5 rounded-chip border border-[color-mix(in_oklab,var(--brand-whatsapp)_35%,transparent)] bg-[var(--brand-whatsapp-soft)] px-2.5 py-1 text-xs font-medium text-[var(--brand-whatsapp-ink)]"
+                >
+                  <span className="h-1.5 w-1.5 rounded-chip bg-[var(--brand-whatsapp)]" />
+                  WhatsApp
+                </span>
+              ) : (
+                <Badge key={c} tone={CHANNEL_TONE[c]} dot>
+                  Shopify
+                </Badge>
+              )
+            )}
           </div>
         )}
 
-        <h2 className="text-xl font-bold text-slate-900 mb-2">{title}</h2>
-        <p className="text-sm text-slate-500 mb-6 leading-relaxed">{description}</p>
+        <h2 className="mb-2 text-xl font-bold text-fg">{title}</h2>
+        <p className="mb-6 text-sm leading-relaxed text-fg-subtle">{description}</p>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 text-left">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">À venir dans cette section</p>
+        <div className="surface-glass p-5 text-left">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+            À venir dans cette section
+          </p>
           <ul className="space-y-2.5">
             {features.map((f) => (
-              <li key={f} className="flex items-start gap-2.5 text-sm text-slate-600">
-                <svg className="w-4 h-4 mt-0.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+              <li key={f} className="flex items-start gap-2.5 text-sm text-fg-muted">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--positive)]" aria-hidden="true" />
                 <span>{f}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="text-xs text-slate-400 mt-5">Section en construction — la boutique en ligne arrive bientôt.</p>
+        <p className="mt-5 text-xs text-fg-subtle">
+          Section en construction — la boutique en ligne arrive bientôt.
+        </p>
       </div>
     </div>
   )

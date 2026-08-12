@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { Box } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+import { Button, ErrorBanner, Input } from '../components/ui'
+import { sectionProps } from '../design/sections'
 
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -21,57 +24,43 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+    // Standalone route, outside MainLayout - there is no #page-chrome host, so
+    // this section only supplies the accent/mesh; the heading renders in-body.
+    <div {...sectionProps('auth')} className="page-mesh flex min-h-screen items-center justify-center bg-canvas px-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-blue-600 mb-4">
-            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-surface bg-[var(--accent)] text-[var(--accent-fg)] shadow-glow">
+            <Box className="h-7 w-7" aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">{t('app.title')}</h1>
-          <p className="text-sm text-slate-500 mt-1">{t('auth.welcome')}</p>
+          <h1 className="text-2xl font-semibold text-fg">{t('app.title')}</h1>
+          <p className="mt-1 text-sm text-fg-subtle">{t('auth.welcome')}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-              {error}
-            </div>
-          )}
+        <form onSubmit={handleSubmit} className="surface-glass space-y-4 p-6">
+          {error && <ErrorBanner>{error}</ErrorBanner>}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t('auth.username')}</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => { setUsername(e.target.value); clearError() }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder={t('auth.username')}
-              autoFocus
-              required
-            />
-          </div>
+          <Input
+            label={t('auth.username')}
+            type="text"
+            value={username}
+            onChange={(e) => { setUsername(e.target.value); clearError() }}
+            placeholder={t('auth.username')}
+            autoFocus
+            required
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{t('auth.password')}</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); clearError() }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder={t('auth.password')}
-              required
-            />
-          </div>
+          <Input
+            label={t('auth.password')}
+            type="password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); clearError() }}
+            placeholder={t('auth.password')}
+            required
+          />
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium text-sm py-2.5 rounded-lg transition-colors"
-          >
+          <Button type="submit" fullWidth loading={isLoading}>
             {isLoading ? t('auth.signingIn') : t('auth.signIn')}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

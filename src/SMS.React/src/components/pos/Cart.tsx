@@ -1,6 +1,12 @@
 import { useTranslation } from 'react-i18next'
+import { AnimatePresence, motion } from 'motion/react'
+import { Minus, Plus, ShoppingCart, X } from 'lucide-react'
 import { useCartStore } from '../../store/cartStore'
 import { formatCurrency } from '../../utils/format'
+import {
+  Badge, Button, CountUp, EmptyState, IconButton, KeyHint, cn, useDataPulse,
+} from '../ui'
+import { listItem } from '../../design/variants'
 import type { Client, LoyaltySettingsConfig } from '../../api/clients'
 
 interface CartProps {
@@ -24,153 +30,219 @@ export default function Cart({ onCheckout, loyaltyClient, loyaltyEnabled, loyalt
     : Math.floor(discountedSubtotal * loyaltySettings.newClientRate / 100)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col bg-canvas">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold text-slate-900">{t('pos.cart')}</h2>
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-base font-semibold tracking-tight text-fg">{t('pos.cart')}</h2>
           {items.length > 0 && (
-            <span className="text-sm font-bold text-white bg-blue-600 px-2.5 py-0.5 rounded-full">
-              {items.reduce((sum, i) => sum + i.quantity, 0)}
-            </span>
+            <Badge tone="info" size="md">
+              <span className="num font-semibold">
+                {items.reduce((sum, i) => sum + i.quantity, 0)}
+              </span>
+            </Badge>
           )}
         </div>
         {items.length > 0 && (
-          <button
-            onClick={clearCart}
-            className="text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
-          >
+          <Button variant="danger-ghost" size="sm" onClick={clearCart}>
             {t('pos.clear')}
-          </button>
+          </Button>
         )}
       </div>
 
-      {/* Cart Items */}
-      <div className="flex-1 overflow-auto p-5 space-y-3">
+      {/* Cart items. Solid rows, never glass - this list scrolls (see PosPage). */}
+      <div className="flex-1 overflow-auto p-4">
         {items.length === 0 ? (
-          <div className="text-center text-slate-400 py-20">
-            <svg className="w-16 h-16 mx-auto mb-4 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            <p className="text-base font-medium">{t('pos.cartEmpty')}</p>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title={t('pos.cartEmpty')}
+            description="Scannez un article ou appuyez sur Inser pour rechercher."
+          />
         ) : (
-          items.map((item) => (
-            <div
-              key={item.productVariantId}
-              className={`rounded-xl p-4 border-2 ${
-                item.isLiquidation
-                  ? 'bg-amber-50 border-amber-200'
-                  : 'bg-white border-slate-100'
-              }`}
-            >
-              {/* Product Name + Remove */}
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-bold text-slate-900 truncate">{item.name}</span>
-                    {item.isLiquidation && (
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded uppercase">
-                        Liquidation
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">
-                    {item.colorName && <span className="font-medium">{item.colorName}</span>}
-                    {item.colorName && item.sizeValue && <span>·</span>}
-                    {item.sizeValue && <span className="font-medium">{item.sizeValue}</span>}
-                  </div>
-                </div>
-                <button
-                  onClick={() => removeItem(item.productVariantId)}
-                  className="text-slate-300 hover:text-red-500 transition-colors ml-2 p-1"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Quantity + Price */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => updateQuantity(item.productVariantId, Math.max(1, item.quantity - 1))}
-                    className="w-9 h-9 rounded-lg border-2 border-slate-200 bg-white hover:bg-slate-50 text-lg font-bold text-slate-600 flex items-center justify-center transition-colors"
-                  >
-                    -
-                  </button>
-                  <span className="text-xl font-bold text-slate-900 w-10 text-center">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(item.productVariantId, item.quantity + 1)}
-                    className="w-9 h-9 rounded-lg border-2 border-slate-200 bg-white hover:bg-slate-50 text-lg font-bold text-slate-600 flex items-center justify-center transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="text-right">
-                  <div className="text-xl font-bold text-slate-900">{formatCurrency(item.lineTotal)}</div>
-                  {item.quantity > 1 && (
-                    <div className="text-xs text-slate-400">{formatCurrency(item.unitPrice)} × {item.quantity}</div>
+          <div className="space-y-3">
+            <AnimatePresence initial={false} mode="popLayout">
+              {items.map((item, i) => (
+                <motion.div
+                  key={item.productVariantId}
+                  layout
+                  custom={i}
+                  variants={listItem}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  data-tone={item.isLiquidation ? 'caution' : undefined}
+                  className={cn(
+                    'rounded-card border p-4 shadow-e1',
+                    item.isLiquidation
+                      ? 'border-[color-mix(in_oklab,var(--tone)_38%,transparent)] bg-[var(--tone-soft)]'
+                      : 'border-border bg-surface'
                   )}
-                </div>
-              </div>
-            </div>
-          ))
+                >
+                  {/* Product name + remove */}
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-base font-semibold text-fg">{item.name}</span>
+                        {item.isLiquidation && (
+                          <Badge tone="caution" size="xs" className="uppercase">
+                            Liquidation
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1.5 text-sm text-fg-subtle">
+                        {item.colorName && <span className="font-medium">{item.colorName}</span>}
+                        {item.colorName && item.sizeValue && <span aria-hidden="true">·</span>}
+                        {item.sizeValue && <span className="num font-medium">{item.sizeValue}</span>}
+                      </div>
+                    </div>
+                    <IconButton
+                      icon={<X className="h-4 w-4" />}
+                      label={t('common.delete')}
+                      variant="danger-ghost"
+                      size="sm"
+                      onClick={() => removeItem(item.productVariantId)}
+                      className="-mr-1 -mt-1"
+                    />
+                  </div>
+
+                  {/* Quantity + price */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <IconButton
+                        icon={<Minus className="h-4 w-4" />}
+                        label="-"
+                        variant="outline"
+                        size="density"
+                        onClick={() => updateQuantity(item.productVariantId, Math.max(1, item.quantity - 1))}
+                      />
+                      <span className="num w-10 text-center text-xl font-bold text-fg">
+                        {item.quantity}
+                      </span>
+                      <IconButton
+                        icon={<Plus className="h-4 w-4" />}
+                        label="+"
+                        variant="outline"
+                        size="density"
+                        onClick={() => updateQuantity(item.productVariantId, item.quantity + 1)}
+                      />
+                    </div>
+                    <div className="text-right">
+                      <div className="num text-xl font-bold text-fg">{formatCurrency(item.lineTotal)}</div>
+                      {item.quantity > 1 && (
+                        <div className="num text-xs text-fg-subtle">
+                          {formatCurrency(item.unitPrice)} × {item.quantity}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         )}
       </div>
 
-      {/* Footer Summary */}
-      <div className="border-t-2 border-slate-100 p-6 space-y-3 bg-white">
-        <div className="flex justify-between text-base">
-          <span className="text-slate-500">{t('common.subtotal')}</span>
-          <span className="font-semibold text-slate-900">{formatCurrency(subtotal())}</span>
+      {/* Footer summary */}
+      <div className="space-y-3 border-t border-border bg-surface p-5">
+        <div className="flex items-baseline justify-between gap-3 text-base">
+          <span className="text-fg-muted">{t('common.subtotal')}</span>
+          <span className="num font-semibold text-fg">{formatCurrency(subtotal())}</span>
         </div>
 
         {loyaltyClient && loyaltyEnabled && pointsToRedeem > 0 && (
-          <div className="flex justify-between text-base">
-            <span className="text-emerald-600 font-medium">Remise fidélité</span>
-            <span className="text-emerald-600 font-bold">-{formatCurrency(loyaltyDiscount)}</span>
+          <div data-tone="positive" className="flex items-baseline justify-between gap-3 text-base">
+            <span className="font-medium text-[var(--tone-ink)]">Remise fidélité</span>
+            <span className="num font-bold text-[var(--tone-ink)]">-{formatCurrency(loyaltyDiscount)}</span>
           </div>
         )}
 
-        <div className="flex justify-between text-base">
-          <span className="text-slate-500">{t('common.tax')} ({(taxRate * 100).toFixed(0)}%)</span>
-          <span className="font-semibold text-slate-900">{formatCurrency(tax())}</span>
+        <div className="flex items-baseline justify-between gap-3 text-base">
+          <span className="text-fg-muted">
+            {t('common.tax')} (<span className="num">{(taxRate * 100).toFixed(0)}</span>%)
+          </span>
+          <span className="num font-semibold text-fg">{formatCurrency(tax())}</span>
         </div>
 
-        <div className="flex justify-between text-xl font-bold border-t-2 border-slate-100 pt-4 mt-3">
-          <span className="text-slate-900">{t('common.total')}</span>
-          <span className="text-slate-900">{formatCurrency(finalTotal > 0 ? finalTotal : 0)}</span>
-        </div>
+        <CartTotal label={t('common.total')} value={finalTotal > 0 ? finalTotal : 0} />
 
         {loyaltyClient && (
-          <div className={`text-sm font-medium p-3 rounded-lg ${loyaltyEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+          <div
+            data-tone="positive"
+            className={cn(
+              'rounded-field p-3 text-sm font-medium',
+              loyaltyEnabled
+                ? 'bg-[var(--tone-soft)] text-[var(--tone-ink)]'
+                : 'bg-sunken text-fg-muted'
+            )}
+          >
             {loyaltyEnabled ? (
               <>
-                {pointsToRedeem > 0 && <span>-{pointsToRedeem} points utilisés · </span>}
-                +{pointsToEarn} points gagnés
+                {pointsToRedeem > 0 && (
+                  <span>-<span className="num">{pointsToRedeem}</span> points utilisés · </span>
+                )}
+                +<span className="num">{pointsToEarn}</span> points gagnés
               </>
             ) : (
-              <span>+{pointsToEarn} points à gagner (fidélité désactivée)</span>
+              <span>
+                +<span className="num">{pointsToEarn}</span> points à gagner (fidélité désactivée)
+              </span>
             )}
           </div>
         )}
 
-        <button
+        <Button
+          variant="solid"
+          size="density"
+          fullWidth
           onClick={onCheckout}
           disabled={items.length === 0}
-          className="w-full py-4 text-lg font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+          className="mt-2 text-base font-bold"
         >
-          {t('pos.checkout')} · {formatCurrency(finalTotal > 0 ? finalTotal : 0)}
-        </button>
+          {t('pos.checkout')} ·{' '}
+          <span className="num">{formatCurrency(finalTotal > 0 ? finalTotal : 0)}</span>
+        </Button>
 
         {items.length > 0 && (
-          <p className="text-xs text-slate-400 text-center mt-2">
-            Entrée pour valider · Esc pour vider
-          </p>
+          <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-fg-subtle">
+            <span className="inline-flex items-center gap-1.5">
+              <KeyHint keys={['Entrée']} /> valider
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyHint keys={['Esc']} /> vider
+            </span>
+          </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The total.
+ *
+ * Presentational only - it takes the already-computed figure as a prop, so no
+ * hook, derived value or handler moves out of Cart above its `return (`.
+ * useDataPulse lives here because the glow is a property of how the total is
+ * DISPLAYED, not of how it is calculated. The pulse is throttled
+ * (PULSE_THROTTLE_MS): a fast scan burst must read as a rhythm, not a strobe.
+ */
+function CartTotal({ label, value }: { label: string; value: number }) {
+  const pulsing = useDataPulse(value)
+
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-card border border-border bg-surface-2 px-4 py-3',
+        'transition-shadow duration-base ease-out-soft',
+        pulsing && 'shadow-glow'
+      )}
+    >
+      <span className="text-sm font-semibold uppercase tracking-wide text-fg-muted">{label}</span>
+      <CountUp
+        value={value}
+        format={formatCurrency}
+        className="text-2xl font-bold tracking-tight text-fg"
+      />
     </div>
   )
 }

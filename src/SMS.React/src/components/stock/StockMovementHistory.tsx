@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { History } from 'lucide-react'
 import { stockApi } from '../../api/stock'
+import { Badge, DataTable, EmptyState, SkeletonTable } from '../ui'
 import type { StockMovement } from '../../types/stock'
 
 interface StockMovementHistoryProps {
@@ -13,15 +15,6 @@ const typeLabels: Record<string, string> = {
   Initial: 'Initial',
   ShopifySync: 'Shopify Sync',
   Purchase: 'Purchase',
-}
-
-const typeColors: Record<string, string> = {
-  Sale: 'text-red-600',
-  Return: 'text-green-600',
-  Adjustment: 'text-blue-600',
-  Initial: 'text-gray-600',
-  ShopifySync: 'text-purple-600',
-  Purchase: 'text-green-600',
 }
 
 export default function StockMovementHistory({ productVariantId }: StockMovementHistoryProps) {
@@ -38,47 +31,91 @@ export default function StockMovementHistory({ productVariantId }: StockMovement
   }, [productVariantId])
 
   if (loading) {
-    return <div className="text-center py-4 text-gray-400">Loading movements...</div>
+    return <SkeletonTable rows={6} cols={6} />
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-      <div className="px-4 py-3 border-b font-medium">Movement History</div>
-      {movements.length === 0 ? (
-        <div className="px-4 py-8 text-center text-gray-400">No movements recorded</div>
-      ) : (
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Date</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Type</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Product</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-gray-500">Change</th>
-              <th className="text-right px-4 py-2 text-xs font-medium text-gray-500">After</th>
-              <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">Reference</th>
-            </tr>
-          </thead>
-          <tbody>
-            {movements.map((m) => (
-              <tr key={m.id} className="border-b hover:bg-gray-50">
-                <td className="px-4 py-2 text-sm">{new Date(m.createdAt).toLocaleString()}</td>
-                <td className={`px-4 py-2 text-sm font-medium ${typeColors[m.type] ?? ''}`}>
-                  {typeLabels[m.type] ?? m.type}
-                </td>
-                <td className="px-4 py-2 text-sm">
-                  <span className="text-gray-900">{m.productName}</span>
-                  <span className="text-gray-400 ml-1">({m.colorName} / {m.sizeValue})</span>
-                </td>
-                <td className={`px-4 py-2 text-sm text-right font-bold ${m.quantityChange < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {m.quantityChange > 0 ? '+' : ''}{m.quantityChange}
-                </td>
-                <td className="px-4 py-2 text-sm text-right">{m.quantityAfter}</td>
-                <td className="px-4 py-2 text-sm text-gray-500">{m.reference ?? '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+    <DataTable<StockMovement>
+      columns={[
+        {
+          key: 'date',
+          header: 'Date',
+          width: '11rem',
+          render: (m) => (
+            <span className="num text-fg-muted">{new Date(m.createdAt).toLocaleString()}</span>
+          ),
+        },
+        {
+          key: 'type',
+          header: 'Type',
+          width: '8rem',
+          render: (m) => (
+            <Badge
+              size="xs"
+              tone={
+                (
+                  {
+                    Sale: 'negative',
+                    Return: 'positive',
+                    Adjustment: 'info',
+                    Initial: 'muted',
+                    ShopifySync: 'special',
+                    Purchase: 'positive',
+                  } as const
+                )[m.type] ?? 'neutral'
+              }
+            >
+              {typeLabels[m.type] ?? m.type}
+            </Badge>
+          ),
+        },
+        {
+          key: 'product',
+          header: 'Product',
+          render: (m) => (
+            <>
+              <span className="font-medium text-fg">{m.productName}</span>
+              <span className="ml-1 text-fg-subtle">
+                ({m.colorName} / {m.sizeValue})
+              </span>
+            </>
+          ),
+        },
+        {
+          key: 'change',
+          header: 'Change',
+          numeric: true,
+          width: '6rem',
+          render: (m) => (
+            <span
+              data-tone={m.quantityChange < 0 ? 'negative' : 'positive'}
+              className="font-bold text-[var(--tone)]"
+            >
+              {m.quantityChange > 0 ? '+' : ''}
+              {m.quantityChange}
+            </span>
+          ),
+        },
+        {
+          key: 'after',
+          header: 'After',
+          numeric: true,
+          width: '6rem',
+          render: (m) => <span className="text-fg">{m.quantityAfter}</span>,
+        },
+        {
+          key: 'reference',
+          header: 'Reference',
+          width: '10rem',
+          render: (m) => <span className="text-fg-subtle">{m.reference ?? '-'}</span>,
+        },
+      ]}
+      data={movements}
+      keyField={(m) => m.id}
+      scrollClassName="max-h-[60vh]"
+      empty={
+        <EmptyState compact icon={History} title="No movements recorded" />
+      }
+    />
   )
 }
