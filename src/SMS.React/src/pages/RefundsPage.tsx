@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import Header from '../components/layout/Header'
 import { refundsApi } from '../api/refunds'
 import { salesApi } from '../api/sales'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency } from '../utils/format'
 import { printHtml } from '../utils/printBridge'
 import { useExchangeStore } from '../store/exchangeStore'
+import CreateRefundTab from '../components/refunds/CreateRefundTab'
+import RefundHistoryTab from '../components/refunds/RefundHistoryTab'
+import { Page, Tabs } from '../components/ui'
 import type { Sale } from '../types/sale'
 import type {
   SaleForRefund,
@@ -18,19 +20,19 @@ import type {
   ProductVariantForExchange,
 } from '../api/refunds'
 
-interface RefundItemSelection {
+export interface RefundItemSelection {
   item: SaleItemForRefund
   quantity: number
 }
 
-interface ExchangeItemSelection {
+export interface ExchangeItemSelection {
   variant: ProductVariantForExchange
   quantity: number
 }
 
-type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'year' | 'custom'
-type RefundType = 'Refund' | 'Exchange'
-type HistoryStatusFilter = 'all' | 'Pending' | 'Completed' | 'Cancelled'
+export type TimeFilter = 'all' | 'today' | 'week' | 'month' | 'year' | 'custom'
+export type RefundType = 'Refund' | 'Exchange'
+export type HistoryStatusFilter = 'all' | 'Pending' | 'Completed' | 'Cancelled'
 
 export default function RefundsPage() {
   const { t } = useTranslation()
@@ -683,38 +685,6 @@ export default function RefundsPage() {
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('fr-FR')
 
-  const paymentMethodLabel = (method: string, tFn: (k: string) => string) => {
-    const map: Record<string, string> = {
-      Cash: tFn('sales.payments.cash'),
-      Card: tFn('sales.payments.card'),
-      Online: tFn('sales.payments.online'),
-    }
-    return map[method] ?? method
-  }
-
-  const saleStatusBadge = (status: string) => {
-    if (status === 'Completed') return 'bg-emerald-100 text-emerald-700'
-    if (status === 'Pending') return 'bg-yellow-100 text-yellow-700'
-    return 'bg-slate-100 text-slate-600'
-  }
-
-  const saleStatusLabel = (status: string, tFn: (k: string) => string) => {
-    if (status === 'Completed') return tFn('sales.completed')
-    return status
-  }
-
-  const refundStatusBadge = (status: string) => {
-    if (status === 'Completed') return 'bg-emerald-100 text-emerald-700'
-    if (status === 'Cancelled') return 'bg-red-100 text-red-700'
-    return 'bg-yellow-100 text-yellow-700'
-  }
-
-  const refundStatusLabel = (status: string, tFn: (k: string) => string) => {
-    if (status === 'Completed') return tFn('refunds.completed')
-    if (status === 'Cancelled') return tFn('refunds.cancelled')
-    return tFn('refunds.pending')
-  }
-
   const tabs = [
     { key: 'create' as const, label: t('refunds.newRefund') },
     { key: 'history' as const, label: t('refunds.history') },
@@ -736,1011 +706,104 @@ export default function RefundsPage() {
     { key: 'Cancelled', label: t('refunds.cancelled') },
   ]
 
-  const gradientColors = [
-    'from-blue-500 to-indigo-600',
-    'from-emerald-500 to-teal-600',
-    'from-violet-500 to-purple-600',
-    'from-amber-500 to-orange-600',
-    'from-rose-500 to-pink-600',
-    'from-cyan-500 to-blue-600',
-  ]
-
-  const getGradient = (id: number) => gradientColors[id % gradientColors.length]
-
   // ── Render ──
 
   return (
-    <div className="flex flex-col h-screen">
-      <Header title={t('refunds.title')} />
-
-      <div className="flex-1 overflow-auto p-6">
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-lg w-fit">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => {
-                setActiveTab(tab.key)
-                setSale(null)
-                setSelections([])
-                setExchangeSelections([])
-              }}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ═══════════════════ CREATE TAB ═══════════════════ */}
-        {activeTab === 'create' && (
-          <div className="max-w-5xl">
-            {!sale ? (
-              <>
-                {/* Receipt QR Scanner */}
-                <div className={`mb-4 p-3 rounded-lg border-2 border-dashed transition-colors ${
-                  qrError ? 'border-red-300 bg-red-50/50' :
-                  scanningQr ? 'border-blue-300 bg-blue-50/50' :
-                  'border-slate-200 bg-slate-50/50'
-                }`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      scanningQr ? 'bg-blue-100' : 'bg-emerald-100'
-                    }`}>
-                      <svg className={`w-5 h-5 ${scanningQr ? 'text-blue-600' : 'text-emerald-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <input
-                        ref={receiptQrRef}
-                        type="text"
-                        value={receiptQrQuery}
-                        onChange={(e) => handleReceiptQrInput(e.target.value)}
-                        onKeyDown={handleReceiptQrKeyDown}
-                        placeholder={t('refunds.scanReceiptQr')}
-                        className="w-full px-3 py-2 text-sm border-0 bg-transparent focus:outline-none focus:ring-0 placeholder:text-slate-400"
-                        disabled={scanningQr}
-                      />
-                    </div>
-                    {scanningQr && (
-                      <div className="text-xs text-blue-500 flex-shrink-0">{t('common.loading')}</div>
-                    )}
-                    {qrError && (
-                      <button onClick={() => { setQrError(null); setReceiptQrQuery(''); receiptQrRef.current?.focus() }} className="text-xs text-red-400 hover:text-red-600 flex-shrink-0">✕</button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Scanned sales list (multiple sales from client QR) */}
-                {scannedSales.length > 0 && (
-                  <div className="mb-4 p-4 bg-white border border-slate-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">
-                      {t('refunds.salesFound', { count: scannedSales.length })}
-                    </h3>
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {scannedSales.map((s) => (
-                        <button
-                          key={s.id}
-                          onClick={() => handleSelectScannedSale(s.id)}
-                          className="w-full flex items-center justify-between p-3 text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-md transition-colors"
-                        >
-                          <div>
-                            <div className="text-sm font-semibold text-slate-900">{s.saleNumber}</div>
-                            <div className="text-xs text-slate-500">{new Date(s.createdAt).toLocaleDateString('fr-FR')} — {s.items.length} article(s)</div>
-                          </div>
-                          <div className="text-sm font-bold text-slate-900">{s.totalAmount.toFixed(2)} DH</div>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setScannedSales([])}
-                      className="mt-3 text-xs text-slate-500 hover:text-slate-700 transition-colors"
-                    >
-                      {t('common.cancel')}
-                    </button>
-                  </div>
-                )}
-
-                {/* Search bar with icon */}
-                <div className="relative mb-4">
-                  <svg
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                  <input
-                    ref={saleSearchRef}
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t('refunds.searchPlaceholder')}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                {/* Time filter buttons */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {timeFilters.map((f) => (
-                    <button
-                      key={f.key}
-                      onClick={() => setTimeFilter(f.key)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                        timeFilter === f.key
-                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Custom date pickers */}
-                {timeFilter === 'custom' && (
-                  <div className="flex gap-3 mb-4">
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">{t('refunds.from')}</label>
-                      <input
-                        type="date"
-                        value={customDateFrom}
-                        onChange={(e) => setCustomDateFrom(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">{t('refunds.to')}</label>
-                      <input
-                        type="date"
-                        value={customDateTo}
-                        onChange={(e) => setCustomDateTo(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Count */}
-                <div className="text-xs text-slate-500 mb-3">
-                  {filteredSales.length} {t('refunds.salesFound')}
-                </div>
-
-                {/* Sales list */}
-                {loading ? (
-                  <div className="text-center py-12 text-slate-400 text-sm">{t('common.loading')}</div>
-                ) : filteredSales.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400 text-sm">{t('refunds.noSales')}</div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredSales.map((s) => (
-                      <div
-                        key={s.id}
-                        onClick={() => handleSelectSale(s)}
-                        className="bg-white rounded-lg border border-slate-200 p-4 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            {/* Gradient avatar with last 4 digits */}
-                            <div
-                              className={`w-10 h-10 rounded-lg bg-gradient-to-br ${getGradient(s.id)} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}
-                            >
-                              {s.saleNumber.slice(-4)}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-semibold text-slate-900">{s.saleNumber}</p>
-                                <span
-                                  className={`px-2 py-0.5 text-xs font-medium rounded-full ${saleStatusBadge(s.status)}`}
-                                >
-                                  {saleStatusLabel(s.status, t)}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-500">
-                                {s.clientName ?? t('refunds.walkInClient')}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-6">
-                            <div className="text-right">
-                              <p className="text-xs text-slate-500">{formatDate(s.createdAt)}</p>
-                              <p className="text-xs text-slate-400">
-                                {paymentMethodLabel(s.paymentMethod, t)}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-slate-900">
-                                {formatCurrency(s.totalAmount)}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {s.items.length} {t('common.items')}
-                              </p>
-                            </div>
-                            <svg
-                              className="w-4 h-4 text-slate-400 flex-shrink-0"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5l7 7-7 7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              /* ── Sale detail view ── */
-              <>
-                {/* Back button */}
-                <button
-                  onClick={() => {
-                    setSale(null)
-                    setSelections([])
-                    setExchangeSelections([])
-                    setReason('')
-                    setNotes('')
-                  }}
-                  className="mb-4 inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                  {t('refunds.backToList')}
-                </button>
-
-                {/* Sale info header */}
-                <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-12 h-12 rounded-lg bg-gradient-to-br ${getGradient(sale.id)} flex items-center justify-center text-white text-base font-bold flex-shrink-0`}
-                    >
-                      {sale.saleNumber.slice(-4)}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-slate-900">{sale.saleNumber}</h3>
-                      <p className="text-sm text-slate-500">
-                        {sale.clientName ?? t('refunds.walkInClient')} · {formatDate(sale.createdAt)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-slate-500">{t('common.total')}</p>
-                      <p className="text-lg font-semibold text-slate-900">
-                        {formatCurrency(sale.totalAmount)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Refund / Exchange toggle */}
-                  <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit mt-4">
-                    <button
-                      onClick={() => setRefundType('Refund')}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                        refundType === 'Refund'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {t('refunds.typeRefund')}
-                    </button>
-                    <button
-                      onClick={() => setRefundType('Exchange')}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                        refundType === 'Exchange'
-                          ? 'bg-orange-600 text-white shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {t('refunds.typeExchange')}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Items table */}
-                <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-slate-900">{t('refunds.selectReturnItems')}</h4>
-                    <button
-                      onClick={handleSelectAllItems}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      {selections.length === sale.items.filter((i) => i.availableForRefund > 0).length
-                        ? t('refunds.deselectAll')
-                        : t('refunds.selectAll')}
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-100">
-                          <th className="text-left py-2 font-medium text-slate-600 w-10"></th>
-                          <th className="text-left py-2 font-medium text-slate-600">{t('products.product')}</th>
-                          <th className="text-left py-2 font-medium text-slate-600">{t('products.color')}</th>
-                          <th className="text-left py-2 font-medium text-slate-600">{t('products.size')}</th>
-                          <th className="text-right py-2 font-medium text-slate-600">{t('common.quantity')}</th>
-                          <th className="text-right py-2 font-medium text-slate-600">{t('products.price')}</th>
-                          <th className="text-right py-2 font-medium text-slate-600">{t('refunds.refunded')}</th>
-                          <th className="text-right py-2 font-medium text-slate-600">{t('refunds.available')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sale.items.map((item) => {
-                          const selected = selections.find((s) => s.item.id === item.id)
-                          return (
-                            <tr
-                              key={item.id}
-                              className={`border-b border-slate-50 ${selected ? 'bg-blue-50/40' : ''}`}
-                            >
-                              <td className="py-3">
-                                <input
-                                  type="checkbox"
-                                  checked={!!selected}
-                                  onChange={() => handleToggleItem(item)}
-                                  disabled={item.availableForRefund <= 0}
-                                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
-                                />
-                              </td>
-                              <td className="py-3 font-medium text-slate-900">{item.productName}</td>
-                              <td className="py-3 text-slate-600">{item.colorName}</td>
-                              <td className="py-3 text-slate-600">{item.sizeValue}</td>
-                              <td className="py-3 text-right text-slate-600">{item.quantity}</td>
-                              <td className="py-3 text-right text-slate-600">{formatCurrency(item.unitPrice)}</td>
-                              <td className="py-3 text-right text-slate-500">{item.alreadyRefundedQuantity}</td>
-                              <td className="py-3 text-right">
-                                <span
-                                  className={`font-medium ${
-                                    item.availableForRefund > 0 ? 'text-emerald-600' : 'text-slate-400'
-                                  }`}
-                                >
-                                  {item.availableForRefund}
-                                </span>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Exchange section */}
-                {refundType === 'Exchange' && (
-                  <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-3">
-                      {t('refunds.selectExchangeItems')}
-                    </h4>
-
-                    <div className="relative mb-4">
-                      <svg
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                      </svg>
-                      <input
-                        ref={exchangeInputRef}
-                        type="text"
-                        value={exchangeSearchQuery}
-                        onChange={(e) => handleExchangeInput(e.target.value)}
-                        onKeyDown={handleExchangeKeyDown}
-                        placeholder={t('refunds.searchExchangePlaceholder') + ' (ou scanner le code-barres)'}
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      />
-                      {searchingExchange && (
-                        <div className="absolute right-3 top-2.5 text-xs text-slate-400">
-                          {t('common.loading')}
-                        </div>
-                      )}
-                      {exchangeSearchResults.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {exchangeSearchResults.map((variant) => (
-                            <div
-                              key={variant.id}
-                              onClick={() => handleAddExchangeItem(variant)}
-                              className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-orange-50 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                {variant.imageUrl ? (
-                                  <img
-                                    src={variant.imageUrl}
-                                    alt={variant.productName}
-                                    className="w-10 h-10 rounded-lg object-cover border border-slate-200 flex-shrink-0"
-                                  />
-                                ) : (
-                                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center flex-shrink-0">
-                                    <span
-                                      className="w-3 h-3 rounded-full border border-slate-300"
-                                      style={{ backgroundColor: variant.colorHexCode }}
-                                    />
-                                  </div>
-                                )}
-                                <div>
-                                  <p className="text-sm font-medium text-slate-900">
-                                    {variant.productName}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {variant.colorName} · {variant.sizeValue}
-                                    {variant.sku && <span className="ml-1 text-slate-400">({variant.sku})</span>}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-xs text-slate-400">
-                                  {t('refunds.stock')}: {variant.stockQuantity}
-                                </span>
-                                <span className="text-sm font-medium text-slate-900">
-                                  {formatCurrency(variant.price)}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {exchangeSelections.length > 0 ? (
-                      <div className="space-y-2">
-                        {exchangeSelections.map((sel) => (
-                          <div
-                            key={sel.variant.id}
-                            className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg"
-                          >
-                            {sel.variant.imageUrl ? (
-                              <img
-                                src={sel.variant.imageUrl}
-                                alt={sel.variant.productName}
-                                className="w-10 h-10 rounded-lg object-cover border border-orange-200 flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center flex-shrink-0">
-                                <span
-                                  className="w-3 h-3 rounded-full border border-orange-300"
-                                  style={{ backgroundColor: sel.variant.colorHexCode }}
-                                />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-900 truncate">
-                                {sel.variant.productName}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {sel.variant.colorName} · {sel.variant.sizeValue}
-                                {sel.variant.sku && <span className="ml-1 text-slate-400">({sel.variant.sku})</span>}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <label className="text-xs text-slate-500">{t('common.quantity')}:</label>
-                              <input
-                                type="number"
-                                min={1}
-                                max={sel.variant.stockQuantity}
-                                value={sel.quantity}
-                                onChange={(e) =>
-                                  handleExchangeQuantityChange(
-                                    sel.variant.id,
-                                    parseInt(e.target.value) || 1
-                                  )
-                                }
-                                className="w-16 px-2 py-1 text-sm border border-slate-200 rounded text-center focus:outline-none focus:ring-2 focus:ring-orange-500"
-                              />
-                            </div>
-                            <span className="text-sm font-medium text-slate-900 w-24 text-right flex-shrink-0">
-                              {formatCurrency(sel.quantity * sel.variant.price)}
-                            </span>
-                            <button
-                              onClick={() => handleRemoveExchangeItem(sel.variant.id)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-400 text-center py-4">
-                        {t('refunds.noExchangeItems')}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Summary + Reason + Submit */}
-                {(selections.length > 0 ||
-                  (refundType === 'Exchange' && exchangeSelections.length > 0)) && (
-                  <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          {t('refunds.globalReason')} <span className="text-slate-400 text-xs">({t('common.cancel')})</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                          placeholder={t('refunds.reasonPlaceholder')}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                          {t('refunds.notes')}
-                        </label>
-                        <input
-                          type="text"
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          placeholder={t('refunds.notesPlaceholder')}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-4 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-500">{t('refunds.returnTotal')}</span>
-                        <span className="text-slate-900 font-medium">{formatCurrency(totalRefund)}</span>
-                      </div>
-                      {refundType === 'Exchange' && (
-                        <>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">{t('refunds.exchangeTotal')}</span>
-                            <span className="text-slate-900 font-medium">
-                              {formatCurrency(totalExchange)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-sm font-semibold border-t border-slate-100 pt-2">
-                            <span className="text-slate-900">{t('refunds.priceDifference')}</span>
-                            <span
-                              className={
-                                priceDifference >= 0 ? 'text-red-600' : 'text-emerald-600'
-                              }
-                            >
-                              {priceDifference >= 0 ? '+' : ''}
-                              {formatCurrency(priceDifference)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex justify-end gap-2 mt-4">
-                      {refundType === 'Exchange' && selections.length > 0 && (
-                        <button
-                          onClick={handleExchangeViaPos}
-                          className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-                        >
-                          {t('refunds.exchangeViaPos')}
-                        </button>
-                      )}
-                      <button
-                        onClick={handleSubmitRefund}
-                        disabled={selections.length === 0 || submitting}
-                        className={`px-6 py-2 text-sm font-medium text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                          refundType === 'Exchange'
-                            ? 'bg-orange-600 hover:bg-orange-700'
-                            : 'bg-emerald-600 hover:bg-emerald-700'
-                        }`}
-                      >
-                        {submitting
-                          ? t('common.loading')
-                          : refundType === 'Exchange'
-                          ? t('refunds.processExchange')
-                          : t('refunds.processRefund')}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ═══════════════════ HISTORY TAB ═══════════════════ */}
-        {activeTab === 'history' && (
-          <div className="max-w-5xl">
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <p className="text-xs font-medium text-slate-500 uppercase">
-                  {t('refunds.stats.totalOperations')}
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{historyStats.total}</p>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <p className="text-xs font-medium text-slate-500 uppercase">
-                  {t('refunds.stats.refundsCount')}
-                </p>
-                <p className="text-2xl font-bold text-blue-600 mt-1">{historyStats.refundsCount}</p>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <p className="text-xs font-medium text-slate-500 uppercase">
-                  {t('refunds.stats.exchangesCount')}
-                </p>
-                <p className="text-2xl font-bold text-orange-600 mt-1">{historyStats.exchangesCount}</p>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <p className="text-xs font-medium text-slate-500 uppercase">
-                  {t('refunds.stats.totalRefunded')}
-                </p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">
-                  {formatCurrency(historyStats.totalRefunded)}
-                </p>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-4">
-                <p className="text-xs font-medium text-slate-500 uppercase">
-                  {t('refunds.stats.pendingCount')}
-                </p>
-                <p className="text-2xl font-bold text-amber-600 mt-1">{historyStats.pendingCount}</p>
-              </div>
-            </div>
-
-            {/* Status filters */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {historyStatusFilters.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setHistoryStatusFilter(f.key)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    historyStatusFilter === f.key
-                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="relative mb-4">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              <input
-                type="text"
-                value={historySearchQuery}
-                onChange={(e) => setHistorySearchQuery(e.target.value)}
-                placeholder={t('refunds.searchHistoryPlaceholder')}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Refunds count */}
-            <div className="text-xs text-slate-500 mb-3">
-              {filteredRefunds.length} {t('refunds.operationsFound')}
-            </div>
-
-            {/* Refund cards */}
-            {loading ? (
-              <div className="text-center py-12 text-slate-400 text-sm">{t('common.loading')}</div>
-            ) : filteredRefunds.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm">{t('refunds.noRefunds')}</div>
-            ) : (
-              <div className="space-y-3">
-                {filteredRefunds.map((refund) => {
-                  const isExpanded = expandedRefundId === refund.id
-                  return (
-                    <div
-                      key={refund.id}
-                      className="bg-white rounded-lg border border-slate-200 overflow-hidden transition-colors"
-                    >
-                      {/* Card header */}
-                      <div
-                        onClick={() => setExpandedRefundId(isExpanded ? null : refund.id)}
-                        className="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            {/* Type badge */}
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                                refund.type === 'Exchange'
-                                  ? 'bg-orange-100 text-orange-700'
-                                  : 'bg-blue-100 text-blue-700'
-                              }`}
-                            >
-                              {refund.type === 'Exchange'
-                                ? t('refunds.typeExchange')
-                                : t('refunds.typeRefund')}
-                            </span>
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">
-                                {refund.refundNumber}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {refund.saleNumber} ·{' '}
-                                {refund.clientName ?? t('refunds.walkInClient')} ·{' '}
-                                {formatDate(refund.refundDate)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <span
-                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${refundStatusBadge(refund.status)}`}
-                            >
-                              {refundStatusLabel(refund.status, t)}
-                            </span>
-                            <span className="text-sm font-semibold text-slate-900">
-                              {formatCurrency(
-                                refund.type === 'Exchange'
-                                  ? refund.totalExchangeAmount
-                                  : refund.totalRefundAmount
-                              )}
-                            </span>
-                            <svg
-                              className={`w-4 h-4 text-slate-400 transition-transform ${
-                                isExpanded ? 'rotate-180' : ''
-                              }`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 9l-7 7-7-7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Expanded details */}
-                      {isExpanded && (
-                        <div className="px-4 pb-4 border-t border-slate-100 pt-4 space-y-4">
-                          {/* Reason & Notes */}
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="font-medium text-slate-600">{t('refunds.reason')}:</span>{' '}
-                              <span className="text-slate-700">{refund.reason}</span>
-                            </div>
-                            {refund.notes && (
-                              <div>
-                                <span className="font-medium text-slate-600">{t('refunds.notes')}:</span>{' '}
-                                <span className="text-slate-700">{refund.notes}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Returned items table */}
-                          {refund.items.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-slate-500 uppercase mb-2">
-                                {t('refunds.returnedItems')}
-                              </p>
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b border-slate-100">
-                                    <th className="text-left py-2 font-medium text-slate-600">
-                                      {t('products.product')}
-                                    </th>
-                                    <th className="text-right py-2 font-medium text-slate-600">
-                                      {t('common.quantity')}
-                                    </th>
-                                    <th className="text-right py-2 font-medium text-slate-600">
-                                      {t('refunds.amount')}
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {refund.items.map((item) => (
-                                    <tr key={item.id} className="border-b border-slate-50">
-                                      <td className="py-2 text-slate-700">
-                                        <p className="font-medium">{item.productName}</p>
-                                        {item.colorName && item.sizeValue && (
-                                          <p className="text-xs text-slate-400">
-                                            {item.colorName} · {item.sizeValue}
-                                          </p>
-                                        )}
-                                      </td>
-                                      <td className="py-2 text-right text-slate-600">
-                                        {item.quantity}
-                                      </td>
-                                      <td className="py-2 text-right text-slate-600">
-                                        {formatCurrency(item.refundAmount)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-
-                          {/* Exchanged items table */}
-                          {refund.type === 'Exchange' && refund.exchangeItems.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-slate-500 uppercase mb-2">
-                                {t('refunds.exchangedItems')}
-                              </p>
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b border-slate-100">
-                                    <th className="text-left py-2 font-medium text-slate-600">
-                                      {t('products.product')}
-                                    </th>
-                                    <th className="text-right py-2 font-medium text-slate-600">
-                                      {t('common.quantity')}
-                                    </th>
-                                    <th className="text-right py-2 font-medium text-slate-600">
-                                      {t('refunds.amount')}
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {refund.exchangeItems.map((item) => (
-                                    <tr key={item.id} className="border-b border-slate-50">
-                                      <td className="py-2 text-slate-700">
-                                        <p className="font-medium">{item.productName}</p>
-                                        {item.colorName && item.sizeValue && (
-                                          <p className="text-xs text-slate-400">
-                                            {item.colorName} · {item.sizeValue}
-                                          </p>
-                                        )}
-                                      </td>
-                                      <td className="py-2 text-right text-slate-600">
-                                        {item.quantity}
-                                      </td>
-                                      <td className="py-2 text-right text-slate-600">
-                                        {formatCurrency(item.totalPrice)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              {refund.priceDifference !== 0 && (
-                                <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between text-sm font-medium">
-                                  <span className="text-slate-500">{t('refunds.priceDifference')}</span>
-                                  <span
-                                    className={
-                                      refund.priceDifference >= 0 ? 'text-red-600' : 'text-emerald-600'
-                                    }
-                                  >
-                                    {refund.priceDifference >= 0 ? '+' : ''}
-                                    {formatCurrency(refund.priceDifference)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Action buttons */}
-                          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handlePrintReceipt(refund)
-                              }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
-                            >
-                              <svg
-                                className="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
-                                />
-                              </svg>
-                              {t('refunds.printReceipt')}
-                            </button>
-
-                            {refund.status === 'Pending' && (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleProcessRefund(refund.id)
-                                  }}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors"
-                                >
-                                  <svg
-                                    className="w-3.5 h-3.5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
-                                  {t('refunds.process')}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleCancelRefund(refund.id)
-                                  }}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
-                                >
-                                  <svg
-                                    className="w-3.5 h-3.5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                  {t('common.cancel')}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
+    <Page section="refunds" title={t('refunds.title')}>
+      <div className="mb-6">
+        <Tabs
+          variant="pill"
+          layoutGroupId="refunds-page-tab"
+          value={activeTab}
+          onChange={(v) => {
+            setActiveTab(v as 'create' | 'history')
+            setSale(null)
+            setSelections([])
+            setExchangeSelections([])
+          }}
+          items={tabs.map((tb) => ({ value: tb.key, label: tb.label }))}
+        />
       </div>
-    </div>
+
+      <>
+        {activeTab === 'create' && (
+          <CreateRefundTab
+            loading={loading}
+            receiptQrRef={receiptQrRef}
+            receiptQrQuery={receiptQrQuery}
+            scanningQr={scanningQr}
+            qrError={qrError}
+            handleReceiptQrInput={handleReceiptQrInput}
+            handleReceiptQrKeyDown={handleReceiptQrKeyDown}
+            setQrError={setQrError}
+            setReceiptQrQuery={setReceiptQrQuery}
+            scannedSales={scannedSales}
+            setScannedSales={setScannedSales}
+            handleSelectScannedSale={handleSelectScannedSale}
+            saleSearchRef={saleSearchRef}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            timeFilter={timeFilter}
+            setTimeFilter={setTimeFilter}
+            timeFilters={timeFilters}
+            customDateFrom={customDateFrom}
+            setCustomDateFrom={setCustomDateFrom}
+            customDateTo={customDateTo}
+            setCustomDateTo={setCustomDateTo}
+            filteredSales={filteredSales}
+            handleSelectSale={handleSelectSale}
+            formatDate={formatDate}
+            sale={sale}
+            setSale={setSale}
+            setSelections={setSelections}
+            setExchangeSelections={setExchangeSelections}
+            setReason={setReason}
+            setNotes={setNotes}
+            refundType={refundType}
+            setRefundType={setRefundType}
+            selections={selections}
+            handleToggleItem={handleToggleItem}
+            handleSelectAllItems={handleSelectAllItems}
+            exchangeSearchQuery={exchangeSearchQuery}
+            exchangeSearchResults={exchangeSearchResults}
+            searchingExchange={searchingExchange}
+            exchangeInputRef={exchangeInputRef}
+            handleExchangeInput={handleExchangeInput}
+            handleExchangeKeyDown={handleExchangeKeyDown}
+            handleAddExchangeItem={handleAddExchangeItem}
+            exchangeSelections={exchangeSelections}
+            handleExchangeQuantityChange={handleExchangeQuantityChange}
+            handleRemoveExchangeItem={handleRemoveExchangeItem}
+            reason={reason}
+            notes={notes}
+            totalRefund={totalRefund}
+            totalExchange={totalExchange}
+            priceDifference={priceDifference}
+            submitting={submitting}
+            handleSubmitRefund={handleSubmitRefund}
+            handleExchangeViaPos={handleExchangeViaPos}
+          />
+        )}
+
+        {activeTab === 'history' && (
+          <RefundHistoryTab
+            loading={loading}
+            historyStats={historyStats}
+            historyStatusFilter={historyStatusFilter}
+            setHistoryStatusFilter={setHistoryStatusFilter}
+            historyStatusFilters={historyStatusFilters}
+            historySearchQuery={historySearchQuery}
+            setHistorySearchQuery={setHistorySearchQuery}
+            filteredRefunds={filteredRefunds}
+            expandedRefundId={expandedRefundId}
+            setExpandedRefundId={setExpandedRefundId}
+            formatDate={formatDate}
+            handlePrintReceipt={handlePrintReceipt}
+            handleProcessRefund={handleProcessRefund}
+            handleCancelRefund={handleCancelRefund}
+          />
+        )}
+      </>
+    </Page>
   )
 }

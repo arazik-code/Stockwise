@@ -1,5 +1,9 @@
 import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
+import { motion } from 'motion/react'
+import { QrCode, X } from 'lucide-react'
+import { cn, Spinner } from '../ui'
+import { formatCurrency } from '../../utils/format'
 import type { SaleForRefund } from '../../api/refunds'
 
 /**
@@ -8,6 +12,10 @@ import type { SaleForRefund } from '../../api/refunds'
  * State machine lives in RefundsPage: this renders idle / scanning / error and
  * the "several sales matched this client QR" picker. Every handler is passed
  * in unchanged.
+ *
+ * This is the single best "feels alive" moment on the page - the dropzone
+ * physically changes tone as the scan progresses, and a fresh error gets a
+ * quick shake so a cashier notices it without having to read the text first.
  */
 
 export interface RefundScannerProps {
@@ -38,23 +46,25 @@ export default function RefundScanner({
   handleSelectScannedSale,
 }: RefundScannerProps) {
   const { t } = useTranslation()
+  const tone = qrError ? 'negative' : scanningQr ? 'info' : 'positive'
 
   return (
     <>
-      {/* Receipt QR Scanner */}
-      <div className={`mb-4 p-3 rounded-lg border-2 border-dashed transition-colors ${
-        qrError ? 'border-red-300 bg-red-50/50' :
-        scanningQr ? 'border-blue-300 bg-blue-50/50' :
-        'border-slate-200 bg-slate-50/50'
-      }`}>
+      {/* Receipt QR Scanner - solid Console surface, no blur; the tone itself
+          is the feedback, so it has to read instantly under shop lighting. */}
+      <motion.div
+        data-tone={tone}
+        animate={qrError ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
+        transition={{ duration: 0.35 }}
+        className={cn(
+          'mb-4 rounded-field border-2 border-dashed p-3 transition-colors',
+          'border-[var(--tone)]/35 bg-[var(--tone-soft)]'
+        )}
+      >
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            scanningQr ? 'bg-blue-100' : 'bg-emerald-100'
-          }`}>
-            <svg className={`w-5 h-5 ${scanningQr ? 'text-blue-600' : 'text-emerald-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-            </svg>
-          </div>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-field bg-[var(--tone)] text-white">
+            {scanningQr ? <Spinner size="sm" tone="current" /> : <QrCode className="h-5 w-5" aria-hidden="true" />}
+          </span>
           <div className="flex-1">
             <input
               ref={receiptQrRef}
@@ -63,43 +73,50 @@ export default function RefundScanner({
               onChange={(e) => handleReceiptQrInput(e.target.value)}
               onKeyDown={handleReceiptQrKeyDown}
               placeholder={t('refunds.scanReceiptQr')}
-              className="w-full px-3 py-2 text-sm border-0 bg-transparent focus:outline-none focus:ring-0 placeholder:text-slate-400"
+              className="w-full border-0 bg-transparent px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-0"
               disabled={scanningQr}
             />
           </div>
           {scanningQr && (
-            <div className="text-xs text-blue-500 flex-shrink-0">{t('common.loading')}</div>
+            <div className="shrink-0 text-xs text-[var(--tone-ink)]">{t('common.loading')}</div>
           )}
           {qrError && (
-            <button onClick={() => { setQrError(null); setReceiptQrQuery(''); receiptQrRef.current?.focus() }} className="text-xs text-red-400 hover:text-red-600 flex-shrink-0">✕</button>
+            <button
+              onClick={() => { setQrError(null); setReceiptQrQuery(''); receiptQrRef.current?.focus() }}
+              aria-label={t('common.cancel')}
+              className="shrink-0 text-[var(--tone)] transition-colors hover:brightness-90"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
-      </div>
+        {qrError && <p className="mt-2 px-1 text-xs text-[var(--tone-ink)]">{qrError}</p>}
+      </motion.div>
 
       {/* Scanned sales list (multiple sales from client QR) */}
       {scannedSales.length > 0 && (
-        <div className="mb-4 p-4 bg-white border border-slate-200 rounded-lg">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">
+        <div className="surface-glass mb-4 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-fg">
             {t('refunds.salesFound', { count: scannedSales.length })}
           </h3>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
+          <div className="max-h-64 space-y-2 overflow-y-auto">
             {scannedSales.map((s) => (
               <button
                 key={s.id}
                 onClick={() => handleSelectScannedSale(s.id)}
-                className="w-full flex items-center justify-between p-3 text-left bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-md transition-colors"
+                className="flex w-full items-center justify-between rounded-field border border-border bg-surface-2 p-3 text-left transition-colors hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
               >
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">{s.saleNumber}</div>
-                  <div className="text-xs text-slate-500">{new Date(s.createdAt).toLocaleDateString('fr-FR')} — {s.items.length} article(s)</div>
+                  <div className="text-sm font-semibold text-fg">{s.saleNumber}</div>
+                  <div className="num text-xs text-fg-subtle">{new Date(s.createdAt).toLocaleDateString('fr-FR')} — {s.items.length} article(s)</div>
                 </div>
-                <div className="text-sm font-bold text-slate-900">{s.totalAmount.toFixed(2)} DH</div>
+                <div className="num text-sm font-bold text-fg">{formatCurrency(s.totalAmount)}</div>
               </button>
             ))}
           </div>
           <button
             onClick={() => setScannedSales([])}
-            className="mt-3 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+            className="mt-3 text-xs text-fg-subtle transition-colors hover:text-fg"
           >
             {t('common.cancel')}
           </button>

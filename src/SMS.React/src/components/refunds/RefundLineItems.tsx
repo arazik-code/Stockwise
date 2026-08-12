@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { formatCurrency } from '../../utils/format'
+import { Checkbox, cn } from '../ui'
 import type { SaleForRefund, SaleItemForRefund } from '../../api/refunds'
 import type { RefundItemSelection } from '../../pages/RefundsPage'
 
@@ -26,12 +27,12 @@ export default function RefundLineItems({
   const { t } = useTranslation()
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold text-slate-900">{t('refunds.selectReturnItems')}</h4>
+    <div className="surface-glass mb-4 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-fg">{t('refunds.selectReturnItems')}</h4>
         <button
           onClick={handleSelectAllItems}
-          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+          className="text-xs font-medium text-[var(--accent)] transition-colors hover:text-[var(--accent-hover)]"
         >
           {selections.length === sale.items.filter((i) => i.availableForRefund > 0).length
             ? t('refunds.deselectAll')
@@ -41,15 +42,15 @@ export default function RefundLineItems({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100">
-              <th className="text-left py-2 font-medium text-slate-600 w-10"></th>
-              <th className="text-left py-2 font-medium text-slate-600">{t('products.product')}</th>
-              <th className="text-left py-2 font-medium text-slate-600">{t('products.color')}</th>
-              <th className="text-left py-2 font-medium text-slate-600">{t('products.size')}</th>
-              <th className="text-right py-2 font-medium text-slate-600">{t('common.quantity')}</th>
-              <th className="text-right py-2 font-medium text-slate-600">{t('products.price')}</th>
-              <th className="text-right py-2 font-medium text-slate-600">{t('refunds.refunded')}</th>
-              <th className="text-right py-2 font-medium text-slate-600">{t('refunds.available')}</th>
+            <tr className="border-b border-border">
+              <th className="w-10 py-2 text-left font-medium text-fg-subtle" />
+              <th className="py-2 text-left font-medium text-fg-subtle">{t('products.product')}</th>
+              <th className="py-2 text-left font-medium text-fg-subtle">{t('products.color')}</th>
+              <th className="py-2 text-left font-medium text-fg-subtle">{t('products.size')}</th>
+              <th className="py-2 text-right font-medium text-fg-subtle">{t('common.quantity')}</th>
+              <th className="py-2 text-right font-medium text-fg-subtle">{t('products.price')}</th>
+              <th className="py-2 text-right font-medium text-fg-subtle">{t('refunds.refunded')}</th>
+              <th className="py-2 text-right font-medium text-fg-subtle">{t('refunds.available')}</th>
             </tr>
           </thead>
           <tbody>
@@ -58,29 +59,23 @@ export default function RefundLineItems({
               return (
                 <tr
                   key={item.id}
-                  className={`border-b border-slate-50 ${selected ? 'bg-blue-50/40' : ''}`}
+                  className={cn('border-b border-border/40', selected && 'bg-[var(--accent-soft)]')}
                 >
                   <td className="py-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={!!selected}
                       onChange={() => handleToggleItem(item)}
                       disabled={item.availableForRefund <= 0}
-                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
                     />
                   </td>
-                  <td className="py-3 font-medium text-slate-900">{item.productName}</td>
-                  <td className="py-3 text-slate-600">{item.colorName}</td>
-                  <td className="py-3 text-slate-600">{item.sizeValue}</td>
-                  <td className="py-3 text-right text-slate-600">{item.quantity}</td>
-                  <td className="py-3 text-right text-slate-600">{formatCurrency(item.unitPrice)}</td>
-                  <td className="py-3 text-right text-slate-500">{item.alreadyRefundedQuantity}</td>
-                  <td className="py-3 text-right">
-                    <span
-                      className={`font-medium ${
-                        item.availableForRefund > 0 ? 'text-emerald-600' : 'text-slate-400'
-                      }`}
-                    >
+                  <td className="py-3 font-medium text-fg">{item.productName}</td>
+                  <td className="py-3 text-fg-muted">{item.colorName}</td>
+                  <td className="py-3 text-fg-muted">{item.sizeValue}</td>
+                  <td className="num py-3 text-right text-fg-muted">{item.quantity}</td>
+                  <td className="num py-3 text-right text-fg-muted">{formatCurrency(item.unitPrice)}</td>
+                  <td className="num py-3 text-right text-fg-subtle">{item.alreadyRefundedQuantity}</td>
+                  <td className="num py-3 text-right">
+                    <span className={item.availableForRefund > 0 ? 'font-medium text-[var(--positive)]' : 'font-medium text-fg-subtle'}>
                       {item.availableForRefund}
                     </span>
                   </td>
