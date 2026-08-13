@@ -37,7 +37,8 @@ public class ShopifyLinkService : IShopifyLinkService
     {
         var rows = await _unitOfWork.Set<ProductVariant>()
             .AsNoTracking()
-            .Where(v => v.ShopifyVariantId == null || v.ShopifyVariantId == 0)
+            .Where(v => (v.ShopifyVariantId == null || v.ShopifyVariantId == 0)
+                && v.IsActive && v.Product.IsActive)
             .Select(v => new
             {
                 v.Id,
