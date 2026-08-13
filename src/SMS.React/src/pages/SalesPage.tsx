@@ -10,8 +10,8 @@ import { useCashOnHand } from '../hooks/useCashOnHand'
 import { showToast } from '../components/shared/Toast'
 import {
   Badge, BreakdownRow, Button, Card, DataTable, IconButton, Input, Page,
-  Select, Skeleton, SkeletonStats, StatCard, StatusBadge, Tabs, Toolbar,
-  type Column,
+  Select, shouldVirtualize, Skeleton, SkeletonStats, StatCard, StatusBadge,
+  Tabs, Toolbar, VirtualTable, type Column,
 } from '../components/ui'
 import type { Sale, SalesReport } from '../types/sale'
 import type { Fournisseur } from '../types/fournisseur'
@@ -375,19 +375,36 @@ export default function SalesPage() {
                   )}
                 </Toolbar>
 
-                <DataTable<Sale>
-                  columns={salesColumns}
-                  data={filteredSales}
-                  keyField={(s) => s.id}
-                  emptyMessage={search.trim() ? t('sales.noResults') : t('sales.noSales')}
-                  selection={{
-                    selected: tableSelection.selected as Set<string | number>,
-                    onToggle: (key) => tableSelection.toggle(Number(key)),
-                    onToggleAll: () => tableSelection.toggleAll(filteredSales),
-                    allSelected: tableSelection.allSelected(filteredSales),
-                    someSelected: tableSelection.someSelected,
-                  }}
-                />
+                {shouldVirtualize(filteredSales.length) ? (
+                  <VirtualTable<Sale>
+                    columns={salesColumns}
+                    data={filteredSales}
+                    keyField={(s) => s.id}
+                    emptyMessage={search.trim() ? t('sales.noResults') : t('sales.noSales')}
+                    height={640}
+                    selection={{
+                      selected: tableSelection.selected as Set<string | number>,
+                      onToggle: (key) => tableSelection.toggle(Number(key)),
+                      onToggleAll: () => tableSelection.toggleAll(filteredSales),
+                      allSelected: tableSelection.allSelected(filteredSales),
+                      someSelected: tableSelection.someSelected,
+                    }}
+                  />
+                ) : (
+                  <DataTable<Sale>
+                    columns={salesColumns}
+                    data={filteredSales}
+                    keyField={(s) => s.id}
+                    emptyMessage={search.trim() ? t('sales.noResults') : t('sales.noSales')}
+                    selection={{
+                      selected: tableSelection.selected as Set<string | number>,
+                      onToggle: (key) => tableSelection.toggle(Number(key)),
+                      onToggleAll: () => tableSelection.toggleAll(filteredSales),
+                      allSelected: tableSelection.allSelected(filteredSales),
+                      someSelected: tableSelection.someSelected,
+                    }}
+                  />
+                )}
               </Card>
             </>
           )}

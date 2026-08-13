@@ -6,7 +6,7 @@ import { productsApi } from '../api/products'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency } from '../utils/format'
 import {
-  Button, DataTable, IconButton, Input, Page, Select, type Column,
+  Button, DataTable, IconButton, Input, Page, Select, shouldVirtualize, VirtualTable, type Column,
 } from '../components/ui'
 import type { Product, ProductVariant } from '../types/product'
 
@@ -134,14 +134,25 @@ export default function ThermalPrinterPage() {
           />
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <DataTable
-              columns={columns}
-              data={allVariants}
-              keyField={({ variant }) => variant.id}
-              loading={loading}
-              emptyMessage={t('common.noData')}
-              sticky
-            />
+            {shouldVirtualize(allVariants.length) ? (
+              <VirtualTable
+                columns={columns}
+                data={allVariants}
+                keyField={({ variant }) => variant.id}
+                loading={loading}
+                emptyMessage={t('common.noData')}
+                height={560}
+              />
+            ) : (
+              <DataTable
+                columns={columns}
+                data={allVariants}
+                keyField={({ variant }) => variant.id}
+                loading={loading}
+                emptyMessage={t('common.noData')}
+                sticky
+              />
+            )}
           </div>
         </div>
 
