@@ -5,6 +5,7 @@ import { adminUsersApi, type AdminUser } from '../../api/adminUsers'
 import { adminRolesApi, type Role } from '../../api/adminRoles'
 import { adminHealthApi, adminAuditApi, type HealthBoard, type AuditLogEntry } from '../../api/adminHealth'
 import { Card, Page, Skeleton, SkeletonStats, StatCard, StatusBadge } from '../../components/ui'
+import BackupPanel from '../../components/admin/BackupPanel'
 
 export default function AdminOverviewPage() {
   const [users, setUsers] = useState<AdminUser[] | null>(null)
@@ -98,6 +99,8 @@ export default function AdminOverviewPage() {
             )}
           </div>
         </Card>
+
+        <BackupPanel />
       </div>
     </Page>
   )

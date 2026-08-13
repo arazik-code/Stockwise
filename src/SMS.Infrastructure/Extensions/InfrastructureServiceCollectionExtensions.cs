@@ -39,6 +39,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<HtmlReceiptGenerator>();
         services.AddScoped<IImageStorageService, ImageStorageService>();
         services.AddScoped<IBarcodeService, BarcodeService>();
+        services.AddScoped<IBackupService, BackupService>();
 
         var shopifySection = configuration.GetSection("Shopify");
         services.Configure<ShopifyOptions>(shopifySection);

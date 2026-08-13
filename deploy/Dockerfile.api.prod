@@ -16,7 +16,12 @@ RUN npm run build
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
 EXPOSE 8080
-RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 curl gnupg && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg && \
+    . /etc/os-release && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 && \
+    apt-get purge -y gnupg && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8080/api/health || exit 1
 
@@ -43,6 +48,6 @@ COPY --from=frontend-build --chown=$APP_UID:$APP_UID /src/dist ./wwwroot
 # already exists in the image - it was previously created lazily at runtime by ImageStorageService,
 # so the volume initialized empty and root-owned, making it unwritable by the non-root $APP_UID
 # below and causing every image upload to 500.
-RUN mkdir -p /app/wwwroot/uploads/products && chown -R $APP_UID:$APP_UID /app/wwwroot/uploads
+RUN mkdir -p /app/wwwroot/uploads/products /app/backups && chown -R $APP_UID:$APP_UID /app/wwwroot/uploads /app/backups
 USER $APP_UID
 ENTRYPOINT ["dotnet", "SMS.API.dll"]

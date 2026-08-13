@@ -22,6 +22,7 @@ export const SECTION_LABELS: Record<string, string> = {
   AdminUsers: 'Admin · Utilisateurs',
   AdminRoles: 'Admin · Rôles',
   AdminHealth: 'Admin · Santé système',
+  AdminBackup: 'Admin · Sauvegardes',
 }
 
 export function sectionLabel(key: string): string {

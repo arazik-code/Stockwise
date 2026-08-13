@@ -40,6 +40,7 @@ services:
       - Sync__ApiKey=${SYNC_API_KEY}
     volumes:
       - uploads:/app/wwwroot/uploads
+      - backups:/app/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,5 +66,9 @@ services:
 volumes:
   pgdata:
   uploads:
+  # Manual/pre-reset backups created via the Admin dashboard. Separate from the existing
+  # deploy/backup-vps.sh nightly cron dumps under /opt/flexshoes/backups on the host - two
+  # independent safety nets, not one shared set.
+  backups:
   caddy_data:
   caddy_config:

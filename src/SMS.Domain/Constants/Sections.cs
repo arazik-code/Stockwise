@@ -29,12 +29,13 @@ public static class Sections
     public const string AdminUsers = "AdminUsers";
     public const string AdminRoles = "AdminRoles";
     public const string AdminHealth = "AdminHealth";
+    public const string AdminBackup = "AdminBackup";
 
     public static readonly IReadOnlyList<string> All = new[]
     {
         Dashboard, Pos, Products, Stock, Catalog, Fournisseurs, Clients, Refunds, Invoices,
         CashDrawer, Reports, Settings, WhatsApp, Shopify, OnlineOrders, OrderConfirmation,
-        OzonExpress, CodFinance, AdminUsers, AdminRoles, AdminHealth
+        OzonExpress, CodFinance, AdminUsers, AdminRoles, AdminHealth, AdminBackup
     };
 
     // Reproduces today's real [Authorize(Roles=...)] matrix across all controllers, so seeding
