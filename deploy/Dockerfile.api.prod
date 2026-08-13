@@ -38,5 +38,11 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish .
 COPY --from=frontend-build --chown=$APP_UID:$APP_UID /src/dist ./wwwroot
+# docker-compose.prod.yml mounts a named volume at wwwroot/uploads. Docker only copies a named
+# volume's initial content/ownership from the image path on first creation, and only if that path
+# already exists in the image - it was previously created lazily at runtime by ImageStorageService,
+# so the volume initialized empty and root-owned, making it unwritable by the non-root $APP_UID
+# below and causing every image upload to 500.
+RUN mkdir -p /app/wwwroot/uploads/products && chown -R $APP_UID:$APP_UID /app/wwwroot/uploads
 USER $APP_UID
 ENTRYPOINT ["dotnet", "SMS.API.dll"]

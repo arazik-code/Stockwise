@@ -26,8 +26,10 @@ public partial class SecurityHeadersMiddleware
                 // ReceiptDesigner.tsx) loads JsBarcode from there via a <script> tag, and that HTML is
                 // opened in a same-origin window/frame that inherits this page's CSP. img-src needs
                 // api.qrserver.com for the receipt template's demo QR preview, alongside Shopify's CDN
-                // for product images.
-                headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.shopify.com https://*.shopifycdn.com https://api.qrserver.com; font-src 'self' data:; connect-src 'self' wss: ws:;";
+                // for product images. connect-src needs http://localhost:5001 - the desktop app's local
+                // hardware bridge (api/hardwareClient.ts) polls the printer/scanner status endpoint
+                // there directly from the renderer, outside the main API origin.
+                headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn.shopify.com https://*.shopifycdn.com https://api.qrserver.com; font-src 'self' data:; connect-src 'self' wss: ws: http://localhost:5001;";
             }
 
             if (context.Request.IsHttps)
