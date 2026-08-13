@@ -1,15 +1,20 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from '../../components/layout/Header'
+import { FileText, Plus, RefreshCw, Truck } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import CreateOzonParcelModal from '../../components/ozon/CreateOzonParcelModal'
 import OzonTrackingModal from '../../components/ozon/OzonTrackingModal'
 import {
-  ozonApi, OZON_STATUS_META, ozonDeliveryNoteLabel10x10Url,
+  ozonApi, ozonDeliveryNoteLabel10x10Url,
   type OzonDashboard, type OzonParcel, type OzonParcelStatus,
   type OzonDeliveryNote, type OzonConfigStatus,
 } from '../../api/ozon'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import {
+  Button, Card, Checkbox, DataTable, EmptyState, Input, Page,
+  Pagination, SkeletonStats, StatCard, StatusBadge, Tabs, cn, type Column,
+} from '../../components/ui'
+import type { Tone } from '../../design/status'
 
 type Tab = 'parcels' | 'notes'
 type StatusFilter = 'all' | OzonParcelStatus
@@ -131,170 +136,213 @@ export default function OnlineDeliveryPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col flex-1">
-        <Header title="Livraison — OzonExpress" />
-        <div className="flex-1 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" /></div>
-      </div>
+      <Page section="onlineDelivery" title="Livraison — OzonExpress">
+        <SkeletonStats count={6} />
+      </Page>
     )
   }
 
   // Not configured → setup gate
   if (!status?.configured) {
     return (
-      <div className="flex flex-col flex-1">
-        <Header title="Livraison — OzonExpress" />
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md text-center bg-white border border-slate-200 rounded-2xl p-8">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1" /></svg>
-            </div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">OzonExpress non configuré</h2>
-            <p className="text-sm text-slate-500 mb-5">Connectez votre compte OzonExpress pour créer des colis, suivre les livraisons et gérer vos bons de livraison directement depuis le système.</p>
-            <button onClick={() => navigate('/online/settings')} className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-              Configurer dans Paramètres →
-            </button>
-          </div>
+      <Page section="onlineDelivery" title="Livraison — OzonExpress">
+        <div className="flex flex-1 items-center justify-center p-6">
+          <Card className="max-w-md text-center">
+            <EmptyState
+              icon={Truck}
+              title="OzonExpress non configuré"
+              description="Connectez votre compte OzonExpress pour créer des colis, suivre les livraisons et gérer vos bons de livraison directement depuis le système."
+              action={
+                <Button onClick={() => navigate('/online/settings')}>
+                  Configurer dans Paramètres →
+                </Button>
+              }
+            />
+          </Card>
         </div>
-      </div>
+      </Page>
     )
   }
 
   const citiesReady = (status.cityCount ?? 0) > 0
 
-  return (
-    <div className="flex flex-col flex-1">
-      <Header
-        title="Livraison — OzonExpress"
-        actions={
-          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-            Nouveau colis
-          </button>
-        }
-      />
+  const kpiTone: Record<'total' | 'transit' | 'delivered' | 'returned' | 'codPending' | 'codCollected', Tone> = {
+    total: 'info',
+    transit: 'special',
+    delivered: 'positive',
+    returned: 'negative',
+    codPending: 'caution',
+    codCollected: 'positive',
+  }
 
-      {/* Hero KPI band */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 px-6 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs font-medium text-slate-300 uppercase tracking-wide">Aperçu des livraisons</p>
+  const parcelColumns: Column<OzonParcel>[] = [
+    {
+      key: 'select',
+      header: '',
+      width: '2.5rem',
+      render: (p) => (
+        <Checkbox
+          checked={selected.has(p.trackingNumber)}
+          onChange={() => toggleSelect(p.trackingNumber)}
+          aria-label="Selectionner le colis"
+        />
+      ),
+    },
+    { key: 'tracking', header: 'Suivi', render: (p) => <span className="num font-mono font-medium text-fg">{p.trackingNumber}</span> },
+    {
+      key: 'receiver',
+      header: 'Destinataire',
+      render: (p) => (
+        <div>
+          <p className="font-medium text-fg">{p.receiver}</p>
+          <p className="num text-xs text-fg-subtle">{p.phone}</p>
+        </div>
+      ),
+    },
+    { key: 'city', header: 'Ville', render: (p) => <span className="text-fg-muted">{p.cityName ?? '—'}</span> },
+    { key: 'cod', header: 'COD', numeric: true, render: (p) => <span className="whitespace-nowrap font-semibold text-fg">{formatCurrency(p.price)}</span> },
+    {
+      key: 'status',
+      header: 'Statut',
+      align: 'center',
+      render: (p) => (
+        <div className="flex flex-col items-center gap-0.5">
+          <StatusBadge domain="ozonParcel" value={p.status} size="xs" />
+          {p.statusText && <span className="text-[10px] text-fg-subtle">{p.statusText}</span>}
+        </div>
+      ),
+    },
+    { key: 'created', header: 'Créé', render: (p) => <span className="whitespace-nowrap text-fg-muted">{formatDateTime(p.createdAt)}</span> },
+    {
+      key: 'bl',
+      header: 'BL',
+      align: 'center',
+      render: (p) =>
+        p.deliveryNoteRef ? (
+          <a
+            href={ozonDeliveryNoteLabel10x10Url(p.deliveryNoteRef)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+            title="Étiquette OzonExpress (code-barres + QR, à coller sur le colis)"
+          >
+            🖨 Étiquette
+          </a>
+        ) : (
+          <span className="text-xs text-fg-subtle">—</span>
+        ),
+    },
+  ]
+
+  return (
+    <Page
+      section="onlineDelivery"
+      title="Livraison — OzonExpress"
+      actions={
+        <Button icon={<Plus className="h-4 w-4" />} onClick={() => setShowCreate(true)}>
+          Nouveau colis
+        </Button>
+      }
+    >
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">Aperçu des livraisons</p>
           <div className="flex gap-2">
-            <button onClick={handleSyncTracking} disabled={syncingTracking} className="px-3 py-1.5 text-xs font-medium text-white bg-white/10 border border-white/20 rounded-md hover:bg-white/20 disabled:opacity-50">
-              {syncingTracking ? 'Synchronisation…' : '↻ Actualiser le suivi'}
-            </button>
-            <button onClick={handleSyncCities} disabled={syncingCities} className="px-3 py-1.5 text-xs font-medium text-white bg-white/10 border border-white/20 rounded-md hover:bg-white/20 disabled:opacity-50">
-              {syncingCities ? 'Synchronisation…' : `↻ Villes (${status.cityCount})`}
-            </button>
+            <Button
+              size="xs"
+              variant="outline"
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              loading={syncingTracking}
+              disabled={syncingTracking}
+              onClick={handleSyncTracking}
+            >
+              {syncingTracking ? 'Synchronisation…' : 'Actualiser le suivi'}
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              loading={syncingCities}
+              disabled={syncingCities}
+              onClick={handleSyncCities}
+            >
+              {syncingCities ? 'Synchronisation…' : `Villes (${status.cityCount})`}
+            </Button>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <KpiTile label="Total colis" value={String(dashboard?.totalParcels ?? 0)} accent="cyan" />
-          <KpiTile label="En transit" value={String(dashboard?.inTransit ?? 0)} accent="violet" />
-          <KpiTile label="Livrés" value={String(dashboard?.delivered ?? 0)} accent="emerald" />
-          <KpiTile label="Retours / refus" value={String((dashboard?.returned ?? 0) + (dashboard?.refused ?? 0))} accent="rose" />
-          <KpiTile label="COD à encaisser" value={formatCurrency(dashboard?.codPending ?? 0)} accent="amber" />
-          <KpiTile label="COD encaissé" value={formatCurrency(dashboard?.codCollected ?? 0)} accent="emerald" />
-        </div>
-      </div>
 
-      <div className="p-6 flex-1 space-y-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
+          <StatCard label="Total colis" value={String(dashboard?.totalParcels ?? 0)} tone={kpiTone.total} />
+          <StatCard label="En transit" value={String(dashboard?.inTransit ?? 0)} tone={kpiTone.transit} />
+          <StatCard label="Livrés" value={String(dashboard?.delivered ?? 0)} tone={kpiTone.delivered} />
+          <StatCard label="Retours / refus" value={String((dashboard?.returned ?? 0) + (dashboard?.refused ?? 0))} tone={kpiTone.returned} />
+          <StatCard label="COD à encaisser" value={formatCurrency(dashboard?.codPending ?? 0)} tone={kpiTone.codPending} />
+          <StatCard label="COD encaissé" value={formatCurrency(dashboard?.codCollected ?? 0)} tone={kpiTone.codCollected} />
+        </div>
+
         {!citiesReady && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 flex items-center justify-between">
+          <div
+            data-tone="caution"
+            className="flex items-center justify-between gap-3 rounded-card border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] px-4 py-3 text-sm text-[var(--tone-ink)]"
+          >
             <span>La liste des villes OzonExpress n'est pas encore synchronisée — nécessaire pour créer des colis.</span>
-            <button onClick={handleSyncCities} disabled={syncingCities} className="text-xs font-medium text-amber-900 underline disabled:opacity-50">
+            <button
+              onClick={handleSyncCities}
+              disabled={syncingCities}
+              className="shrink-0 text-xs font-medium underline-offset-2 hover:underline disabled:opacity-50"
+            >
               {syncingCities ? 'Synchronisation…' : 'Synchroniser maintenant'}
             </button>
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <button onClick={() => setTab('parcels')} className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${tab === 'parcels' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Colis</button>
-          <button onClick={() => setTab('notes')} className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${tab === 'notes' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Bons de livraison ({notes.length})</button>
-        </div>
+        <Tabs
+          variant="segmented"
+          layoutGroupId="online-delivery-tab"
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          items={[
+            { value: 'parcels', label: 'Colis' },
+            { value: 'notes', label: `Bons de livraison (${notes.length})` },
+          ]}
+        />
 
         {tab === 'parcels' ? (
-          <>
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
-              <input type="text" placeholder="Rechercher suivi, client, téléphone, ville..." value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 min-w-[220px] max-w-sm px-3.5 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              <div className="flex gap-1 bg-slate-100 rounded-lg p-1 flex-wrap">
-                {STATUS_FILTERS.map((f) => (
-                  <button key={f.key} onClick={() => setStatusFilter(f.key)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${statusFilter === f.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{f.label}</button>
-                ))}
-              </div>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher suivi, client, téléphone, ville..."
+                size="sm"
+                wrapperClassName="min-w-[220px] max-w-sm flex-1"
+              />
+              <Tabs
+                variant="pill"
+                size="sm"
+                layoutGroupId="online-delivery-status-filter"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v as StatusFilter)}
+                items={STATUS_FILTERS.map((f) => ({ value: f.key, label: f.label }))}
+              />
               {selected.size > 0 && (
-                <button onClick={handleCreateNote} disabled={creatingNote} className="px-3.5 py-2 text-sm font-medium text-white bg-slate-900 rounded-md hover:bg-slate-800 disabled:opacity-50">
+                <Button size="sm" loading={creatingNote} disabled={creatingNote} onClick={handleCreateNote}>
                   {creatingNote ? 'Création…' : `Créer BL (${selected.size})`}
-                </button>
+                </Button>
               )}
-              <span className="text-xs text-slate-400 ml-auto">{filtered.length} colis</span>
+              <span className="num ml-auto text-xs text-fg-subtle">{filtered.length} colis</span>
             </div>
 
-            {filtered.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white border border-slate-200 rounded-lg">Aucun colis</div>
-            ) : (
-              <>
-                <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[820px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50">
-                          <th className="w-8 px-3 py-2.5"></th>
-                          <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Suivi</th>
-                          <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Destinataire</th>
-                          <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Ville</th>
-                          <th className="text-right px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">COD</th>
-                          <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
-                          <th className="text-left px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Créé</th>
-                          <th className="text-center px-3 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">BL</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {paged.map((p) => {
-                          const meta = OZON_STATUS_META[p.status]
-                          return (
-                            <tr key={p.id} onClick={() => setTrackParcel(p)} className="hover:bg-slate-50 cursor-pointer transition-colors">
-                              <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                                <input type="checkbox" checked={selected.has(p.trackingNumber)} onChange={() => toggleSelect(p.trackingNumber)} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                              </td>
-                              <td className="px-3 py-2.5 text-sm font-mono font-medium text-slate-900">{p.trackingNumber}</td>
-                              <td className="px-3 py-2.5 text-sm">
-                                <p className="font-medium text-slate-900">{p.receiver}</p>
-                                <p className="text-xs text-slate-400">{p.phone}</p>
-                              </td>
-                              <td className="px-3 py-2.5 text-sm text-slate-600">{p.cityName ?? '—'}</td>
-                              <td className="px-3 py-2.5 text-sm text-right font-semibold text-slate-900 whitespace-nowrap">{formatCurrency(p.price)}</td>
-                              <td className="px-3 py-2.5 text-center">
-                                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${meta.className}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-                                  {p.statusText || meta.label}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-sm text-slate-500 whitespace-nowrap">{formatDateTime(p.createdAt)}</td>
-                              <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                {p.deliveryNoteRef ? (
-                                  <a href={ozonDeliveryNoteLabel10x10Url(p.deliveryNoteRef)} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-emerald-600 hover:text-emerald-800" title="Étiquette OzonExpress (code-barres + QR, à coller sur le colis)">
-                                    🖨 Étiquette
-                                  </a>
-                                ) : (
-                                  <span className="text-xs text-slate-300">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {pageCount > 1 && (
-                    <div className="flex items-center justify-center gap-2 py-3 border-t border-slate-100">
-                      <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Précédent</button>
-                      <span className="text-sm text-slate-500 px-2">Page {currentPage} / {pageCount}</span>
-                      <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={currentPage === pageCount} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Suivant</button>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </>
+            <DataTable
+              columns={parcelColumns}
+              data={paged}
+              keyField={(p) => p.id}
+              onRowClick={(p) => setTrackParcel(p)}
+              emptyMessage="Aucun colis"
+            />
+            <Pagination page={currentPage} pageCount={pageCount} total={filtered.length} onChange={setPage} />
+          </div>
         ) : (
           <DeliveryNotesTab notes={notes} />
         )}
@@ -307,55 +355,47 @@ export default function OnlineDeliveryPage() {
         />
       )}
       {trackParcel && <OzonTrackingModal parcel={trackParcel} onClose={() => setTrackParcel(null)} />}
-    </div>
+    </Page>
   )
 }
 
 function DeliveryNotesTab({ notes }: { notes: OzonDeliveryNote[] }) {
   if (notes.length === 0) {
     return (
-      <div className="text-center py-16 bg-white border border-slate-200 rounded-lg">
-        <p className="text-sm text-slate-500 mb-1">Aucun bon de livraison</p>
-        <p className="text-xs text-slate-400">Sélectionnez des colis dans l'onglet « Colis » puis cliquez sur « Créer BL » pour générer un bon de livraison.</p>
+      <div className="surface-glass">
+        <EmptyState
+          icon={FileText}
+          title="Aucun bon de livraison"
+          description="Sélectionnez des colis dans l'onglet « Colis » puis cliquez sur « Créer BL » pour générer un bon de livraison."
+        />
       </div>
     )
   }
   return (
     <div className="space-y-2">
       {notes.map((n) => (
-        <div key={n.id} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            </div>
+        <Card key={n.id} className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-sunken text-fg-muted">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </span>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900 font-mono">{n.ref}</p>
-              <p className="text-xs text-slate-400">{n.parcelCount} colis · {formatDateTime(n.createdAt)} · {n.status === 'Saved' ? 'Enregistré' : 'Brouillon'}</p>
+              <p className="num font-mono text-sm font-semibold text-fg">{n.ref}</p>
+              <p className="text-xs text-fg-subtle">
+                <span className="num">{n.parcelCount}</span> colis · {formatDateTime(n.createdAt)} · {n.status === 'Saved' ? 'Enregistré' : 'Brouillon'}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <a href={n.pdfUrl} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100">BL PDF</a>
-            <a href={n.labelsA4Url} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100">Étiquettes A4</a>
-            <a href={n.labels10x10Url} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-md hover:bg-slate-100">Étiquettes 10×10</a>
+          <div className="flex shrink-0 items-center gap-2">
+            <a href={n.pdfUrl} target="_blank" rel="noopener noreferrer" className={cn(linkPillClass)}>BL PDF</a>
+            <a href={n.labelsA4Url} target="_blank" rel="noopener noreferrer" className={cn(linkPillClass)}>Étiquettes A4</a>
+            <a href={n.labels10x10Url} target="_blank" rel="noopener noreferrer" className={cn(linkPillClass)}>Étiquettes 10×10</a>
           </div>
-        </div>
+        </Card>
       ))}
     </div>
   )
 }
 
-function KpiTile({ label, value, accent }: { label: string; value: string; accent: 'emerald' | 'cyan' | 'violet' | 'amber' | 'rose' }) {
-  const ring = {
-    emerald: 'from-emerald-400/20 to-emerald-400/0 ring-emerald-400/30',
-    cyan: 'from-cyan-400/20 to-cyan-400/0 ring-cyan-400/30',
-    violet: 'from-violet-400/20 to-violet-400/0 ring-violet-400/30',
-    amber: 'from-amber-400/20 to-amber-400/0 ring-amber-400/30',
-    rose: 'from-rose-400/20 to-rose-400/0 ring-rose-400/30',
-  }[accent]
-  return (
-    <div className={`rounded-xl p-4 bg-gradient-to-br ${ring} ring-1 backdrop-blur-sm`}>
-      <p className="text-[11px] font-medium text-slate-300 uppercase tracking-wide">{label}</p>
-      <p className="text-lg font-bold text-white mt-1 truncate">{value}</p>
-    </div>
-  )
-}
+const linkPillClass =
+  'rounded-field border border-border bg-sunken px-2.5 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-2'

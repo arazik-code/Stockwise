@@ -5,6 +5,8 @@ import { openWhatsApp } from '../../utils/whatsapp'
 import { copyImageToClipboard, downloadDataUrl } from '../../utils/clipboardImage'
 import { showToast } from '../shared/Toast'
 import { QRCodeSVG } from 'qrcode.react'
+import { CheckCircle2, Printer, Send } from 'lucide-react'
+import { Button, Modal } from '../ui'
 
 interface ClientQrCardProps {
   client: Client
@@ -120,64 +122,58 @@ export default function ClientQrCard({ client, onClose, title, subtitle, closeLa
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-96 border border-slate-200">
-        <div className="text-center mb-5">
-          <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
-            <svg className="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-semibold text-slate-900">{title ?? 'Client enregistré!'}</h2>
-          <p className="text-sm text-slate-500">{subtitle ?? client.name}</p>
-        </div>
-
-        <div className="flex justify-center mb-5">
-          <div className="p-4 bg-white border-2 border-emerald-200 rounded-lg">
-            <QRCodeSVG
-              value={client.qrCode}
-              size={160}
-              level="H"
-              includeMargin={true}
-              bgColor="#ffffff"
-              fgColor="#065f46"
-            />
-          </div>
-        </div>
-
-        <div className="text-center mb-5">
-          <p className="text-xs text-slate-500 mb-1">Code du client</p>
-          <p className="font-mono text-sm font-medium text-slate-700 bg-slate-100 px-3 py-1.5 rounded inline-block">
-            {client.qrCode}
-          </p>
-          <p className="text-sm text-emerald-600 mt-2 font-medium">
-            {client.totalPoints} points disponibles
-          </p>
-        </div>
-
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={handlePrintQr}
-            className="flex-1 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors"
-          >
-            Imprimer QR Code
-          </button>
-          <button
-            onClick={handleSendWhatsApp}
-            disabled={sendingWhatsApp}
-            className="flex-1 py-2.5 text-sm font-medium text-white bg-green-500 rounded-md hover:bg-green-600 transition-colors disabled:opacity-50"
-          >
-            {sendingWhatsApp ? 'Préparation...' : 'Envoyer WhatsApp'}
-          </button>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="w-full py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
-        >
-          {closeLabel ?? 'Continuer'}
-        </button>
+    <Modal open onClose={onClose} size="sm" showClose={false}>
+      <div className="mb-5 text-center">
+        <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-chip bg-[var(--positive-soft)] text-[var(--positive)]">
+          <CheckCircle2 className="h-7 w-7" />
+        </span>
+        <h2 className="text-lg font-semibold text-fg">{title ?? 'Client enregistré!'}</h2>
+        <p className="text-sm text-fg-subtle">{subtitle ?? client.name}</p>
       </div>
-    </div>
+
+      <div className="mb-5 flex justify-center">
+        {/* The QR must stay true black-on-white to keep scanning reliable across cameras and print - a deliberate light island, like the print surfaces. */}
+        <div className="rounded-card border-2 border-[color-mix(in_oklab,var(--positive)_28%,transparent)] bg-white p-4">
+          <QRCodeSVG
+            value={client.qrCode}
+            size={160}
+            level="H"
+            includeMargin={true}
+            bgColor="#ffffff"
+            fgColor="#065f46"
+          />
+        </div>
+      </div>
+
+      <div className="mb-5 text-center">
+        <p className="mb-1 text-xs text-fg-subtle">Code du client</p>
+        <p className="num inline-block rounded-inset bg-sunken px-3 py-1.5 font-mono text-sm font-medium text-fg-muted">
+          {client.qrCode}
+        </p>
+        <p className="num mt-2 text-sm font-medium text-[var(--positive)]">
+          {client.totalPoints} points disponibles
+        </p>
+      </div>
+
+      <div className="mb-3 flex gap-2">
+        <Button variant="success" className="flex-1" icon={<Printer className="h-4 w-4" />} onClick={handlePrintQr}>
+          Imprimer QR Code
+        </Button>
+        <Button
+          variant="success"
+          className="flex-1"
+          icon={<Send className="h-4 w-4" />}
+          disabled={sendingWhatsApp}
+          loading={sendingWhatsApp}
+          onClick={handleSendWhatsApp}
+        >
+          {sendingWhatsApp ? 'Préparation...' : 'Envoyer WhatsApp'}
+        </Button>
+      </div>
+
+      <Button variant="outline" fullWidth onClick={onClose}>
+        {closeLabel ?? 'Continuer'}
+      </Button>
+    </Modal>
   )
 }

@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import Header from '../../components/layout/Header'
+import { CheckCircle2, PiggyBank, Truck, Wallet } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
-import { codFinanceApi, type CodFinanceDashboard, type CourierRemittance } from '../../api/codFinance'
+import { codFinanceApi, type CodFinanceDashboard, type CodOutstandingOrder, type CourierRemittance } from '../../api/codFinance'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import {
+  Badge, Button, Checkbox, DataTable, Input, Modal, Page,
+  SkeletonStats, SkeletonTable, StatCard, Tabs, cn, type Column,
+} from '../../components/ui'
 
 type Tab = 'overview' | 'remittances'
 
@@ -72,204 +76,184 @@ export default function OnlineFinancePage() {
 
   if (loading && !dashboard) {
     return (
-      <div className="flex flex-col flex-1">
-        <Header title="Encaissements COD" />
-        <div className="flex items-center justify-center py-24">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+      <Page section="onlineFinance" title="Encaissements COD">
+        <div className="space-y-5">
+          <SkeletonStats count={4} />
+          <SkeletonTable rows={8} cols={7} />
         </div>
-      </div>
+      </Page>
     )
   }
 
+  const outstandingColumns: Column<CodOutstandingOrder>[] = [
+    {
+      key: 'select',
+      header: '',
+      width: '2.5rem',
+      render: (o) => (
+        <Checkbox
+          checked={selected.has(o.onlineOrderId)}
+          onChange={() => toggleSelect(o.onlineOrderId)}
+          aria-label="Selectionner la commande"
+        />
+      ),
+    },
+    { key: 'order', header: 'Commande', render: (o) => <span className="num font-medium text-fg">{o.orderNumber}</span> },
+    { key: 'client', header: 'Client', render: (o) => <span className="text-fg-muted">{o.customerName}</span> },
+    { key: 'tracking', header: 'Tracking', render: (o) => <span className="num text-fg-subtle">{o.trackingNumber ?? '-'}</span> },
+    { key: 'delivered', header: 'Livree le', render: (o) => <span className="text-fg-muted">{o.deliveredAt ? formatDateTime(o.deliveredAt) : '-'}</span> },
+    {
+      key: 'days',
+      header: 'Jours',
+      numeric: true,
+      render: (o) => (
+        <span className={cn('font-medium', o.daysOutstanding > 30 ? 'text-[var(--negative)]' : 'text-fg-muted')}>
+          {o.daysOutstanding}
+        </span>
+      ),
+    },
+    { key: 'amount', header: 'Montant COD', numeric: true, render: (o) => <span className="font-semibold text-fg">{formatCurrency(o.codAmount)}</span> },
+  ]
+
+  const remittanceColumns: Column<CourierRemittance>[] = [
+    { key: 'reference', header: 'Reference', render: (r) => <span className="font-medium text-fg">{r.reference || `#${r.id}`}</span> },
+    { key: 'period', header: 'Periode', render: (r) => <span className="text-fg-muted">{formatDateTime(r.periodStart)} - {formatDateTime(r.periodEnd)}</span> },
+    { key: 'declared', header: 'Declare', numeric: true, render: (r) => <span className="text-fg">{formatCurrency(r.declaredAmount)}</span> },
+    { key: 'matched', header: 'Rapproche', numeric: true, render: (r) => <span className="text-fg">{formatCurrency(r.matchedAmount)}</span> },
+    {
+      key: 'variance',
+      header: 'Ecart',
+      numeric: true,
+      render: (r) => (
+        <span className={cn('font-medium', Math.abs(r.varianceAmount) > 0.01 ? 'text-[var(--negative)]' : 'text-[var(--positive)]')}>
+          {formatCurrency(r.varianceAmount)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Statut',
+      render: (r) => (
+        <Badge
+          size="sm"
+          tone={r.status === 'Reconciled' ? 'positive' : r.status === 'Disputed' ? 'negative' : r.status === 'Closed' ? 'muted' : 'caution'}
+        >
+          {r.status === 'Reconciled' ? 'Reconcilie' : r.status === 'Disputed' ? 'Ecart' : r.status === 'Closed' ? 'Cloture' : 'Brouillon'}
+        </Badge>
+      ),
+    },
+    { key: 'orders', header: 'Commandes', numeric: true, render: (r) => <span className="text-fg-muted">{r.orderCount}</span> },
+  ]
+
   return (
-    <div className="flex flex-col flex-1">
-      <Header title="Encaissements COD" />
-      <div className="px-6 pt-5">
-        <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-          {[{ key: 'overview' as Tab, label: 'Vue d\'ensemble' }, { key: 'remittances' as Tab, label: 'Remises courrier' }].map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`px-3.5 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                tab === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+    <Page section="onlineFinance" title="Encaissements COD">
+      <div className="space-y-5">
+        <Tabs
+          variant="segmented"
+          layoutGroupId="online-finance-tab"
+          value={tab}
+          onChange={(v) => setTab(v as Tab)}
+          items={[
+            { value: 'overview', label: "Vue d'ensemble" },
+            { value: 'remittances', label: 'Remises courrier' },
+          ]}
+        />
+
+        {tab === 'overview' && dashboard && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <StatCard label="COD en attente" value={formatCurrency(dashboard.outstandingCod)} sub={`${dashboard.outstandingCount} commande(s)`} tone="caution" icon={Wallet} />
+              <StatCard label="Encaisse ce mois" value={formatCurrency(dashboard.collectedThisMonth)} tone="positive" icon={CheckCircle2} />
+              <StatCard label="Frais coursier ce mois" value={formatCurrency(dashboard.courierFeesThisMonth)} tone="negative" icon={Truck} />
+              <StatCard label="Net ce mois" value={formatCurrency(dashboard.netThisMonth)} icon={PiggyBank} />
+            </div>
+
+            <div className="surface-glass p-5">
+              <h3 className="mb-4 text-sm font-semibold text-fg">Anciennete du COD en attente</h3>
+              <div className="grid grid-cols-4 gap-3">
+                {dashboard.aging.map((bucket) => (
+                  <div
+                    key={bucket.label}
+                    className={cn(
+                      'rounded-card border p-3',
+                      bucket.label === '30+ jours' && bucket.count > 0
+                        ? 'border-[color-mix(in_oklab,var(--negative)_28%,transparent)] bg-[var(--negative-soft)]'
+                        : 'border-border bg-sunken'
+                    )}
+                  >
+                    <p className="text-xs text-fg-subtle">{bucket.label}</p>
+                    <p className="num text-lg font-semibold text-fg">{bucket.count}</p>
+                    <p className="num text-xs text-fg-subtle">{formatCurrency(bucket.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-fg">Commandes en attente de remise (les plus anciennes)</h3>
+                {selected.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-fg-subtle">
+                      <span className="num">{selected.size}</span> selectionnee(s) — <span className="num">{formatCurrency(selectedTotal)}</span>
+                    </span>
+                    <Button size="xs" onClick={() => setShowCreate(true)}>
+                      Creer une remise
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <DataTable
+                columns={outstandingColumns}
+                data={dashboard.oldestOutstanding}
+                keyField={(o) => o.onlineOrderId}
+                emptyMessage="Rien en attente - tout est reconcilie."
+              />
+            </div>
+          </div>
+        )}
+
+        {tab === 'remittances' && (
+          <DataTable
+            columns={remittanceColumns}
+            data={remittances}
+            keyField={(r) => r.id}
+            emptyMessage="Aucune remise enregistree pour le moment."
+          />
+        )}
       </div>
 
-      {tab === 'overview' && dashboard && (
-        <div className="p-6 space-y-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">COD en attente</p>
-              <p className="text-xl font-semibold text-amber-600">{formatCurrency(dashboard.outstandingCod)}</p>
-              <p className="text-xs text-slate-400 mt-1">{dashboard.outstandingCount} commande(s)</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Encaisse ce mois</p>
-              <p className="text-xl font-semibold text-emerald-600">{formatCurrency(dashboard.collectedThisMonth)}</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Frais coursier ce mois</p>
-              <p className="text-xl font-semibold text-red-600">{formatCurrency(dashboard.courierFeesThisMonth)}</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4">
-              <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Net ce mois</p>
-              <p className="text-xl font-semibold text-slate-900">{formatCurrency(dashboard.netThisMonth)}</p>
-            </div>
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Nouvelle remise coursier"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Annuler</Button>
+            <Button type="submit" form="remittance-form" loading={creating} disabled={creating}>
+              {creating ? 'Enregistrement...' : 'Enregistrer la remise'}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="remittance-form"
+          onSubmit={(e) => { e.preventDefault(); handleCreateRemittance(new FormData(e.currentTarget)) }}
+          className="space-y-3"
+        >
+          <p className="rounded-card bg-sunken p-2 text-xs text-fg-subtle">
+            <span className="num">{selected.size}</span> commande(s) selectionnee(s) — total du a solder : <span className="num">{formatCurrency(selectedTotal)}</span>
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Input name="periodStart" type="date" required label="Debut periode" />
+            <Input name="periodEnd" type="date" required label="Fin periode" />
           </div>
-
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">Anciennete du COD en attente</h3>
-            <div className="grid grid-cols-4 gap-3">
-              {dashboard.aging.map((bucket) => (
-                <div key={bucket.label} className={`rounded-lg p-3 border ${bucket.label === '30+ jours' && bucket.count > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                  <p className="text-xs text-slate-500">{bucket.label}</p>
-                  <p className="text-lg font-semibold text-slate-900">{bucket.count}</p>
-                  <p className="text-xs text-slate-500">{formatCurrency(bucket.amount)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900">Commandes en attente de remise (les plus anciennes)</h3>
-              {selected.size > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">{selected.size} selectionnee(s) - {formatCurrency(selectedTotal)}</span>
-                  <button
-                    onClick={() => setShowCreate(true)}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
-                  >
-                    Creer une remise
-                  </button>
-                </div>
-              )}
-            </div>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="px-4 py-2.5 w-8"></th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Commande</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Tracking</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Livree le</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Jours</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Montant COD</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {dashboard.oldestOutstanding.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">Rien en attente - tout est reconcilie.</td></tr>
-                ) : dashboard.oldestOutstanding.map((o) => (
-                  <tr key={o.onlineOrderId} className={`hover:bg-slate-50 ${selected.has(o.onlineOrderId) ? 'bg-emerald-50' : ''}`}>
-                    <td className="px-4 py-2.5">
-                      <input type="checkbox" checked={selected.has(o.onlineOrderId)} onChange={() => toggleSelect(o.onlineOrderId)} />
-                    </td>
-                    <td className="px-4 py-2.5 text-sm font-mono font-medium text-slate-900">{o.orderNumber}</td>
-                    <td className="px-4 py-2.5 text-sm text-slate-600">{o.customerName}</td>
-                    <td className="px-4 py-2.5 text-sm font-mono text-slate-500">{o.trackingNumber ?? '-'}</td>
-                    <td className="px-4 py-2.5 text-sm text-slate-600">{o.deliveredAt ? formatDateTime(o.deliveredAt) : '-'}</td>
-                    <td className={`px-4 py-2.5 text-sm text-right font-medium ${o.daysOutstanding > 30 ? 'text-red-600' : 'text-slate-600'}`}>{o.daysOutstanding}</td>
-                    <td className="px-4 py-2.5 text-sm text-right font-medium text-slate-900">{formatCurrency(o.codAmount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {tab === 'remittances' && (
-        <div className="p-6">
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Reference</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Periode</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Declare</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Rapproche</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Ecart</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wider">Commandes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {remittances.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">Aucune remise enregistree pour le moment.</td></tr>
-                ) : remittances.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5 text-sm font-medium text-slate-900">{r.reference || `#${r.id}`}</td>
-                    <td className="px-4 py-2.5 text-sm text-slate-600">{formatDateTime(r.periodStart)} - {formatDateTime(r.periodEnd)}</td>
-                    <td className="px-4 py-2.5 text-sm text-right text-slate-900">{formatCurrency(r.declaredAmount)}</td>
-                    <td className="px-4 py-2.5 text-sm text-right text-slate-900">{formatCurrency(r.matchedAmount)}</td>
-                    <td className={`px-4 py-2.5 text-sm text-right font-medium ${Math.abs(r.varianceAmount) > 0.01 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      {formatCurrency(r.varianceAmount)}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        r.status === 'Reconciled' ? 'bg-emerald-50 text-emerald-700' : r.status === 'Disputed' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {r.status === 'Reconciled' ? 'Reconcilie' : r.status === 'Disputed' ? 'Ecart' : r.status === 'Closed' ? 'Cloture' : 'Brouillon'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-right text-slate-600">{r.orderCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-[480px] border border-slate-200">
-            <h3 className="text-sm font-semibold text-slate-900 mb-4">Nouvelle remise coursier</h3>
-            <form
-              onSubmit={(e) => { e.preventDefault(); handleCreateRemittance(new FormData(e.currentTarget)) }}
-              className="space-y-3"
-            >
-              <p className="text-xs text-slate-500 bg-slate-50 rounded p-2">
-                {selected.size} commande(s) selectionnee(s) - total du a solder : {formatCurrency(selectedTotal)}
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Debut periode</label>
-                  <input name="periodStart" type="date" required className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Fin periode</label>
-                  <input name="periodEnd" type="date" required className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Montant declare par le coursier (MAD)</label>
-                <input name="declaredAmount" type="number" step="0.01" required defaultValue={selectedTotal.toFixed(2)} className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Reference (optionnel)</label>
-                <input name="reference" type="text" className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Reference bancaire (optionnel)</label>
-                <input name="bankRef" type="text" className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md text-sm" />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowCreate(false)} className="px-3.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50 rounded-md">Annuler</button>
-                <button type="submit" disabled={creating} className="px-3.5 py-1.5 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50">
-                  {creating ? 'Enregistrement...' : 'Enregistrer la remise'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+          <Input name="declaredAmount" type="number" step="0.01" required defaultValue={selectedTotal.toFixed(2)} label="Montant declare par le coursier (MAD)" />
+          <Input name="reference" type="text" label="Reference (optionnel)" />
+          <Input name="bankRef" type="text" label="Reference bancaire (optionnel)" />
+        </form>
+      </Modal>
+    </Page>
   )
 }

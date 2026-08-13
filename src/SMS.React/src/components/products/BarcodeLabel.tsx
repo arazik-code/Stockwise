@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import JsBarcode from 'jsbarcode'
 import type { ProductVariant } from '../../types/product'
+import { Button } from '../ui'
 
 interface BarcodeLabelProps {
   variant: ProductVariant & { productName: string }
@@ -42,6 +43,8 @@ export default function BarcodeLabel({ variant, onPrint, labelSize = '50x25' }: 
 
   return (
     <div
+      data-theme="light"
+      data-perf="lean"
       className="print-label inline-block border border-slate-300 rounded bg-white"
       style={{ width: `${s.w}mm`, height: `${s.h}mm`, padding: '2mm', overflow: 'hidden', boxSizing: 'border-box' }}
     >
@@ -66,12 +69,15 @@ export default function BarcodeLabel({ variant, onPrint, labelSize = '50x25' }: 
         </div>
       </div>
       {onPrint && (
-        <button
+        <Button
+          size="xs"
+          variant="outline"
+          fullWidth
           onClick={onPrint}
-          className="mt-1 w-full py-0.5 text-[8px] font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-colors no-print"
+          className="no-print mt-1 h-auto py-0.5 text-[8px]"
         >
           {t('products.printLabel')}
-        </button>
+        </Button>
       )}
     </div>
   )

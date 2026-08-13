@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Image as ImageIcon, Pencil, Plus, Upload } from 'lucide-react'
 import type { CreateProductRequest, Category, Product, ProductVariant } from '../../types/product'
 import type { Color } from '../../types/color'
 import type { Size } from '../../types/size'
@@ -11,6 +12,7 @@ import { stockApi } from '../../api/stock'
 import { showToast } from '../shared/Toast'
 import { printLabel, printProductBarcode } from './BarcodeLabel'
 import api from '../../api/client'
+import { Badge, Button, Input, Modal, Select, Textarea } from '../ui'
 
 interface ProductFormProps {
   product?: Product | null
@@ -214,272 +216,237 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
   const totalStock = product?.variants.reduce((sum, v) => sum + v.stockQuantity, 0) ?? 0
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-4xl max-h-[92vh] overflow-hidden border border-slate-200 flex flex-col shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-slate-900 truncate">
-              {isEditing ? product!.name : t('products.add')}
-            </h2>
-            {isEditing && (
-              <div className="flex items-center gap-2 mt-0.5">
-                {product?.shopifyProductId && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Importé de Shopify
-                  </span>
-                )}
-                {product?.barcode && (
-                  <span className="text-[11px] font-mono text-slate-400">{product.barcode}</span>
-                )}
-              </div>
+    <Modal
+      open
+      onClose={onCancel}
+      size="2xl"
+      bodyClassName="p-0"
+      title={isEditing ? product!.name : t('products.add')}
+      description={
+        isEditing ? (
+          <span className="inline-flex items-center gap-2">
+            {product?.shopifyProductId && (
+              <Badge tone="positive" size="xs">Importé de Shopify</Badge>
+            )}
+            {product?.barcode && (
+              <span className="num font-mono text-fg-subtle">{product.barcode}</span>
+            )}
+          </span>
+        ) : undefined
+      }
+    >
+      {/* Read view (existing product, not editing info) */}
+      {isEditing && !editingInfo ? (
+        <div className="grid grid-cols-[220px_1fr] gap-6 p-6">
+          <div className="space-y-3">
+            <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-card border border-border bg-sunken">
+              {imagePreview ? (
+                <img src={imagePreview} alt={form.name} className="h-full w-full object-cover" />
+              ) : (
+                <ImageIcon className="h-12 w-12 text-fg-subtle" aria-hidden="true" />
+              )}
+            </div>
+            {product?.barcode && (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                fullWidth
+                onClick={() => printProductBarcode({ name: product.name, barcode: product.barcode! })}
+              >
+                Imprimer code-barres
+              </Button>
             )}
           </div>
-          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {/* Read view (existing product, not editing info) */}
-          {isEditing && !editingInfo ? (
-            <div className="p-6 grid grid-cols-[220px_1fr] gap-6">
-              <div className="space-y-3">
-                <div className="w-full aspect-square rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden">
-                  {imagePreview ? (
-                    <img src={imagePreview} alt={form.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <svg className="w-12 h-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  )}
-                </div>
-                {product?.barcode && (
-                  <button
-                    type="button"
-                    onClick={() => printProductBarcode({ name: product.name, barcode: product.barcode! })}
-                    className="w-full text-xs font-medium text-slate-600 hover:text-blue-600 border border-slate-200 rounded-md py-1.5"
-                  >
-                    Imprimer code-barres
-                  </button>
-                )}
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-fg-subtle">Catégorie</p>
+                <p className="font-medium text-fg">{categories.find(c => c.id === form.categoryId)?.name ?? '—'}</p>
               </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Catégorie</p>
-                    <p className="text-slate-800 font-medium">{categories.find(c => c.id === form.categoryId)?.name ?? '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Marque</p>
-                    <p className="text-slate-800 font-medium">{form.brand || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Stock total</p>
-                    <p className={`font-medium ${stockBadgeClass(totalStock)}`}>{totalStock}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-3 text-sm bg-slate-50 rounded-lg p-3">
-                  <div>
-                    <p className="text-[11px] text-slate-400">Prix local (magasin)</p>
-                    <p className="text-slate-900 font-semibold">{form.price.toFixed(2)} DH</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Prix en ligne</p>
-                    <p className="text-emerald-700 font-semibold">{form.onlinePrice ? `${form.onlinePrice.toFixed(2)} DH` : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Prix d'achat</p>
-                    <p className="text-slate-700">{form.costPrice ? `${form.costPrice.toFixed(2)} DH` : '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Prix soldé</p>
-                    <p className="text-slate-700">{form.liquidationPrice ? `${form.liquidationPrice.toFixed(2)} DH` : '—'}</p>
-                  </div>
-                </div>
-
-                {form.description && (
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-1">Description</p>
-                    <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap line-clamp-4">{form.description}</p>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setEditingInfo(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Modifier les informations
-                </button>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-fg-subtle">Marque</p>
+                <p className="font-medium text-fg">{form.brand || '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-fg-subtle">Stock total</p>
+                <p className={`font-medium ${stockBadgeClass(totalStock)}`}>{totalStock}</p>
               </div>
             </div>
+
+            <div className="grid grid-cols-4 gap-3 rounded-card bg-sunken p-3 text-sm">
+              <div>
+                <p className="text-[11px] text-fg-subtle">Prix local (magasin)</p>
+                <p className="num font-semibold text-fg">{form.price.toFixed(2)} DH</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-fg-subtle">Prix en ligne</p>
+                <p className="num font-semibold text-[var(--positive)]">{form.onlinePrice ? `${form.onlinePrice.toFixed(2)} DH` : '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-fg-subtle">Prix d'achat</p>
+                <p className="num text-fg-muted">{form.costPrice ? `${form.costPrice.toFixed(2)} DH` : '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-fg-subtle">Prix soldé</p>
+                <p className="num text-fg-muted">{form.liquidationPrice ? `${form.liquidationPrice.toFixed(2)} DH` : '—'}</p>
+              </div>
+            </div>
+
+            {form.description && (
+              <div>
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-fg-subtle">Description</p>
+                <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed text-fg-muted">{form.description}</p>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              size="xs"
+              variant="soft"
+              icon={<Pencil className="h-3.5 w-3.5" />}
+              onClick={() => setEditingInfo(true)}
+            >
+              Modifier les informations
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-fg-muted">{t('products.productImage')}</label>
+            <div className="flex items-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-card border-2 border-dashed border-border bg-sunken">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+                ) : (
+                  <ImageIcon className="h-8 w-8 text-fg-subtle" aria-hidden="true" />
+                )}
+              </div>
+              <div>
+                <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} className="hidden" id="image-upload" />
+                <label htmlFor="image-upload" className="inline-flex cursor-pointer items-center gap-1.5 rounded-field border border-border bg-surface px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-2">
+                  <Upload className="h-3.5 w-3.5" />
+                  {t('products.chooseFile')}
+                </label>
+                <p className="mt-1 text-xs text-fg-subtle">{t('products.fileHint')}</p>
+              </div>
+            </div>
+          </div>
+
+          <Input
+            label={`${t('products.name')} *`}
+            required
+            value={form.name}
+            onChange={(e) => handleChange('name', e.target.value)}
+          />
+
+          <Textarea
+            label={t('products.description')}
+            value={form.description ?? ''}
+            onChange={(e) => handleChange('description', e.target.value)}
+            rows={3}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label={t('products.brand')}
+              value={form.brand ?? ''}
+              onChange={(e) => handleChange('brand', e.target.value)}
+            />
+            <Select
+              label={`${t('products.category')} *`}
+              required
+              value={form.categoryId}
+              onChange={(e) => handleChange('categoryId', parseInt(e.target.value))}
+            >
+              <option value={0}>{t('products.selectCategory')}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </div>
+
+          <Select
+            label={t('products.fournisseur')}
+            value={form.fournisseurId ?? ''}
+            onChange={(e) => handleChange('fournisseurId', parseInt(e.target.value) || undefined)}
+          >
+            <option value="">{t('products.fournisseur')}</option>
+            {fournisseurs.map((f) => (
+              <option key={f.id} value={f.id}>{f.nom}</option>
+            ))}
+          </Select>
+
+          <div className="grid grid-cols-4 gap-4">
+            <Input
+              type="number" step="0.01" min="0" required
+              label="Prix local (magasin) *"
+              hint="Prix en boutique physique (POS)"
+              value={form.price}
+              onChange={(e) => handleChange('price', parseFloat(e.target.value) || 0)}
+            />
+            <Input
+              type="number" step="0.01" min="0"
+              label={t('products.costPrice')}
+              hint="Prix d'achat fournisseur"
+              value={form.costPrice ?? ''}
+              onChange={(e) => handleChange('costPrice', parseFloat(e.target.value) || undefined)}
+            />
+            <Input
+              type="number" step="0.01" min="0"
+              label={t('products.liquidationPrice')}
+              hint="Prix soldé (variante liquidation)"
+              value={form.liquidationPrice ?? ''}
+              onChange={(e) => handleChange('liquidationPrice', parseFloat(e.target.value) || undefined)}
+            />
+            <Input
+              type="number" step="0.01" min="0"
+              label={<span className="text-[var(--positive)]">Prix en ligne</span>}
+              hint="Commandes Shopify/WhatsApp (sinon prix local)"
+              value={form.onlinePrice ?? ''}
+              onChange={(e) => handleChange('onlinePrice', parseFloat(e.target.value) || undefined)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => (isEditing ? setEditingInfo(false) : onCancel())}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit">
+              {isEditing ? t('common.save') : t('products.add')}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {/* Variants Section — only when editing */}
+      {isEditing && product && (
+        <div className="border-t border-border px-6 pb-6 pt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-fg">{t('products.variants')} <span className="font-normal text-fg-subtle">({product.variants.length})</span></h3>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              icon={<Plus className="h-3.5 w-3.5" />}
+              disabled={editingVariantId !== null}
+              onClick={startAddVariant}
+            >
+              {t('products.addVariant')}
+            </Button>
+          </div>
+
+          {product.variants.length === 0 && editingVariantId === null ? (
+            <p className="py-4 text-center text-sm text-fg-subtle">{t('products.noVariants')}</p>
           ) : (
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.productImage')}</label>
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
-                    {imagePreview ? (
-                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    )}
-                  </div>
-                  <div>
-                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} className="hidden" id="image-upload" />
-                    <label htmlFor="image-upload" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 cursor-pointer transition-colors">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                      {t('products.chooseFile')}
-                    </label>
-                    <p className="text-xs text-slate-400 mt-1">{t('products.fileHint')}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.name')} *</label>
-                <input
-                  type="text" required value={form.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.description')}</label>
-                <textarea
-                  value={form.description ?? ''}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.brand')}</label>
-                  <input
-                    type="text" value={form.brand ?? ''}
-                    onChange={(e) => handleChange('brand', e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.category')} *</label>
-                  <select
-                    required value={form.categoryId}
-                    onChange={(e) => handleChange('categoryId', parseInt(e.target.value))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value={0}>{t('products.selectCategory')}</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.fournisseur')}</label>
-                <select
-                  value={form.fournisseurId ?? ''}
-                  onChange={(e) => handleChange('fournisseurId', parseInt(e.target.value) || undefined)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">{t('products.fournisseur')}</option>
-                  {fournisseurs.map((f) => (
-                    <option key={f.id} value={f.id}>{f.nom}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Prix local (magasin) *</label>
-                  <input
-                    type="number" step="0.01" min="0" required value={form.price}
-                    onChange={(e) => handleChange('price', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Prix en boutique physique (POS)</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.costPrice')}</label>
-                  <input
-                    type="number" step="0.01" min="0" value={form.costPrice ?? ''}
-                    onChange={(e) => handleChange('costPrice', parseFloat(e.target.value) || undefined)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Prix d'achat fournisseur</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('products.liquidationPrice')}</label>
-                  <input
-                    type="number" step="0.01" min="0" value={form.liquidationPrice ?? ''}
-                    onChange={(e) => handleChange('liquidationPrice', parseFloat(e.target.value) || undefined)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Prix soldé (variante liquidation)</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-emerald-600 mb-1.5">Prix en ligne</label>
-                  <input
-                    type="number" step="0.01" min="0" value={form.onlinePrice ?? ''}
-                    onChange={(e) => handleChange('onlinePrice', parseFloat(e.target.value) || undefined)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Commandes Shopify/WhatsApp (sinon prix local)</p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 justify-end pt-2">
-                <button
-                  type="button"
-                  onClick={() => (isEditing ? setEditingInfo(false) : onCancel())}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
-                  {isEditing ? t('common.save') : t('products.add')}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Variants Section — only when editing */}
-          {isEditing && product && (
-            <div className="px-6 pb-6 border-t border-slate-100 pt-5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900">{t('products.variants')} <span className="text-slate-400 font-normal">({product.variants.length})</span></h3>
-                <button
-                  type="button"
-                  onClick={startAddVariant}
-                  disabled={editingVariantId !== null}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  {t('products.addVariant')}
-                </button>
-              </div>
-
-              {product.variants.length === 0 && editingVariantId === null ? (
-                <p className="text-sm text-slate-400 py-4 text-center">{t('products.noVariants')}</p>
-              ) : (
+            // NOTE: the table below is the fragile per-variant inline-edit grid (color x
+            // size rows with in-place edit/save/cancel state). Per the migration contract
+            // this block is left byte-for-byte untouched below - structure, classNames,
+            // handlers, everything - rather than risk the row logic. Documented exception
+            // to the "no <table>" / "no literal Tailwind colours" rules, same category as
+            // BarcodeLabel's print island.
                 <div className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden overflow-x-auto">
                   <table className="w-full text-sm min-w-[640px]">
                     <thead>
@@ -699,8 +666,7 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
               )}
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
+

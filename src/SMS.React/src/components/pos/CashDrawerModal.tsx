@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { ArrowDown, ArrowUp, Banknote, X } from 'lucide-react'
 import { cashDrawerApi, type CashDrawerSummary, type CashDrawerMovementType } from '../../api/cashDrawer'
 import { showToast } from '../../components/shared/Toast'
 import { formatCurrency, formatDateTime } from '../../utils/format'
+import { Button, IconButton, Input, Modal, Skeleton, StatusDot, Tabs, Textarea } from '../ui'
 
 interface CashDrawerModalProps {
   onClose: () => void
@@ -66,150 +68,123 @@ export default function CashDrawerModal({ onClose }: CashDrawerModalProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onKeyDown={handleKeyDown}
-    >
-      <div className="bg-white rounded-2xl w-full max-w-[460px] border border-slate-200 shadow-2xl overflow-hidden">
-        <div className="px-6 pt-5 pb-4 bg-gradient-to-br from-slate-900 to-slate-700 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 10v2m9-8a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Mouvement de caisse</p>
-                <p className="text-[11px] text-slate-300">Accès administrateur</p>
-              </div>
+    <Modal open onClose={onClose} closeOnEsc={false} size="sm" showClose={false} bodyClassName="p-0">
+      {/* The whole dialog (header, body, footer) shares one onKeyDown scope, same as
+          before the restyle - it must keep covering every focusable control inside,
+          which is why it is not split across Modal's own title/footer slots. */}
+      <div onKeyDown={handleKeyDown}>
+        <div className="flex items-center justify-between gap-3 rounded-t-surface border-b border-border bg-surface-2 px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-[var(--accent-soft)] text-[var(--accent)]">
+              <Banknote className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-fg">Mouvement de caisse</p>
+              <p className="text-[11px] text-fg-subtle">Accès administrateur</p>
             </div>
-            <button onClick={onClose} className="text-slate-300 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
+          <IconButton icon={<X className="h-4 w-4" />} label="Fermer" size="xs" onClick={onClose} />
+        </div>
 
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="text-[11px] uppercase tracking-wide text-slate-300">Solde caisse</span>
+        <div className="px-6 pt-4">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-fg-subtle">Solde caisse</span>
             {loading ? (
-              <div className="h-5 w-20 bg-white/10 rounded animate-pulse" />
+              <Skeleton className="h-5" width="80px" />
             ) : (
-              <span className="text-xl font-bold tabular-nums">{formatCurrency(summary?.balance ?? 0)}</span>
+              <span className="num text-xl font-bold text-fg">{formatCurrency(summary?.balance ?? 0)}</span>
             )}
           </div>
           {!loading && summary && (
-            <p className="text-[11px] text-slate-400 mt-1">
-              Ventes especes {formatCurrency(summary.cashSalesTotal)}
-              {summary.cashRefundsTotal !== 0 && <> · Retours {formatCurrency(summary.cashRefundsTotal)}</>}
-              {summary.manualNet !== 0 && <> · Mouvements manuels {formatCurrency(summary.manualNet)}</>}
+            <p className="mt-1 text-[11px] text-fg-subtle">
+              Ventes especes <span className="num">{formatCurrency(summary.cashSalesTotal)}</span>
+              {summary.cashRefundsTotal !== 0 && <> · Retours <span className="num">{formatCurrency(summary.cashRefundsTotal)}</span></>}
+              {summary.manualNet !== 0 && <> · Mouvements manuels <span className="num">{formatCurrency(summary.manualNet)}</span></>}
             </p>
           )}
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-4">
-            <button
-              type="button"
-              onClick={() => setType('Deposit')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                type === 'Deposit'
-                  ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19V5m0 0l-6 6m6-6l6 6" />
-              </svg>
-              Dépôt
-            </button>
-            <button
-              type="button"
-              onClick={() => setType('Withdrawal')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                type === 'Withdrawal'
-                  ? 'bg-white text-red-700 shadow-sm ring-1 ring-red-200'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 5v14m0 0l-6-6m6 6l6-6" />
-              </svg>
-              Retrait
-            </button>
-          </div>
+          <Tabs
+            variant="segmented"
+            className="mb-4 grid w-full grid-cols-2"
+            items={[
+              { value: 'Deposit', label: 'Dépôt', icon: <ArrowUp className="h-4 w-4" /> },
+              { value: 'Withdrawal', label: 'Retrait', icon: <ArrowDown className="h-4 w-4" /> },
+            ]}
+            value={type}
+            onChange={setType}
+          />
 
-          <label className="block text-xs font-medium text-slate-500 mb-1.5">Montant (MAD)</label>
-          <div className="relative mb-4">
-            <input
-              ref={amountRef}
-              type="text"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.,]/g, ''))}
-              placeholder="0.00"
-              className={`w-full px-4 py-3 text-2xl font-bold tabular-nums border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors ${
-                type === 'Deposit'
-                  ? 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-100 text-emerald-700'
-                  : 'border-slate-200 focus:border-red-400 focus:ring-red-100 text-red-700'
-              }`}
-            />
-          </div>
+          <Input
+            ref={amountRef}
+            type="text"
+            inputMode="decimal"
+            label="Montant (MAD)"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9.,]/g, ''))}
+            placeholder="0.00"
+            wrapperClassName="mb-4"
+            className={
+              'num h-auto px-4 py-3 text-2xl font-bold ' +
+              (type === 'Deposit'
+                ? 'text-[var(--positive)] focus:border-[var(--positive)] focus:shadow-[0_0_0_3px_var(--positive-soft)]'
+                : 'text-[var(--negative)] focus:border-[var(--negative)] focus:shadow-[0_0_0_3px_var(--negative-soft)]')
+            }
+          />
 
-          <label className="block text-xs font-medium text-slate-500 mb-1.5">Motif (optionnel)</label>
-          <textarea
+          <Textarea
+            label="Motif (optionnel)"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Ex : achat fournitures, dépôt banque, avance..."
             rows={2}
-            className="w-full px-3.5 py-2.5 text-sm border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-100 focus:border-slate-300 resize-none mb-5"
+            wrapperClassName="mb-5"
+            className="resize-none"
           />
 
-          <div className="flex gap-2 mb-5">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2.5 text-sm font-medium rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-            >
+          <div className="mb-5 flex gap-2">
+            <Button variant="outline" fullWidth onClick={onClose}>
               Annuler
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={type === 'Deposit' ? 'success' : 'danger'}
+              fullWidth
               onClick={handleSubmit}
               disabled={!isValid || submitting}
-              className={`flex-1 py-2.5 text-sm font-semibold rounded-xl text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                type === 'Deposit' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
-              }`}
+              loading={submitting}
             >
-              {submitting ? '...' : type === 'Deposit' ? 'Confirmer le dépôt' : 'Confirmer le retrait'}
-            </button>
+              {type === 'Deposit' ? 'Confirmer le dépôt' : 'Confirmer le retrait'}
+            </Button>
           </div>
 
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Mouvements récents</p>
+          <div className="border-t border-border pt-4">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">Mouvements récents</p>
             {loading ? (
               <div className="space-y-2">
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-9 bg-slate-50 rounded-lg animate-pulse" />
+                  <Skeleton key={i} className="h-9" />
                 ))}
               </div>
             ) : !summary || summary.recent.length === 0 ? (
-              <p className="text-sm text-slate-400 py-3 text-center">Aucun mouvement enregistré</p>
+              <p className="py-3 text-center text-sm text-fg-subtle">Aucun mouvement enregistré</p>
             ) : (
-              <div className="space-y-1 max-h-48 overflow-y-auto">
+              <div className="max-h-48 space-y-1 overflow-y-auto">
                 {summary.recent.map((m) => (
-                  <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 text-sm">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                          m.type === 'Deposit' ? 'bg-emerald-500' : 'bg-red-500'
-                        }`}
-                      />
+                  <div key={m.id} className="flex items-center justify-between rounded-inset px-3 py-2 text-sm hover:bg-surface-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <StatusDot tone={m.type === 'Deposit' ? 'positive' : 'negative'} size="sm" />
                       <div className="min-w-0">
-                        <p className="text-slate-700 truncate">{m.reason || (m.type === 'Deposit' ? 'Dépôt' : 'Retrait')}</p>
-                        <p className="text-[11px] text-slate-400">{m.userFullName} · {formatDateTime(m.createdAt)}</p>
+                        <p className="truncate text-fg-muted">{m.reason || (m.type === 'Deposit' ? 'Dépôt' : 'Retrait')}</p>
+                        <p className="text-[11px] text-fg-subtle">{m.userFullName} · {formatDateTime(m.createdAt)}</p>
                       </div>
                     </div>
-                    <span className={`font-semibold tabular-nums flex-shrink-0 ml-2 ${m.type === 'Deposit' ? 'text-emerald-600' : 'text-red-600'}`}>
+                    <span
+                      className={
+                        'num ml-2 shrink-0 font-semibold ' +
+                        (m.type === 'Deposit' ? 'text-[var(--positive)]' : 'text-[var(--negative)]')
+                      }
+                    >
                       {m.type === 'Deposit' ? '+' : '-'}{formatCurrency(m.amount)}
                     </span>
                   </div>
@@ -219,6 +194,6 @@ export default function CashDrawerModal({ onClose }: CashDrawerModalProps) {
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

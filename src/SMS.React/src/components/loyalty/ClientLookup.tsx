@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { ChevronRight, QrCode, Search, User } from 'lucide-react'
 import { clientsApi, type Client } from '../../api/clients'
 import { showToast } from '../shared/Toast'
+import { Button, Input, Modal, Tabs } from '../ui'
 
 interface ClientLookupProps {
   onClientFound: (client: Client) => void
@@ -110,107 +112,89 @@ export default function ClientLookup({ onClientFound, onNewClient, onClose }: Cl
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 w-full max-w-[440px] border border-slate-200 shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Client Fidélité</h2>
-              <p className="text-xs text-slate-500">Scanner, rechercher par nom ou téléphone</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      open
+      onClose={onClose}
+      size="sm"
+      title={
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-[var(--accent-soft)] text-[var(--accent)]">
+            <QrCode className="h-4 w-4" />
+          </span>
+          <span>Client Fidélité</span>
         </div>
-
+      }
+      description="Scanner, rechercher par nom ou téléphone"
+    >
+      <div className="space-y-4">
         {/* Mode Toggle */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => { setMode('scan'); setQuery(''); setSuggestions([]); setShowSuggestions(false) }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              mode === 'scan'
-                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Scanner QR Code
-          </button>
-          <button
-            onClick={() => { setMode('search'); setQuery(''); setSuggestions([]); setShowSuggestions(false) }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-              mode === 'search'
-                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                : 'bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            Rechercher client
-          </button>
-        </div>
+        <Tabs
+          variant="segmented"
+          layoutGroupId="client-lookup-mode"
+          value={mode}
+          onChange={(v) => {
+            setMode(v as 'scan' | 'search')
+            setQuery('')
+            setSuggestions([])
+            setShowSuggestions(false)
+          }}
+          items={[
+            { value: 'scan', label: 'Scanner QR Code' },
+            { value: 'search', label: 'Rechercher client' },
+          ]}
+          className="w-full [&>button]:flex-1"
+        />
 
         {/* Input */}
-        <div className="relative mb-4">
+        <div className="relative">
           {mode === 'scan' ? (
-            <input
+            <Input
               ref={scanInputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Scanner le code QR ici..."
-              className="w-full px-4 py-3 text-base border-2 border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder:text-slate-400 font-mono text-center tracking-wider"
+              className="text-center font-mono text-base tracking-wider"
+              size="lg"
               autoFocus
             />
           ) : (
             <>
-              <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={query}
-                  onChange={(e) => handleQueryChange(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  placeholder="Nom du client ou numéro de téléphone..."
-                  className="w-full pl-10 pr-4 py-3 text-base border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder:text-slate-400"
-                  autoFocus
-                />
-              </div>
+              <Input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => handleQueryChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Nom du client ou numéro de téléphone..."
+                leading={<Search />}
+                size="lg"
+                autoFocus
+              />
 
               {/* Suggestions Dropdown */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-auto">
+                <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-card border border-border bg-surface shadow-e3">
                   {suggestions.map((client) => (
                     <button
                       key={client.id}
                       type="button"
                       onMouseDown={() => handleSelectClient(client)}
-                      className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition-colors flex items-center gap-3 border-b border-slate-50 last:border-0"
+                      className="flex w-full items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors last:border-0 hover:bg-surface-2"
                     >
-                      <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{client.name}</p>
-                        <p className="text-xs text-slate-500">{client.phone} · {client.totalPoints} points</p>
-                      </div>
-                      <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-chip bg-[var(--accent-soft)] text-[var(--accent)]">
+                        <User className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-fg">{client.name}</span>
+                        <span className="block text-xs text-fg-subtle">
+                          {client.phone} · <span className="num">{client.totalPoints}</span> points
+                        </span>
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-fg-subtle" />
                     </button>
                   ))}
                 </div>
@@ -220,29 +204,22 @@ export default function ClientLookup({ onClientFound, onNewClient, onClose }: Cl
         </div>
 
         {/* Search Button */}
-        <button
-          onClick={handleSearch}
-          disabled={loading || !query.trim()}
-          className="w-full py-3 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button fullWidth onClick={handleSearch} disabled={loading || !query.trim()} loading={loading}>
           {loading ? 'Recherche...' : 'Rechercher client'}
-        </button>
+        </Button>
 
         {/* Divider */}
-        <div className="flex items-center gap-3 my-4">
-          <div className="flex-1 border-t border-slate-200"></div>
-          <span className="text-xs text-slate-400">ou</span>
-          <div className="flex-1 border-t border-slate-200"></div>
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-fg-subtle">ou</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         {/* New Client Button */}
-        <button
-          onClick={() => onNewClient('')}
-          className="w-full py-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-        >
+        <Button variant="outline" fullWidth onClick={() => onNewClient('')}>
           Enregistrer un nouveau client
-        </button>
+        </Button>
       </div>
-    </div>
+    </Modal>
   )
 }

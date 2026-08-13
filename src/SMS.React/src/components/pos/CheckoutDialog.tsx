@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Check, Printer } from 'lucide-react'
 import { useCartStore } from '../../store/cartStore'
 import { useExchangeStore } from '../../store/exchangeStore'
 import { salesApi } from '../../api/sales'
 import { refundsApi } from '../../api/refunds'
 import { formatCurrency } from '../../utils/format'
 import { printReceipt, printExchangeReceipt, buildReceiptData, type ReceiptData } from '../../utils/printReceipt'
+import { Button, Input, KeyHint, Modal, Tabs } from '../ui'
 import type { Client } from '../../api/clients'
 
 interface CheckoutDialogProps {
@@ -227,181 +229,177 @@ export default function CheckoutDialog({
   // ── Post-sale receipt screen ──
   if (receiptData) {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl p-5 sm:p-8 w-full max-w-[420px] max-h-[90vh] overflow-auto text-center border border-slate-200 shadow-xl">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-5">
-            <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">{t('pos.saleComplete')}</h2>
-          <p className="text-base text-slate-500 mb-4">
-            {t('pos.receipt')}: <span className="font-mono font-bold">{receiptData.saleNumber}</span>
-          </p>
-
-          {/* Loyalty info */}
-          {loyaltyClient && (
-            <div className="bg-slate-50 rounded-xl p-4 mb-5">
-              {receiptData.pointsRedeemed > 0 && (
-                <p className="text-base text-emerald-600 mb-1">
-                  -{receiptData.pointsRedeemed} points utilisés ({formatCurrency(loyaltyDiscount)} de remise)
-                </p>
-              )}
-              {receiptData.pointsEarned > 0 && (
-                <p className="text-base text-blue-600 font-medium">
-                  +{receiptData.pointsEarned} points gagnés
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Receipt preview */}
-          <div className="bg-slate-50 rounded-lg p-4 mb-5 text-left max-h-48 overflow-auto border border-slate-100">
-            <pre className="text-[10px] font-mono text-slate-700 whitespace-pre-wrap leading-tight">
-              {formatReceiptPreview(receiptData)}
-            </pre>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => printReceipt(receiptData)}
-              className="flex-1 py-3 text-base font-semibold text-blue-700 bg-blue-50 border-2 border-blue-200 rounded-xl hover:bg-blue-100 transition-colors inline-flex items-center justify-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              Imprimer
-            </button>
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 text-base font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
-            >
-              {t('pos.close')}
-            </button>
-          </div>
-
-          <p className="text-xs text-slate-400 mt-3">Entrée pour fermer et imprimer</p>
+      <Modal open onClose={onClose} closeOnEsc={false} size="sm" showClose={false} bodyClassName="text-center">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-chip bg-[var(--positive-soft)] text-[var(--positive)]">
+          <Check className="h-8 w-8" aria-hidden="true" />
         </div>
-      </div>
-    )
-  }
+        <h2 className="mb-2 text-xl font-bold text-fg">{t('pos.saleComplete')}</h2>
+        <p className="mb-4 text-base text-fg-subtle">
+          {t('pos.receipt')}: <span className="num font-mono font-bold text-fg">{receiptData.saleNumber}</span>
+        </p>
 
-  // ── Checkout form ──
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-5 sm:p-8 w-full max-w-[440px] border border-slate-200 max-h-[90vh] overflow-auto shadow-xl">
-        <h2 className="text-xl font-bold text-slate-900 mb-6">{t('pos.checkout')}</h2>
-
-        {loyaltyClient && loyaltyEnabled && pointsToRedeem > 0 && (
-          <div className="mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <div className="flex items-center justify-between">
-              <span className="text-base text-emerald-700">Remise fidélité</span>
-              <span className="text-base font-bold text-emerald-700">-{formatCurrency(loyaltyDiscount)}</span>
-            </div>
-            <p className="text-sm text-emerald-600 mt-1">{pointsToRedeem} points utilisés</p>
-          </div>
-        )}
-
-        {exchangeContext && (
-          <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-blue-700">
-                Crédit échange — {exchangeContext.originalSaleNumber}
-              </span>
-              <span className="text-sm font-bold text-blue-700">-{formatCurrency(exchangeCredit)}</span>
-            </div>
-            <div className="space-y-1">
-              {exchangeContext.returnedItems.map((ri) => (
-                <div key={ri.saleItemId} className="flex justify-between text-xs text-blue-600">
-                  <span>{ri.productName} ×{ri.quantity}</span>
-                  <span>{formatCurrency(ri.lineTotal)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-3 mb-6">
-          <div className="flex justify-between text-base">
-            <span className="text-slate-500">{t('common.subtotal')}</span>
-            <span className="font-semibold text-slate-700">{formatCurrency(currentSubtotal)}</span>
-          </div>
-          {loyaltyDiscount > 0 && (
-            <div className="flex justify-between text-base">
-              <span className="text-emerald-600">Remise fidélité</span>
-              <span className="text-emerald-600 font-bold">-{formatCurrency(loyaltyDiscount)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-base">
-            <span className="text-slate-500">{t('common.tax')}</span>
-            <span className="font-semibold text-slate-700">{formatCurrency(taxAmount)}</span>
-          </div>
-          <div className="flex justify-between text-2xl font-bold border-t-2 border-slate-100 pt-4 mt-3">
-            <span className="text-slate-900">{t('common.total')}</span>
-            <span className="text-slate-900">{formatCurrency(total)}</span>
-          </div>
-        </div>
-
-        <div className="mb-5">
-          <label className="block text-sm font-medium text-slate-500 mb-2">{t('pos.paymentMethod')} <span className="text-slate-400">← →</span></label>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setPaymentMethod('Cash')}
-              className={`flex-1 py-3 text-base font-semibold rounded-xl border-2 transition-colors ${
-                paymentMethod === 'Cash' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {t('sales.payments.cash')}
-            </button>
-            <button
-              onClick={() => setPaymentMethod('Card')}
-              className={`flex-1 py-3 text-base font-semibold rounded-xl border-2 transition-colors ${
-                paymentMethod === 'Card' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {t('sales.payments.card')}
-            </button>
-          </div>
-        </div>
-
-        {paymentMethod === 'Cash' && (
-          <div className="mb-5">
-            <label className="block text-sm font-medium text-slate-500 mb-2">{t('pos.amountTendered')} <span className="text-slate-400">Entrée pour valider</span></label>
-            <input
-              ref={amountInputRef}
-              type="number"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              placeholder={total.toFixed(2)}
-              className="w-full px-4 py-3 text-lg border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400 font-semibold"
-            />
-            {amountPaid && (
-              <p className="text-sm mt-2 text-slate-500">
-                {t('pos.change')}: <span className="font-bold text-lg text-slate-900">{formatCurrency(Math.max(0, change))}</span>
+        {/* Loyalty info */}
+        {loyaltyClient && (
+          <div className="mb-5 rounded-card bg-surface-2 p-4">
+            {receiptData.pointsRedeemed > 0 && (
+              <p className="num mb-1 text-base text-[var(--positive)]">
+                -{receiptData.pointsRedeemed} points utilisés ({formatCurrency(loyaltyDiscount)} de remise)
+              </p>
+            )}
+            {receiptData.pointsEarned > 0 && (
+              <p className="num text-base font-medium text-[var(--info)]">
+                +{receiptData.pointsEarned} points gagnés
               </p>
             )}
           </div>
         )}
 
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 text-base font-semibold text-slate-700 bg-white border-2 border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
-            {t('common.cancel')}
-          </button>
-          <button
-            ref={completeRef}
-            onClick={handleComplete}
-            disabled={processing || (paymentMethod === 'Cash' && change < 0)}
-            className="flex-1 py-3 text-base font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {processing ? t('pos.processing') : t('pos.completeSale')}
-          </button>
+        {/* Receipt preview */}
+        <div className="mb-5 max-h-48 overflow-auto rounded-card border border-border bg-surface-2 p-4 text-left">
+          <pre className="num whitespace-pre-wrap font-mono text-[10px] leading-tight text-fg-muted">
+            {formatReceiptPreview(receiptData)}
+          </pre>
         </div>
 
-        <p className="text-xs text-slate-400 text-center mt-4">
-          ← → Changer mode · Entrée Valider · Échap Annuler
-        </p>
+        <div className="flex gap-3">
+          <Button variant="soft" fullWidth icon={<Printer className="h-5 w-5" />} onClick={() => printReceipt(receiptData)}>
+            Imprimer
+          </Button>
+          <Button variant="solid" fullWidth onClick={onClose}>
+            {t('pos.close')}
+          </Button>
+        </div>
+
+        <p className="mt-3 text-xs text-fg-subtle">Entrée pour fermer et imprimer</p>
+      </Modal>
+    )
+  }
+
+  // ── Checkout form ──
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      closeOnEsc={false}
+      size="sm"
+      title={t('pos.checkout')}
+      footer={
+        <div className="flex w-full flex-col gap-3">
+          <div className="flex gap-3">
+            <Button variant="outline" fullWidth onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              ref={completeRef}
+              variant="success"
+              fullWidth
+              onClick={handleComplete}
+              disabled={processing || (paymentMethod === 'Cash' && change < 0)}
+              loading={processing}
+            >
+              {t('pos.completeSale')}
+            </Button>
+          </div>
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-fg-subtle">
+            <KeyHint keys={['←', '→']} /> Changer mode
+            <span>·</span>
+            <KeyHint keys={['Entrée']} /> Valider
+            <span>·</span>
+            <KeyHint keys={['Échap']} /> Annuler
+          </p>
+        </div>
+      }
+    >
+      {loyaltyClient && loyaltyEnabled && pointsToRedeem > 0 && (
+        <div data-tone="positive" className="mb-5 rounded-card border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-base text-[var(--tone-ink)]">Remise fidélité</span>
+            <span className="num text-base font-bold text-[var(--tone-ink)]">-{formatCurrency(loyaltyDiscount)}</span>
+          </div>
+          <p className="num mt-1 text-sm text-[var(--tone-ink)] opacity-80">{pointsToRedeem} points utilisés</p>
+        </div>
+      )}
+
+      {exchangeContext && (
+        <div data-tone="info" className="mb-5 rounded-card border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-[var(--tone-ink)]">
+              Crédit échange — {exchangeContext.originalSaleNumber}
+            </span>
+            <span className="num text-sm font-bold text-[var(--tone-ink)]">-{formatCurrency(exchangeCredit)}</span>
+          </div>
+          <div className="space-y-1">
+            {exchangeContext.returnedItems.map((ri) => (
+              <div key={ri.saleItemId} className="flex justify-between text-xs text-[var(--tone-ink)] opacity-80">
+                <span>{ri.productName} ×{ri.quantity}</span>
+                <span className="num">{formatCurrency(ri.lineTotal)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mb-6 space-y-3">
+        <div className="flex justify-between text-base">
+          <span className="text-fg-subtle">{t('common.subtotal')}</span>
+          <span className="num font-semibold text-fg-muted">{formatCurrency(currentSubtotal)}</span>
+        </div>
+        {loyaltyDiscount > 0 && (
+          <div className="flex justify-between text-base">
+            <span className="text-[var(--positive)]">Remise fidélité</span>
+            <span className="num font-bold text-[var(--positive)]">-{formatCurrency(loyaltyDiscount)}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-base">
+          <span className="text-fg-subtle">{t('common.tax')}</span>
+          <span className="num font-semibold text-fg-muted">{formatCurrency(taxAmount)}</span>
+        </div>
+        <div className="mt-3 flex justify-between border-t-2 border-border pt-4 text-2xl font-bold">
+          <span className="text-fg">{t('common.total')}</span>
+          <span className="num text-fg">{formatCurrency(total)}</span>
+        </div>
       </div>
-    </div>
+
+      <div className="mb-5">
+        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-fg-subtle">
+          {t('pos.paymentMethod')} <KeyHint keys={['←', '→']} />
+        </label>
+        <Tabs
+          variant="segmented"
+          className="grid w-full grid-cols-2"
+          items={[
+            { value: 'Cash', label: t('sales.payments.cash') },
+            { value: 'Card', label: t('sales.payments.card') },
+          ]}
+          value={paymentMethod}
+          onChange={setPaymentMethod}
+        />
+      </div>
+
+      {paymentMethod === 'Cash' && (
+        <div className="mb-5">
+          <Input
+            ref={amountInputRef}
+            type="number"
+            label={
+              <span className="flex items-center gap-2">
+                {t('pos.amountTendered')} <KeyHint keys={['Entrée']} />
+              </span>
+            }
+            value={amountPaid}
+            onChange={(e) => setAmountPaid(e.target.value)}
+            placeholder={total.toFixed(2)}
+            size="lg"
+            className="num font-semibold"
+          />
+          {amountPaid && (
+            <p className="mt-2 text-sm text-fg-subtle">
+              {t('pos.change')}: <span className="num text-lg font-bold text-fg">{formatCurrency(Math.max(0, change))}</span>
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 

@@ -1,9 +1,11 @@
 import { useState, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronRight, ScanLine, Search } from 'lucide-react'
 import { refundsApi, type SaleForRefund, type SaleItemForRefund, type ProductVariantForExchange } from '../../api/refunds'
 import { formatCurrency } from '../../utils/format'
 import { useCartStore } from '../../store/cartStore'
 import { useExchangeStore, type ExchangeReturnedItem } from '../../store/exchangeStore'
+import { Badge, Button, Checkbox, EmptyState, Input, Modal, Spinner, cn } from '../ui'
 
 interface ExchangeDialogProps {
   onClose: () => void
@@ -196,41 +198,32 @@ export default function ExchangeDialog({ onClose, onReadyForCheckout }: Exchange
   // ── Step: Scan ──
   if (step === 'scan') {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl p-6 w-full max-w-[480px] border border-slate-200 shadow-xl">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">ÉCHANGE</span>
-              <h2 className="text-lg font-bold text-slate-900">{t('pos.exchange.scanReceipt')}</h2>
-            </div>
-            <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+      <Modal
+        open
+        onClose={onClose}
+        closeOnEsc={false}
+        size="md"
+        title={
+          <div>
+            <Badge tone="caution" size="xs" className="mb-1 uppercase tracking-wide">Échange</Badge>
+            <div className="text-base font-bold text-fg">{t('pos.exchange.scanReceipt')}</div>
           </div>
+        }
+      >
+        <Input
+          ref={scanInputRef}
+          type="text"
+          size="lg"
+          leading={<ScanLine className="h-5 w-5" />}
+          trailing={loading ? <Spinner size="sm" /> : undefined}
+          onChange={(e) => handleScanInput(e.target.value)}
+          onKeyDown={handleScanKeyDown}
+          placeholder={t('pos.exchange.scanPlaceholder')}
+          autoFocus
+        />
 
-          <div className="relative mb-4">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-            </svg>
-            <input
-              ref={scanInputRef}
-              type="text"
-              onChange={(e) => handleScanInput(e.target.value)}
-              onKeyDown={handleScanKeyDown}
-              placeholder={t('pos.exchange.scanPlaceholder')}
-              autoFocus
-              className="w-full pl-10 pr-4 py-3 text-base border-2 border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            />
-            {loading && (
-              <div className="absolute right-3 top-3.5 text-xs text-slate-400">{t('common.loading')}</div>
-            )}
-          </div>
-
-          <p className="text-xs text-slate-400 text-center">Scannez le bon de caisse ou entrez le numéro manuellement</p>
-        </div>
-      </div>
+        <p className="mt-4 text-center text-xs text-fg-subtle">Scannez le bon de caisse ou entrez le numéro manuellement</p>
+      </Modal>
     )
   }
 
@@ -238,187 +231,161 @@ export default function ExchangeDialog({ onClose, onReadyForCheckout }: Exchange
   if (step === 'selectReturn' && sale) {
     const availableItems = sale.items.filter((i) => i.availableForRefund > 0)
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl p-6 w-full max-w-[600px] max-h-[80vh] overflow-auto border border-slate-200 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">ÉCHANGE</span>
-              <h2 className="text-lg font-bold text-slate-900">{t('pos.exchange.selectReturnItems')}</h2>
-            </div>
-            <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+      <Modal
+        open
+        onClose={onClose}
+        closeOnEsc={false}
+        size="xl"
+        bodyClassName="p-0"
+        title={
+          <div>
+            <Badge tone="caution" size="xs" className="mb-1 uppercase tracking-wide">Échange</Badge>
+            <div className="text-base font-bold text-fg">{t('pos.exchange.selectReturnItems')}</div>
           </div>
-
-          <div className="bg-slate-50 rounded-lg p-3 mb-4 flex items-center justify-between text-sm">
-            <span className="text-slate-600">
-              Vente: <span className="font-semibold text-slate-900">{sale.saleNumber}</span>
-              {sale.clientName && <span className="ml-2 text-slate-500">— {sale.clientName}</span>}
-            </span>
-            <span className="text-slate-500">
-              {new Date(sale.createdAt).toLocaleDateString('fr-FR')}
-            </span>
-          </div>
-
-          <div className="space-y-2 mb-4">
-            {availableItems.map((item) => {
-              const selected = selectedReturnItems.find((i) => i.id === item.id)
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => toggleReturnItem(item)}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selected ? 'bg-orange-50 border-orange-300' : 'bg-white border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!selected}
-                    onChange={() => toggleReturnItem(item)}
-                    className="w-4 h-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{item.productName}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.colorName} · {item.sizeValue}
-                      {item.productSku && <span className="ml-1 text-slate-400">({item.productSku})</span>}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-slate-900">{formatCurrency(item.unitPrice)}</p>
-                    <p className="text-xs text-slate-500">×{item.availableForRefund} dispo</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {selectedReturnItems.length > 0 && (
-            <div className="bg-orange-50 rounded-lg p-3 mb-4 flex items-center justify-between">
-              <span className="text-sm text-orange-700">
-                {selectedReturnItems.length} article(s) sélectionné(s)
-              </span>
-              <span className="text-sm font-bold text-orange-700">
-                Crédit: {formatCurrency(totalRefund)}
-              </span>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => { setSale(null); setStep('scan'); setSelectedReturnItems([]) }}
-              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
-            >
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setSale(null); setStep('scan'); setSelectedReturnItems([]) }}>
               Retour
-            </button>
-            <button
-              onClick={handleConfirmReturnItems}
-              disabled={selectedReturnItems.length === 0}
-              className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            </Button>
+            <Button variant="solid" onClick={handleConfirmReturnItems} disabled={selectedReturnItems.length === 0}>
               Continuer
-            </button>
-          </div>
+            </Button>
+          </>
+        }
+      >
+        <div className="flex items-center justify-between border-b border-border bg-surface-2 px-6 py-3 text-sm">
+          <span className="text-fg-muted">
+            Vente: <span className="font-semibold text-fg">{sale.saleNumber}</span>
+            {sale.clientName && <span className="ml-2 text-fg-subtle">— {sale.clientName}</span>}
+          </span>
+          <span className="text-fg-subtle">{new Date(sale.createdAt).toLocaleDateString('fr-FR')}</span>
         </div>
-      </div>
+
+        <div className="space-y-2 px-6 py-4">
+          {availableItems.map((item) => {
+            const selected = selectedReturnItems.find((i) => i.id === item.id)
+            return (
+              <div
+                key={item.id}
+                onClick={() => toggleReturnItem(item)}
+                data-tone="caution"
+                className={cn(
+                  'flex cursor-pointer items-center gap-3 rounded-card border p-3 transition-colors duration-fast',
+                  selected ? 'border-[var(--tone)] bg-[var(--tone-soft)]' : 'border-border bg-surface hover:border-border-strong'
+                )}
+              >
+                <Checkbox checked={!!selected} onChange={() => toggleReturnItem(item)} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-fg">{item.productName}</p>
+                  <p className="text-xs text-fg-subtle">
+                    {item.colorName} · {item.sizeValue}
+                    {item.productSku && <span className="ml-1 text-fg-subtle">({item.productSku})</span>}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="num text-sm font-medium text-fg">{formatCurrency(item.unitPrice)}</p>
+                  <p className="num text-xs text-fg-subtle">×{item.availableForRefund} dispo</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {selectedReturnItems.length > 0 && (
+          <div
+            data-tone="caution"
+            className="mx-6 mb-4 flex items-center justify-between rounded-card bg-[var(--tone-soft)] px-3 py-2.5"
+          >
+            <span className="text-sm text-[var(--tone-ink)]">{selectedReturnItems.length} article(s) sélectionné(s)</span>
+            <span className="num text-sm font-bold text-[var(--tone-ink)]">Crédit: {formatCurrency(totalRefund)}</span>
+          </div>
+        )}
+      </Modal>
     )
   }
 
   // ── Step: Search replacement ──
   if (step === 'searchReplace') {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl p-6 w-full max-w-[550px] max-h-[80vh] overflow-auto border border-slate-200 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">ÉCHANGE</span>
-              <h2 className="text-lg font-bold text-slate-900">{t('pos.exchange.selectReplacement')}</h2>
-            </div>
-            <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+      <Modal
+        open
+        onClose={onClose}
+        closeOnEsc={false}
+        size="lg"
+        bodyClassName="p-0"
+        title={
+          <div>
+            <Badge tone="caution" size="xs" className="mb-1 uppercase tracking-wide">Échange</Badge>
+            <div className="text-base font-bold text-fg">{t('pos.exchange.selectReplacement')}</div>
           </div>
+        }
+        footer={
+          <Button variant="outline" onClick={() => { setStep('selectReturn'); setSearchQuery(''); setSearchResults([]) }}>
+            Retour
+          </Button>
+        }
+      >
+        <div data-tone="caution" className="border-b border-border bg-[var(--tone-soft)] px-6 py-3 text-sm">
+          <span className="text-[var(--tone-ink)]">
+            Crédit retour: <span className="num font-bold">{formatCurrency(totalRefund)}</span>
+          </span>
+          <span className="mx-2 text-[var(--tone-ink)] opacity-50">·</span>
+          <span className="text-[var(--tone-ink)] opacity-80">{selectedReturnItems.length} article(s) retourné(s)</span>
+        </div>
 
-          <div className="bg-orange-50 rounded-lg p-3 mb-4 text-sm">
-            <span className="text-orange-700">
-              Crédit retour: <span className="font-bold">{formatCurrency(totalRefund)}</span>
-            </span>
-            <span className="mx-2 text-orange-300">·</span>
-            <span className="text-orange-600">
-              {selectedReturnItems.length} article(s) retourné(s)
-            </span>
-          </div>
-
-          <div className="relative mb-4">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchInput(e.target.value)}
-              placeholder="Rechercher le produit de remplacement... (ou scanner)"
-              autoFocus
-              className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            />
-            {searching && (
-              <div className="absolute right-3 top-3 text-xs text-slate-400">{t('common.loading')}</div>
-            )}
-          </div>
+        <div className="p-6">
+          <Input
+            ref={searchInputRef}
+            type="text"
+            leading={<Search className="h-4 w-4" />}
+            trailing={searching ? <Spinner size="sm" /> : undefined}
+            value={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
+            placeholder="Rechercher le produit de remplacement... (ou scanner)"
+            autoFocus
+            wrapperClassName="mb-4"
+          />
 
           {searchResults.length > 0 ? (
-            <div className="space-y-2 mb-4">
+            <div className="space-y-2">
               {searchResults.map((variant) => (
-                <div
+                <button
                   key={variant.id}
+                  type="button"
                   onClick={() => handleConfirmExchange(variant)}
-                  className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-all"
+                  className="flex w-full items-center gap-3 rounded-card border border-border bg-surface p-3 text-left transition-colors duration-fast hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center flex-shrink-0">
-                    <span className="w-3 h-3 rounded-full border border-slate-300" style={{ backgroundColor: variant.colorHexCode }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900">{variant.productName}</p>
-                    <p className="text-xs text-slate-500">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-chip bg-surface-2">
+                    <span
+                      className="h-3 w-3 rounded-chip border border-border"
+                      style={{ backgroundColor: variant.colorHexCode }}
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-fg">{variant.productName}</p>
+                    <p className="text-xs text-fg-subtle">
                       {variant.colorName} · {variant.sizeValue}
-                      {variant.sku && <span className="ml-1 text-slate-400">({variant.sku})</span>}
+                      {variant.sku && <span className="ml-1 text-fg-subtle">({variant.sku})</span>}
                     </p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-medium text-slate-900">{formatCurrency(variant.price)}</p>
-                    <p className="text-xs text-slate-400">Stock: {variant.stockQuantity}</p>
+                  <div className="shrink-0 text-right">
+                    <p className="num text-sm font-medium text-fg">{formatCurrency(variant.price)}</p>
+                    <p className="num text-xs text-fg-subtle">Stock: {variant.stockQuantity}</p>
                   </div>
-                  <svg className="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-fg-subtle" aria-hidden="true" />
+                </button>
               ))}
             </div>
           ) : searchQuery.trim() ? (
-            <div className="text-center py-8 text-slate-400 text-sm">
-              Aucun produit trouvé
-            </div>
+            <EmptyState compact variant="search" title="Aucun produit trouvé" />
           ) : (
-            <div className="text-center py-8 text-slate-400 text-sm">
+            <p className="py-8 text-center text-sm text-fg-subtle">
               Tapez le nom, SKU ou scannez le code-barres du produit de remplacement
-            </div>
+            </p>
           )}
-
-          <div className="flex justify-end">
-            <button
-              onClick={() => { setStep('selectReturn'); setSearchQuery(''); setSearchResults([]) }}
-              className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50"
-            >
-              Retour
-            </button>
-          </div>
         </div>
-      </div>
+      </Modal>
     )
   }
 

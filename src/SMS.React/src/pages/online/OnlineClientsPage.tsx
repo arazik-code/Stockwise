@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import Header from '../../components/layout/Header'
+import { AlertTriangle, ImageOff, RefreshCw, Search, Sparkles, Users, Wallet, XCircle } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import {
   crmApi,
@@ -11,7 +11,10 @@ import {
 } from '../../api/clients'
 import { formatCurrency, formatDateTime } from '../../utils/format'
 import { openWhatsApp, hasWhatsApp, buildClientGreeting } from '../../utils/whatsapp'
-import { CATEGORY_BADGE, CATEGORY_LABELS } from '../../utils/clientCategory'
+import {
+  Avatar, Badge, BreakdownRow, Button, Card, EmptyState, IconButton, Input, Modal, Page,
+  Pagination, Select, Skeleton, Spinner, StatCard, StatusBadge, Tabs, Tooltip,
+} from '../../components/ui'
 
 const WhatsAppIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -24,33 +27,17 @@ type SortKey = 'spent' | 'orders' | 'recent' | 'name'
 
 const PAGE_SIZE = 25
 
-const SEGMENT_LABELS: Record<ClientSegment, string> = {
-  Vip: 'VIP',
-  Regular: 'Régulier',
-  AtRisk: 'À risque',
-  Lost: 'Perdu',
-  New: 'Nouveau',
-}
-
-const SEGMENT_BADGE: Record<ClientSegment, string> = {
-  Vip: 'bg-amber-50 text-amber-700 border-amber-200',
-  Regular: 'bg-slate-50 text-slate-600 border-slate-200',
-  AtRisk: 'bg-orange-50 text-orange-700 border-orange-200',
-  Lost: 'bg-red-50 text-red-700 border-red-200',
-  New: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-}
-
-interface Highlight { label: string; className: string }
+interface Highlight { label: string; tone: 'special' | 'caution' | 'positive' | 'neutral' }
 
 // Compact, at-a-glance insight chips derived from a client's numbers.
 function clientHighlights(c: ClientCrmSummary): Highlight[] {
   const h: Highlight[] = []
-  if (c.orderCount >= 4) h.push({ label: `🔁 ${c.orderCount} commandes`, className: 'bg-violet-50 text-violet-700' })
-  else if (c.orderCount >= 2) h.push({ label: 'Fidèle', className: 'bg-violet-50 text-violet-700' })
-  if (c.totalSpent >= 2500) h.push({ label: '💎 Gros acheteur', className: 'bg-amber-50 text-amber-700' })
-  if (c.daysSinceLastOrder != null && c.daysSinceLastOrder <= 30) h.push({ label: '🔥 Actif', className: 'bg-emerald-50 text-emerald-700' })
-  if (c.daysSinceLastOrder != null && c.daysSinceLastOrder > 180 && c.orderCount > 0) h.push({ label: '⏰ À relancer', className: 'bg-orange-50 text-orange-700' })
-  if (c.orderCount === 0) h.push({ label: 'Sans achat', className: 'bg-slate-100 text-slate-500' })
+  if (c.orderCount >= 4) h.push({ label: `🔁 ${c.orderCount} commandes`, tone: 'special' })
+  else if (c.orderCount >= 2) h.push({ label: 'Fidèle', tone: 'special' })
+  if (c.totalSpent >= 2500) h.push({ label: '💎 Gros acheteur', tone: 'caution' })
+  if (c.daysSinceLastOrder != null && c.daysSinceLastOrder <= 30) h.push({ label: '🔥 Actif', tone: 'positive' })
+  if (c.daysSinceLastOrder != null && c.daysSinceLastOrder > 180 && c.orderCount > 0) h.push({ label: '⏰ À relancer', tone: 'caution' })
+  if (c.orderCount === 0) h.push({ label: 'Sans achat', tone: 'neutral' })
   return h
 }
 
@@ -142,153 +129,149 @@ export default function OnlineClientsPage() {
   const maxSpent = useMemo(() => Math.max(1, ...clients.map((c) => c.totalSpent)), [clients])
 
   return (
-    <div className="flex flex-col flex-1">
-      <Header title="Clients — CRM en ligne" />
-
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 px-6 py-6 mt-0">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs font-medium text-slate-300 uppercase tracking-wide">Vue d'ensemble clients</p>
-          <button
-            onClick={handleImport}
-            disabled={importing}
-            className="px-3.5 py-2 text-sm font-medium text-white bg-white/10 border border-white/20 rounded-md hover:bg-white/20 disabled:opacity-50"
-          >
-            {importing ? 'Import en cours…' : '↻ Importer les clients Shopify'}
-          </button>
+    <Page
+      section="onlineClients"
+      title="Clients — CRM en ligne"
+      actions={
+        <Button
+          variant="outline"
+          icon={<RefreshCw className="h-4 w-4" />}
+          loading={importing}
+          disabled={importing}
+          onClick={handleImport}
+        >
+          {importing ? 'Import en cours…' : 'Importer les clients Shopify'}
+        </Button>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          <StatCard label="Clients au total" numericValue={dashboard?.totalClients ?? 0} icon={Users} tone="info" loading={loading} />
+          <StatCard label="Chiffre d'affaires cumulé" value={formatCurrency(dashboard?.totalRevenue ?? 0)} icon={Wallet} tone="positive" loading={loading} />
+          <StatCard label="Clients VIP" numericValue={dashboard?.vipCount ?? 0} icon={Sparkles} tone="caution" loading={loading} />
+          <StatCard label="À risque" numericValue={dashboard?.atRiskCount ?? 0} icon={AlertTriangle} tone="critical" loading={loading} />
+          <StatCard label="Perdus" numericValue={dashboard?.lostCount ?? 0} icon={XCircle} tone="negative" loading={loading} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <KpiTile label="Clients au total" value={String(dashboard?.totalClients ?? 0)} accent="cyan" />
-          <KpiTile label="Chiffre d'affaires cumulé" value={formatCurrency(dashboard?.totalRevenue ?? 0)} accent="emerald" />
-          <KpiTile label="Clients VIP" value={String(dashboard?.vipCount ?? 0)} accent="amber" />
-          <KpiTile label="À risque" value={String(dashboard?.atRiskCount ?? 0)} accent="violet" />
-          <KpiTile label="Perdus" value={String(dashboard?.lostCount ?? 0)} accent="rose" />
-        </div>
-      </div>
 
-      <div className="p-6 flex-1 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="text"
-            placeholder="Rechercher par nom, téléphone ou email..."
+          <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 min-w-[220px] max-w-md px-3.5 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            placeholder="Rechercher par nom, téléphone ou email..."
+            leading={<Search />}
+            wrapperClassName="min-w-[220px] max-w-md flex-1"
           />
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1 flex-wrap">
-            {([
-              { key: 'all', label: 'Tous' },
-              { key: 'Vip', label: 'VIP' },
-              { key: 'Regular', label: 'Régulier' },
-              { key: 'AtRisk', label: 'À risque' },
-              { key: 'Lost', label: 'Perdu' },
-              { key: 'New', label: 'Nouveau' },
-            ] as { key: SegmentFilter; label: string }[]).map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setSegmentFilter(f.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  segmentFilter === f.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <select
+          <Tabs
+            variant="segmented"
+            layoutGroupId="online-clients-segment"
+            value={segmentFilter}
+            onChange={(v) => setSegmentFilter(v as SegmentFilter)}
+            items={[
+              { value: 'all', label: 'Tous' },
+              { value: 'Vip', label: 'VIP' },
+              { value: 'Regular', label: 'Régulier' },
+              { value: 'AtRisk', label: 'À risque' },
+              { value: 'Lost', label: 'Perdu' },
+              { value: 'New', label: 'Nouveau' },
+            ]}
+          />
+          <Select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            wrapperClassName="w-auto"
           >
             <option value="spent">Trier: Total dépensé</option>
             <option value="orders">Trier: Nombre de commandes</option>
             <option value="recent">Trier: Commande récente</option>
             <option value="name">Trier: Nom</option>
-          </select>
-          <span className="text-xs text-slate-400 ml-auto">{filtered.length} client(s)</span>
+          </Select>
+          <span className="num ml-auto text-xs text-fg-subtle">{filtered.length} client(s)</span>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+          <div className="space-y-2" role="status" aria-label="Chargement">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="surface-glass flex items-center gap-4 p-3">
+                <Skeleton variant="circle" className="h-11 w-11" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton variant="text" width="30%" />
+                  <Skeleton variant="text" width="50%" />
+                </div>
+                <Skeleton className="h-8" width="90px" />
+              </div>
+            ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-slate-400 bg-white border border-slate-200 rounded-lg">Aucun client</div>
+          <EmptyState title="Aucun client" />
         ) : (
           <>
             <div className="space-y-2">
               {paged.map((c) => {
                 const spentPct = Math.round((c.totalSpent / maxSpent) * 100)
                 return (
-                  <div
+                  <Card
                     key={c.id}
+                    interactive
                     onClick={() => setSelectedId(c.id)}
-                    className="group bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-sm transition-all"
+                    className="flex items-center gap-4 p-3"
                   >
-                    <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-500 flex-shrink-0">
-                      {c.name.slice(0, 2).toUpperCase()}
-                    </div>
+                    <Avatar name={c.name} size="md" />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{c.name}</p>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border flex-shrink-0 ${SEGMENT_BADGE[c.segment]}`}>
-                          {SEGMENT_LABELS[c.segment]}
-                        </span>
-                        <span
-                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border flex-shrink-0 ${CATEGORY_BADGE[c.loyaltyCategory]}`}
-                          title="Catégorie de fidélité"
-                        >
-                          Fidélité : {CATEGORY_LABELS[c.loyaltyCategory]}
-                        </span>
+                        <p className="truncate text-sm font-semibold text-fg">{c.name}</p>
+                        <StatusBadge domain="rfmSegment" value={c.segment} size="xs" animate={false} showIcon={false} />
+                        <Tooltip content="Catégorie de fidélité">
+                          <span>
+                            <StatusBadge domain="clientTier" value={c.loyaltyCategory} size="xs" animate={false} />
+                          </span>
+                        </Tooltip>
                         {c.isShopifyImported && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">Shopify</span>
+                          <Badge tone="positive" size="xs">Shopify</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400">{c.phone}{c.city ? ` · ${c.city}` : ''}{c.email ? ` · ${c.email}` : ''}{c.favoriteCategory ? ` · Aime : ${c.favoriteCategory}` : ''}</p>
-                      <div className="flex flex-wrap gap-1 mt-1">
+                      <p className="text-xs text-fg-subtle">{c.phone}{c.city ? ` · ${c.city}` : ''}{c.email ? ` · ${c.email}` : ''}{c.favoriteCategory ? ` · Aime : ${c.favoriteCategory}` : ''}</p>
+                      <div className="mt-1 flex flex-wrap gap-1">
                         {clientHighlights(c).map((h) => (
-                          <span key={h.label} className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${h.className}`}>{h.label}</span>
+                          <span key={h.label} data-tone={h.tone} className="rounded-chip bg-[var(--tone-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--tone-ink)]">{h.label}</span>
                         ))}
                       </div>
-                      <div className="mt-1.5 h-1.5 w-full max-w-xs bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full" style={{ width: `${spentPct}%` }} />
+                      <div className="mt-1.5 h-1.5 w-full max-w-xs overflow-hidden rounded-chip bg-sunken">
+                        <div className="h-full rounded-chip bg-[var(--accent)]" style={{ width: `${spentPct}%` }} />
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-6 flex-shrink-0 text-right">
+                    <div className="flex flex-shrink-0 items-center gap-6 text-right">
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total dépensé</p>
-                        <p className="text-sm font-semibold text-slate-900">{formatCurrency(c.totalSpent)}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Total dépensé</p>
+                        <p className="num text-sm font-semibold text-fg">{formatCurrency(c.totalSpent)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Commandes</p>
-                        <p className="text-sm font-medium text-slate-700">{c.orderCount}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Commandes</p>
+                        <p className="num text-sm font-medium text-fg-muted">{c.orderCount}</p>
                       </div>
                       <div className="hidden lg:block">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Dernière commande</p>
-                        <p className="text-sm text-slate-500">{c.lastOrderAt ? formatDateTime(c.lastOrderAt) : '—'}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Dernière commande</p>
+                        <p className="text-sm text-fg-subtle">{c.lastOrderAt ? formatDateTime(c.lastOrderAt) : '—'}</p>
                       </div>
                       {hasWhatsApp(c.phone) && (
-                        <button
+                        <IconButton
+                          icon={<WhatsAppIcon className="h-4 w-4" />}
+                          label="Contacter sur WhatsApp"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 text-whatsapp-ink hover:bg-whatsapp-soft"
                           onClick={(e) => { e.stopPropagation(); openWhatsApp(c.phone, buildClientGreeting(c.name)) }}
-                          title="Contacter sur WhatsApp"
-                          className="w-9 h-9 flex items-center justify-center rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors flex-shrink-0"
-                        >
-                          <WhatsAppIcon />
-                        </button>
+                        />
                       )}
                     </div>
-                  </div>
+                  </Card>
                 )
               })}
             </div>
 
             {pageCount > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Précédent</button>
-                <span className="text-sm text-slate-500 px-2">Page {currentPage} / {pageCount}</span>
-                <button onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={currentPage === pageCount} className="px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-40">Suivant</button>
-              </div>
+              <Pagination page={currentPage} pageCount={pageCount} onChange={setPage} />
             )}
           </>
         )}
@@ -297,32 +280,15 @@ export default function OnlineClientsPage() {
       {selectedId !== null && (
         <ClientDetailModal clientId={selectedId} onClose={closeDetail} />
       )}
-    </div>
-  )
-}
-
-function KpiTile({ label, value, accent }: { label: string; value: string; accent: 'emerald' | 'cyan' | 'violet' | 'amber' | 'rose' }) {
-  const ring = {
-    emerald: 'from-emerald-400/20 to-emerald-400/0 ring-emerald-400/30',
-    cyan: 'from-cyan-400/20 to-cyan-400/0 ring-cyan-400/30',
-    violet: 'from-violet-400/20 to-violet-400/0 ring-violet-400/30',
-    amber: 'from-amber-400/20 to-amber-400/0 ring-amber-400/30',
-    rose: 'from-rose-400/20 to-rose-400/0 ring-rose-400/30',
-  }[accent]
-
-  return (
-    <div className={`rounded-xl p-4 bg-gradient-to-br ${ring} ring-1 backdrop-blur-sm`}>
-      <p className="text-[11px] font-medium text-slate-300 uppercase tracking-wide">{label}</p>
-      <p className="text-xl font-bold text-white mt-1 truncate">{value}</p>
-    </div>
+    </Page>
   )
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex justify-between gap-3 py-0.5">
-      <span className="text-[11px] text-slate-400 uppercase tracking-wide flex-shrink-0">{label}</span>
-      <span className="text-sm text-slate-700 text-right truncate">{value || '—'}</span>
+      <span className="flex-shrink-0 text-[11px] uppercase tracking-wide text-fg-subtle">{label}</span>
+      <span className="truncate text-right text-sm text-fg-muted">{value || '—'}</span>
     </div>
   )
 }
@@ -344,151 +310,148 @@ function ClientDetailModal({ clientId, onClose }: { clientId: number; onClose: (
   )
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85vh] overflow-auto border border-slate-200">
-        {loading || !analytics ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+    <Modal
+      open
+      onClose={onClose}
+      size="2xl"
+      bodyClassName="px-0 py-0"
+      title={
+        analytics && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{analytics.summary.name}</span>
+            <StatusBadge domain="rfmSegment" value={analytics.summary.segment} size="xs" animate={false} showIcon={false} />
+            <Tooltip content="Catégorie de fidélité">
+              <span>
+                <StatusBadge domain="clientTier" value={analytics.summary.loyaltyCategory} size="xs" animate={false} />
+              </span>
+            </Tooltip>
+            {clientHighlights(analytics.summary).map((h) => (
+              <span key={h.label} data-tone={h.tone} className="rounded-chip bg-[var(--tone-soft)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--tone-ink)]">{h.label}</span>
+            ))}
           </div>
-        ) : (
-          <>
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-semibold text-slate-900">{analytics.summary.name}</h3>
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${SEGMENT_BADGE[analytics.summary.segment]}`}>
-                    {SEGMENT_LABELS[analytics.summary.segment]}
-                  </span>
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${CATEGORY_BADGE[analytics.summary.loyaltyCategory]}`}>
-                    Fidélité : {CATEGORY_LABELS[analytics.summary.loyaltyCategory]}
-                  </span>
-                  {clientHighlights(analytics.summary).map((h) => (
-                    <span key={h.label} className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${h.className}`}>{h.label}</span>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-500">{analytics.summary.phone}{analytics.summary.email ? ` · ${analytics.summary.email}` : ''}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {hasWhatsApp(analytics.summary.phone) && (
-                  <button
-                    onClick={() => openWhatsApp(analytics.summary.phone, buildClientGreeting(analytics.summary.name))}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-white bg-green-500 rounded-md hover:bg-green-600 transition-colors"
-                  >
-                    <WhatsAppIcon className="w-3.5 h-3.5" /> WhatsApp
-                  </button>
-                )}
-                <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
+        )
+      }
+      description={analytics ? `${analytics.summary.phone}${analytics.summary.email ? ` · ${analytics.summary.email}` : ''}` : undefined}
+      footer={
+        analytics && hasWhatsApp(analytics.summary.phone) ? (
+          <Button
+            variant="success"
+            icon={<WhatsAppIcon className="h-4 w-4" />}
+            onClick={() => openWhatsApp(analytics.summary.phone, buildClientGreeting(analytics.summary.name))}
+          >
+            WhatsApp
+          </Button>
+        ) : undefined
+      }
+    >
+      {loading || !analytics ? (
+        <div className="flex items-center justify-center py-24">
+          <Spinner size="lg" />
+        </div>
+      ) : (
+        <div className="space-y-6 px-5 py-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-card bg-sunken p-3">
+              <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Total dépensé</p>
+              <p className="num text-lg font-semibold text-fg">{formatCurrency(analytics.summary.totalSpent)}</p>
             </div>
+            <div className="rounded-card bg-sunken p-3">
+              <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Commandes</p>
+              <p className="num text-lg font-semibold text-fg">{analytics.summary.orderCount}</p>
+            </div>
+            <div className="rounded-card bg-sunken p-3">
+              <p className="text-[10px] uppercase tracking-wide text-fg-subtle">Dernière commande</p>
+              <p className="text-sm font-medium text-fg-muted">{analytics.summary.lastOrderAt ? formatDateTime(analytics.summary.lastOrderAt) : '—'}</p>
+            </div>
+          </div>
 
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">Total dépensé</p>
-                  <p className="text-lg font-semibold text-slate-900">{formatCurrency(analytics.summary.totalSpent)}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">Commandes</p>
-                  <p className="text-lg font-semibold text-slate-900">{analytics.summary.orderCount}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">Dernière commande</p>
-                  <p className="text-sm font-medium text-slate-700">{analytics.summary.lastOrderAt ? formatDateTime(analytics.summary.lastOrderAt) : '—'}</p>
-                </div>
-              </div>
-
-              {/* Contact & location details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm border border-slate-100 rounded-lg p-4">
-                <InfoRow label="Téléphone" value={analytics.summary.phone} />
-                <InfoRow label="Email" value={analytics.summary.email} />
-                <InfoRow label="Ville" value={analytics.summary.city} />
-                <InfoRow label="Adresse" value={analytics.summary.addressLine} />
-                {analytics.summary.shopifyOrdersCount != null && (
-                  <InfoRow label="Commandes Shopify (vie)" value={String(analytics.summary.shopifyOrdersCount)} />
-                )}
-                {analytics.summary.shopifyTotalSpent != null && (
-                  <InfoRow label="Dépensé Shopify (vie)" value={formatCurrency(analytics.summary.shopifyTotalSpent)} />
-                )}
-                {analytics.summary.tags && (
-                  <div className="md:col-span-2">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Tags</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {analytics.summary.tags.split(',').map((t) => t.trim()).filter(Boolean).map((t) => (
-                        <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">{t}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {analytics.categoryBreakdown.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Catégories préférées</h4>
-                  <div className="space-y-1.5">
-                    {analytics.categoryBreakdown.slice(0, 6).map((cat) => (
-                      <div key={cat.categoryName} className="flex items-center gap-3">
-                        <span className="text-xs text-slate-600 w-32 truncate flex-shrink-0">{cat.categoryName}</span>
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full" style={{ width: `${Math.round((cat.amountSpent / maxCategoryAmount) * 100)}%` }} />
-                        </div>
-                        <span className="text-xs font-medium text-slate-700 w-20 text-right flex-shrink-0">{formatCurrency(cat.amountSpent)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {analytics.recommendations.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Produits recommandés</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {analytics.recommendations.map((r) => (
-                      <div key={r.productId} className="border border-slate-200 rounded-lg overflow-hidden">
-                        <div className="w-full h-20 bg-slate-50 flex items-center justify-center">
-                          {r.imageUrl ? (
-                            <img src={r.imageUrl} alt={r.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                          ) : (
-                            <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="p-2">
-                          <p className="text-xs font-medium text-slate-900 truncate">{r.name}</p>
-                          <p className="text-xs text-slate-500">{formatCurrency(r.price)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <h4 className="text-sm font-semibold text-slate-900 mb-2">Historique d'achats</h4>
-                <div className="space-y-1.5 max-h-64 overflow-auto">
-                  {analytics.purchaseHistory.length === 0 && (
-                    <p className="text-sm text-slate-400 text-center py-6">Aucun achat enregistré</p>
-                  )}
-                  {analytics.purchaseHistory.map((h, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-sm bg-slate-50 rounded px-3 py-2">
-                      <div className="min-w-0">
-                        <span className="font-medium text-slate-900 truncate">{h.productName}</span>
-                        {(h.colorName || h.sizeValue) && (
-                          <span className="text-slate-400 text-xs ml-2">{[h.colorName, h.sizeValue].filter(Boolean).join(' / ')}</span>
-                        )}
-                        <div className="text-xs text-slate-400">{h.source} · {h.orderReference} · {formatDateTime(h.date)}</div>
-                      </div>
-                      <span className="font-medium text-slate-900 flex-shrink-0 ml-3">{formatCurrency(h.lineTotal)}</span>
-                    </div>
+          {/* Contact & location details */}
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2 rounded-card border border-border p-4 text-sm md:grid-cols-2">
+            <InfoRow label="Téléphone" value={analytics.summary.phone} />
+            <InfoRow label="Email" value={analytics.summary.email} />
+            <InfoRow label="Ville" value={analytics.summary.city} />
+            <InfoRow label="Adresse" value={analytics.summary.addressLine} />
+            {analytics.summary.shopifyOrdersCount != null && (
+              <InfoRow label="Commandes Shopify (vie)" value={String(analytics.summary.shopifyOrdersCount)} />
+            )}
+            {analytics.summary.shopifyTotalSpent != null && (
+              <InfoRow label="Dépensé Shopify (vie)" value={formatCurrency(analytics.summary.shopifyTotalSpent)} />
+            )}
+            {analytics.summary.tags && (
+              <div className="md:col-span-2">
+                <p className="mb-1 text-[10px] uppercase tracking-wide text-fg-subtle">Tags</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {analytics.summary.tags.split(',').map((t) => t.trim()).filter(Boolean).map((t) => (
+                    <Badge key={t} tone="special" size="sm">{t}</Badge>
                   ))}
                 </div>
               </div>
+            )}
+          </div>
+
+          {analytics.categoryBreakdown.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-fg">Catégories préférées</h4>
+              <div className="space-y-3">
+                {analytics.categoryBreakdown.slice(0, 6).map((cat) => (
+                  <BreakdownRow
+                    key={cat.categoryName}
+                    label={cat.categoryName}
+                    value={cat.amountSpent}
+                    total={maxCategoryAmount}
+                    format={formatCurrency}
+                  />
+                ))}
+              </div>
             </div>
-          </>
-        )}
-      </div>
-    </div>
+          )}
+
+          {analytics.recommendations.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-fg">Produits recommandés</h4>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {analytics.recommendations.map((r) => (
+                  <div key={r.productId} className="overflow-hidden rounded-card border border-border">
+                    <div className="flex h-20 w-full items-center justify-center bg-sunken">
+                      {r.imageUrl ? (
+                        <img src={r.imageUrl} alt={r.name} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                      ) : (
+                        <ImageOff className="h-6 w-6 text-fg-subtle" aria-hidden="true" />
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <p className="truncate text-xs font-medium text-fg">{r.name}</p>
+                      <p className="num text-xs text-fg-subtle">{formatCurrency(r.price)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-fg">Historique d'achats</h4>
+            {analytics.purchaseHistory.length === 0 ? (
+              <EmptyState compact title="Aucun achat enregistré" />
+            ) : (
+              <div className="max-h-64 space-y-1.5 overflow-auto">
+                {analytics.purchaseHistory.map((h, idx) => (
+                  <div key={idx} className="flex items-center justify-between rounded-inset bg-sunken px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <span className="truncate font-medium text-fg">{h.productName}</span>
+                      {(h.colorName || h.sizeValue) && (
+                        <span className="ml-2 text-xs text-fg-subtle">{[h.colorName, h.sizeValue].filter(Boolean).join(' / ')}</span>
+                      )}
+                      <div className="text-xs text-fg-subtle">{h.source} · {h.orderReference} · {formatDateTime(h.date)}</div>
+                    </div>
+                    <span className="num ml-3 flex-shrink-0 font-medium text-fg">{formatCurrency(h.lineTotal)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }

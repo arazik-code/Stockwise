@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import Header from '../components/layout/Header'
+import { ImageOff, Save, X } from 'lucide-react'
 import { settingsApi, type ReceiptTemplateConfig } from '../api/clients'
 import { showToast } from '../components/shared/Toast'
 import { invalidateReceiptTemplateCache } from '../utils/printReceipt'
+import { Button, Input, Page, Select, Switch, Tabs, Textarea } from '../components/ui'
 
 const DEFAULT_TEMPLATE: ReceiptTemplateConfig = {
   shopName: 'FLEX SHOES',
@@ -83,80 +84,66 @@ export default function ReceiptDesignerPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col flex-1">
-        <Header title="Design Recu" />
-        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">{t('common.loading')}</div>
-      </div>
+      <Page section="receiptDesign" title="Design Recu" bare fill>
+        <div className="flex flex-1 items-center justify-center text-sm text-fg-subtle">{t('common.loading')}</div>
+      </Page>
     )
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
-      <Header
-        title="Design Recu"
-        actions={
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
-          </button>
-        }
-      />
-
+    <Page
+      section="receiptDesign"
+      title="Design Recu"
+      bare
+      fill
+      actions={
+        <Button onClick={handleSave} loading={saving} size="sm" icon={<Save className="h-4 w-4" />}>
+          {saving ? 'Enregistrement...' : 'Enregistrer'}
+        </Button>
+      }
+    >
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left Panel ── */}
-        <div className="w-[380px] bg-white border-r border-slate-200 overflow-auto flex-shrink-0">
-          <div className="flex border-b border-slate-200 sticky top-0 bg-white z-10">
-            {([
-              { key: 'shop', label: 'Boutique' },
-              { key: 'content', label: 'Contenu' },
-              { key: 'style', label: 'Style' },
-            ] as const).map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 py-3 text-xs font-medium transition-colors ${
-                  activeTab === tab.key
-                    ? 'text-slate-900 border-b-2 border-slate-900'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        <div className="w-[380px] shrink-0 overflow-auto border-r border-border bg-surface">
+          <Tabs
+            items={[
+              { value: 'shop', label: 'Boutique' },
+              { value: 'content', label: 'Contenu' },
+              { value: 'style', label: 'Style' },
+            ]}
+            value={activeTab}
+            onChange={setActiveTab}
+            size="sm"
+            className="sticky top-0 z-10 bg-surface"
+          />
 
-          <div className="p-5 space-y-5">
+          <div className="space-y-5 p-5">
             {activeTab === 'shop' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Logo</label>
+                  <label className="mb-2 block text-xs font-medium text-fg-muted">Logo</label>
                   <div className="flex items-center gap-4">
                     {config.logoBase64 ? (
                       <div className="relative">
-                        <img src={config.logoBase64} alt="Logo" className="h-16 w-16 object-contain border border-slate-200 rounded p-1 bg-white" />
+                        <img src={config.logoBase64} alt="Logo" className="h-16 w-16 rounded-field border border-border bg-surface object-contain p-1" />
                         <button
                           onClick={() => update({ logoBase64: '' })}
-                          className="absolute -top-2 -right-2 w-5 h-5 bg-slate-900 text-white rounded-full text-xs flex items-center justify-center hover:bg-slate-700"
-                        >×</button>
+                          aria-label="Supprimer le logo"
+                          className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--negative)] text-white transition-colors duration-fast hover:brightness-110"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       </div>
                     ) : (
-                      <div className="h-16 w-16 border border-dashed border-slate-300 rounded flex items-center justify-center text-slate-300">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                      <div className="flex h-16 w-16 items-center justify-center rounded-field border border-dashed border-border text-fg-subtle">
+                        <ImageOff className="h-6 w-6" />
                       </div>
                     )}
                     <div>
-                      <button onClick={() => logoInputRef.current?.click()} className="text-sm text-slate-700 hover:text-slate-900 font-medium underline underline-offset-2">
+                      <Button variant="ghost" size="xs" onClick={() => logoInputRef.current?.click()}>
                         {config.logoBase64 ? 'Changer' : 'Ajouter un logo'}
-                      </button>
-                      <p className="text-xs text-slate-400 mt-1">PNG, JPG · Max 2MB</p>
+                      </Button>
+                      <p className="mt-1 text-xs text-fg-subtle">PNG, JPG · Max 2MB</p>
                       <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
                     </div>
                   </div>
@@ -171,7 +158,7 @@ export default function ReceiptDesignerPage() {
 
             {activeTab === 'content' && (
               <>
-                <p className="text-xs text-slate-400 mb-1">Sections du ticket</p>
+                <p className="mb-1 text-xs text-fg-subtle">Sections du ticket</p>
                 <Toggle label="Logo en haut" checked={!!config.logoBase64} onChange={() => {}} disabled />
                 <Toggle label="Numero de ticket" checked={config.showTicketNumber} onChange={(v) => update({ showTicketNumber: v })} />
                 <Toggle label="Date et heure" checked={config.showDate} onChange={(v) => update({ showDate: v })} />
@@ -179,61 +166,68 @@ export default function ReceiptDesignerPage() {
                 <Toggle label="Details variantes (couleur/taille)" checked={config.showVariantDetails} onChange={(v) => update({ showVariantDetails: v })} />
                 <Toggle label="SKU" checked={config.showSku} onChange={(v) => update({ showSku: v })} />
                 <Toggle label="Prix unitaire" checked={config.showUnitPrice} onChange={(v) => update({ showUnitPrice: v })} />
-                <div className="border-t border-slate-100 pt-4 mt-4">
-                  <p className="text-xs text-slate-400 mb-1">Totaux</p>
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="mb-1 text-xs text-fg-subtle">Totaux</p>
                   <Toggle label="Sous-total" checked={config.showSubtotal} onChange={(v) => update({ showSubtotal: v })} />
                   <Toggle label="TVA" checked={config.showTax} onChange={(v) => update({ showTax: v })} />
                   <Toggle label="Remise fidelite" checked={config.showDiscount} onChange={(v) => update({ showDiscount: v })} />
                 </div>
-                <div className="border-t border-slate-100 pt-4 mt-4">
-                  <p className="text-xs text-slate-400 mb-1">Bas de ticket</p>
+                <div className="mt-4 border-t border-border pt-4">
+                  <p className="mb-1 text-xs text-fg-subtle">Bas de ticket</p>
                   <Toggle label="Mode de paiement" checked={config.showPaymentMethod} onChange={(v) => update({ showPaymentMethod: v })} />
                   <Toggle label="Infos fidelite" checked={config.showLoyaltyInfo} onChange={(v) => update({ showLoyaltyInfo: v })} />
                   <Toggle label="QR Code client" checked={config.showQrCode} onChange={(v) => update({ showQrCode: v })} />
                 </div>
-                <div className="border-t border-slate-100 pt-4 mt-4 space-y-4">
+                <div className="mt-4 space-y-4 border-t border-border pt-4">
                   <Field label="Texte d'en-tete" value={config.headerText} onChange={(v) => update({ headerText: v })} placeholder="(optionnel)" />
                   <Field label="Texte du pied" value={config.footerText} onChange={(v) => update({ footerText: v })} placeholder="Merci et a bientot!" />
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Conditions / Mentions legales</label>
-                    <textarea
-                      value={config.termsText}
-                      onChange={(e) => update({ termsText: e.target.value })}
-                      placeholder="Delai d'echange : 15 jours&#10;Emballage et ticket de caisse obligatoire&#10;Articles Soldes ni repris"
-                      rows={4}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent resize-none"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">Un ligne par condition (ENTREE pour nouvelle ligne)</p>
-                  </div>
+                  <Textarea
+                    label="Conditions / Mentions legales"
+                    value={config.termsText}
+                    onChange={(e) => update({ termsText: e.target.value })}
+                    placeholder="Delai d'echange : 15 jours&#10;Emballage et ticket de caisse obligatoire&#10;Articles Soldes ni repris"
+                    rows={4}
+                    hint="Un ligne par condition (ENTREE pour nouvelle ligne)"
+                  />
                 </div>
               </>
             )}
 
             {activeTab === 'style' && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Police</label>
-                  <select value={config.fontFamily} onChange={(e) => update({ fontFamily: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg">
-                    <option value="'Consolas', 'Courier New', monospace">Consolas (defaut)</option>
-                    <option value="'Courier New', Courier, monospace">Courier New</option>
-                    <option value="'Lucida Console', Monaco, monospace">Lucida Console</option>
-                    <option value="monospace">System Mono</option>
-                  </select>
-                </div>
-                <p className="text-xs text-slate-400 mt-2">Les recus utilisent toujours une police a largeur fixe pour l'alignement sur imprimante thermique 80mm.</p>
+                <Select
+                  label="Police"
+                  value={config.fontFamily}
+                  onChange={(e) => update({ fontFamily: e.target.value })}
+                  size="sm"
+                >
+                  <option value="'Consolas', 'Courier New', monospace">Consolas (defaut)</option>
+                  <option value="'Courier New', Courier, monospace">Courier New</option>
+                  <option value="'Lucida Console', Monaco, monospace">Lucida Console</option>
+                  <option value="monospace">System Mono</option>
+                </Select>
+                <p className="mt-2 text-xs text-fg-subtle">Les recus utilisent toujours une police a largeur fixe pour l'alignement sur imprimante thermique 80mm.</p>
               </>
             )}
           </div>
         </div>
 
-        {/* ── Right Panel: Live Preview ── */}
-        <div className="flex-1 overflow-auto p-6 flex justify-center bg-slate-100">
-          <div className="bg-white shadow-2xl rounded-lg overflow-hidden" style={{ width: '80mm', minHeight: '200mm' }}>
+        {/* ── Right Panel: Live Preview ──
+            Physical receipt output - kept as a light paper island, byte-identical
+            in look regardless of app theme. See CONTRACT.md §6. Nothing inside
+            <ReceiptPreview> is touched by the redesign. */}
+        <div className="flex flex-1 justify-center overflow-auto bg-sunken p-6">
+          <div
+            data-theme="light"
+            data-perf="lean"
+            className="paper overflow-hidden"
+            style={{ width: '80mm', minHeight: '200mm' }}
+          >
             <ReceiptPreview config={config} />
           </div>
         </div>
       </div>
-    </div>
+    </Page>
   )
 }
 
@@ -416,20 +410,23 @@ function ReceiptPreview({ config }: { config: ReceiptTemplateConfig }) {
 // ── Form Helpers ──
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent" />
-    </div>
+    <Input
+      label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      size="sm"
+    />
   )
 }
 
 function Toggle({ label, checked, onChange, disabled }: { label: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <label className={`flex items-center justify-between py-2 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} group`}>
-      <span className="text-sm text-slate-700 group-hover:text-slate-900">{label}</span>
-      <button type="button" onClick={() => !disabled && onChange(!checked)} className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-slate-900' : 'bg-slate-300'}`}>
-        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${checked ? 'translate-x-4' : ''}`} />
-      </button>
-    </label>
+    <Switch
+      label={label}
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      disabled={disabled}
+    />
   )
 }

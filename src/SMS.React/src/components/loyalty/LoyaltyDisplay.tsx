@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
+import { AlertTriangle, Star, User, X } from 'lucide-react'
 import { formatCurrency } from '../../utils/format'
 import type { Client, LoyaltySettingsConfig } from '../../api/clients'
+import { IconButton, Switch } from '../ui'
 
 interface LoyaltyDisplayProps {
   client: Client
@@ -19,88 +21,62 @@ export default function LoyaltyDisplay({ client, onRemove, onViewDetails, loyalt
   const potentialDiscount = maxRedeemableUnits * dhPerRedemption
 
   return (
-    <div className={`border-2 rounded-xl p-4 ${
-      isLiquidationCart
-        ? 'bg-amber-50 border-amber-200'
-        : loyaltyEnabled
-          ? 'bg-emerald-50 border-emerald-200'
-          : 'bg-slate-50 border-slate-200'
-    }`}>
+    <div
+      data-tone={isLiquidationCart ? 'caution' : loyaltyEnabled ? 'positive' : 'muted'}
+      className="rounded-card border border-[color-mix(in_oklab,var(--tone)_28%,transparent)] bg-[var(--tone-soft)] p-4"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            isLiquidationCart ? 'bg-amber-100' : loyaltyEnabled ? 'bg-emerald-100' : 'bg-slate-100'
-          }`}>
-            <svg className={`w-5 h-5 ${
-              isLiquidationCart ? 'text-amber-600' : loyaltyEnabled ? 'text-emerald-600' : 'text-slate-400'
-            }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-chip bg-[color-mix(in_oklab,var(--tone)_16%,transparent)] text-[var(--tone)]">
+            <User className="h-5 w-5" />
+          </span>
           <div>
-            <p className={`text-base font-bold ${isLiquidationCart ? 'text-amber-900' : loyaltyEnabled ? 'text-emerald-900' : 'text-slate-700'}`}>
-              {client.name}
-            </p>
-            <p className={`text-sm ${isLiquidationCart ? 'text-amber-600' : loyaltyEnabled ? 'text-emerald-600' : 'text-slate-500'}`}>
-              {client.phone}
-            </p>
+            <p className="text-base font-bold text-[var(--tone-ink)]">{client.name}</p>
+            <p className="num text-sm text-[var(--tone)]">{client.phone}</p>
           </div>
         </div>
-        <button onClick={onRemove} className={`${isLiquidationCart ? 'text-amber-400 hover:text-amber-600' : loyaltyEnabled ? 'text-emerald-400 hover:text-emerald-600' : 'text-slate-400 hover:text-slate-600'} transition-colors`}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <IconButton
+          icon={<X className="h-4 w-4" />}
+          label={t('common.close')}
+          variant="ghost"
+          size="xs"
+          onClick={onRemove}
+          className="text-[var(--tone)] hover:text-[var(--tone-ink)]"
+        />
       </div>
 
       <div className="mt-3 flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <svg className={`w-4 h-4 ${isLiquidationCart ? 'text-amber-500' : loyaltyEnabled ? 'text-emerald-500' : 'text-slate-400'}`} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-          <span className={`text-lg font-bold ${isLiquidationCart ? 'text-amber-900' : loyaltyEnabled ? 'text-emerald-900' : 'text-slate-700'}`}>
-            {client.totalPoints}
-          </span>
-          <span className={`text-sm ${isLiquidationCart ? 'text-amber-600' : loyaltyEnabled ? 'text-emerald-600' : 'text-slate-500'}`}>
-            {t('pos.points')}
-          </span>
+          <Star className="h-4 w-4 text-[var(--tone)]" fill="currentColor" />
+          <span className="num text-lg font-bold text-[var(--tone-ink)]">{client.totalPoints}</span>
+          <span className="text-sm text-[var(--tone)]">{t('pos.points')}</span>
         </div>
 
         {potentialDiscount > 0 && !isLiquidationCart && (
-          <div className={`text-sm px-2.5 py-1 rounded-lg ${loyaltyEnabled ? 'text-emerald-700 bg-emerald-100' : 'text-slate-600 bg-slate-100'}`}>
+          <div className="num rounded-chip bg-[color-mix(in_oklab,var(--tone)_14%,transparent)] px-2.5 py-1 text-sm text-[var(--tone-ink)]">
             {formatCurrency(potentialDiscount)} {t('pos.available')}
           </div>
         )}
       </div>
 
-      <div className="mt-3 pt-3 border-t border-dashed border-slate-200">
+      <div className="mt-3 border-t border-dashed border-[color-mix(in_oklab,var(--tone)_24%,transparent)] pt-3">
         {isLiquidationCart ? (
-          <div className="flex items-center gap-2 text-amber-700">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
+          <div className="flex items-center gap-2 text-[var(--tone-ink)]">
+            <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">Liquidation — fidélité non applicable</span>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <span className={`text-sm font-medium ${loyaltyEnabled ? 'text-emerald-700' : 'text-slate-600'}`}>
-                {loyaltyEnabled ? 'Utiliser les points' : 'Accumuler les points'}
-              </span>
-              <button
-                onClick={() => onToggleLoyalty(!loyaltyEnabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  loyaltyEnabled ? 'bg-emerald-600' : 'bg-slate-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow ${
-                    loyaltyEnabled ? 'translate-x-5' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <Switch
+              checked={loyaltyEnabled}
+              onChange={(e) => onToggleLoyalty(e.target.checked)}
+              label={
+                <span className="text-sm font-medium text-[var(--tone-ink)]">
+                  {loyaltyEnabled ? 'Utiliser les points' : 'Accumuler les points'}
+                </span>
+              }
+            />
+            <p className="mt-1 text-xs text-fg-subtle">
               {loyaltyEnabled
                 ? 'Les points seront déduisés du total'
                 : 'Les points seront accumulés pour plus tard'}
@@ -112,7 +88,7 @@ export default function LoyaltyDisplay({ client, onRemove, onViewDetails, loyalt
       {onViewDetails && (
         <button
           onClick={onViewDetails}
-          className={`mt-2 text-sm font-medium transition-colors ${isLiquidationCart ? 'text-amber-600 hover:text-amber-800' : loyaltyEnabled ? 'text-emerald-600 hover:text-emerald-800' : 'text-slate-500 hover:text-slate-700'}`}
+          className="mt-2 text-sm font-medium text-[var(--tone)] transition-colors hover:text-[var(--tone-ink)]"
         >
           {t('pos.viewDetails')}
         </button>
