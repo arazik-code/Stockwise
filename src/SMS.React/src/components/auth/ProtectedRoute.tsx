@@ -15,6 +15,11 @@ const DEFAULT_ROUTE: Record<string, string> = {
   StockManager: '/products',
 }
 
+// Every path any role can reach. Used to tell "wrong role for a real route" (redirect to that
+// role's home) apart from "not a route at all" (let it fall through to the *, NotFoundPage) -
+// without this distinction every unknown URL silently redirected to / instead of showing 404.
+const ALL_KNOWN_ROUTES = new Set(Object.values(ROLE_ROUTES).flat())
+
 export default function ProtectedRoute() {
   const { token, user } = useAuthStore()
   const location = useLocation()
@@ -27,7 +32,7 @@ export default function ProtectedRoute() {
     return <Navigate to="/change-password" replace />
   }
 
-  if (user && !user.mustChangePassword) {
+  if (user && !user.mustChangePassword && ALL_KNOWN_ROUTES.has(location.pathname)) {
     const allowed = ROLE_ROUTES[user.role] || ROLE_ROUTES['Admin']
     if (!allowed.includes(location.pathname)) {
       return <Navigate to={DEFAULT_ROUTE[user.role] || '/'} replace />

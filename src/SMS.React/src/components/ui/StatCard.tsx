@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { motion, useInView, useMotionValue, useSpring, useReducedMotion } from 'motion/react'
+import { motion, useMotionValue, useSpring, useReducedMotion } from 'motion/react'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import { cn } from './cn'
 import { Skeleton } from './States'
@@ -20,6 +20,14 @@ import type { Tone } from '../../design/status'
  * Count-up belongs on stat tiles only, never in a table: 2,957 springs would
  * destroy the frame budget for an effect nobody looks at.
  *
+ * Triggers unconditionally on mount/value-change rather than gating on
+ * `useInView` - a stat tile is never off-screen at the point a user can read
+ * it, and gating a REQUIRED data value behind "did the intersection
+ * observer happen to fire" means the number can get stuck at its initial 0
+ * forever in any environment where that observer doesn't run on the usual
+ * schedule (a backgrounded/prerendered tab, some webview hosts). An
+ * animation is a nice-to-have; the number itself is not optional.
+ *
  * `tabular-nums` (the `num` utility) is not optional here - with proportional
  * figures every digit change shifts the layout and the number visibly wobbles
  * for the whole animation.
@@ -34,8 +42,6 @@ export function CountUp({
   className?: string
 }) {
   const reduce = useReducedMotion()
-  const ref = useRef<HTMLSpanElement>(null)
-  const inView = useInView(ref, { once: true, margin: '-40px' })
   const motionValue = useMotionValue(0)
   const spring = useSpring(motionValue, SPRING.float)
   const [display, setDisplay] = useState(reduce ? value : 0)
@@ -45,8 +51,8 @@ export function CountUp({
       setDisplay(value)
       return
     }
-    if (inView) motionValue.set(value)
-  }, [inView, value, motionValue, reduce])
+    motionValue.set(value)
+  }, [value, motionValue, reduce])
 
   useEffect(() => {
     if (reduce) return
@@ -54,7 +60,7 @@ export function CountUp({
   }, [spring, reduce])
 
   return (
-    <span ref={ref} className={cn('num', className)}>
+    <span className={cn('num', className)}>
       {format ? format(display) : Math.round(display).toLocaleString('fr-FR')}
     </span>
   )
