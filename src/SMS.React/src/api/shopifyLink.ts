@@ -33,6 +33,7 @@ export interface LinkVariantResult {
   shopifyVariantId?: number
   inventoryItemId?: number
   quantityPushed?: number
+  sharedSku?: string
 }
 
 export interface AutoLinkResult {

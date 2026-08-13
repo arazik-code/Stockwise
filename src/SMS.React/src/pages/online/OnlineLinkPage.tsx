@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { CheckCircle2, Link2, RefreshCw, Search } from 'lucide-react'
+import { CheckCircle2, Link2, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { showToast } from '../../components/shared/Toast'
 import {
   shopifyLinkApi,
@@ -8,6 +8,7 @@ import {
   type ShopifyVariantCandidate,
   type BulkSyncProgress,
 } from '../../api/shopifyLink'
+import { productsApi, type DraftProduct, type DeleteDraftProductsResult } from '../../api/products'
 import {
   Badge, Button, Card, DataTable, EmptyState, Input, Modal, Page,
   ProgressBar, Spinner, type Column,
@@ -22,6 +23,12 @@ export default function OnlineLinkPage() {
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [sync, setSync] = useState<BulkSyncProgress | null>(null)
+
+  const [draftsOpen, setDraftsOpen] = useState(false)
+  const [drafts, setDrafts] = useState<DraftProduct[]>([])
+  const [draftsLoading, setDraftsLoading] = useState(false)
+  const [draftsBusy, setDraftsBusy] = useState(false)
+  const [draftsResult, setDraftsResult] = useState<DeleteDraftProductsResult | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -120,6 +127,39 @@ export default function OnlineLinkPage() {
     }
   }
 
+  const openDrafts = async () => {
+    setDraftsOpen(true)
+    setDraftsResult(null)
+    setDraftsLoading(true)
+    try {
+      setDrafts(await productsApi.getDrafts())
+    } catch {
+      showToast('Impossible de charger les produits brouillon', 'error')
+    } finally {
+      setDraftsLoading(false)
+    }
+  }
+
+  const confirmDeleteDrafts = async () => {
+    if (draftsBusy) return
+    setDraftsBusy(true)
+    try {
+      const res = await productsApi.deleteDrafts()
+      setDraftsResult(res)
+      setDrafts([])
+      showToast(
+        res.skipped.length > 0
+          ? `${res.deleted} produit(s) supprime(s), ${res.skipped.length} conserve(s) (historique existant)`
+          : `${res.deleted} produit(s) brouillon supprime(s)`,
+        res.deleted > 0 ? 'success' : 'info'
+      )
+    } catch {
+      showToast('Echec de la suppression des produits brouillon', 'error')
+    } finally {
+      setDraftsBusy(false)
+    }
+  }
+
   const columns: Column<UnlinkedVariant>[] = [
     { key: 'product', header: 'Produit', render: (v) => <span className="font-medium text-fg">{v.productName}</span> },
     { key: 'size', header: 'Taille', render: (v) => <span className="text-fg-muted">{v.sizeValue ?? '-'}</span> },
@@ -147,6 +187,9 @@ export default function OnlineLinkPage() {
       title="Liaison Shopify"
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" size="sm" icon={<Trash2 className="h-4 w-4" />} onClick={openDrafts}>
+            Produits brouillon
+          </Button>
           <Button variant="outline" size="sm" disabled={busy || loading} onClick={doAutoLink}>
             Liaison automatique
           </Button>
@@ -285,6 +328,72 @@ export default function OnlineLinkPage() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={draftsOpen}
+        onClose={() => setDraftsOpen(false)}
+        size="lg"
+        title="Produits brouillon"
+        description="Produits importes depuis Shopify dont le statut n'est plus actif (brouillon, archive). Leur suppression est definitive."
+      >
+        {draftsLoading ? (
+          <div className="flex justify-center py-12">
+            <Spinner size="lg" />
+          </div>
+        ) : draftsResult ? (
+          <div className="space-y-3">
+            <div
+              data-tone={draftsResult.skipped.length > 0 ? 'caution' : 'positive'}
+              className="rounded-card border border-[color-mix(in_oklab,var(--tone)_25%,transparent)] bg-[var(--tone-soft)] px-4 py-3 text-sm text-[var(--tone-ink)]"
+            >
+              {draftsResult.deleted} produit(s) supprime(s) sur {draftsResult.totalDrafts}.
+              {draftsResult.skipped.length > 0 && ` ${draftsResult.skipped.length} conserve(s) car lie(s) a un historique.`}
+            </div>
+            {draftsResult.skipped.length > 0 && (
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {draftsResult.skipped.map((s) => (
+                  <div key={s.id} className="rounded-field border border-border px-3 py-2 text-xs">
+                    <p className="font-medium text-fg">{s.name}</p>
+                    <p className="text-fg-subtle">{s.reason}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setDraftsOpen(false)}>Fermer</Button>
+            </div>
+          </div>
+        ) : drafts.length === 0 ? (
+          <EmptyState icon={CheckCircle2} title="Aucun produit brouillon" description="Rien a nettoyer." />
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-fg-muted">
+              {drafts.length} produit(s) brouillon trouve(s). Les produits ayant deja des ventes, factures,
+              commandes en ligne ou mouvements de stock seront automatiquement conserves.
+            </p>
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {drafts.map((d) => (
+                <div key={d.id} className="flex items-center justify-between rounded-field border border-border px-3 py-2 text-sm">
+                  <span className="truncate text-fg">{d.name}</span>
+                  <Badge tone="neutral" size="xs">{d.variantCount} variante(s)</Badge>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button variant="outline" size="sm" onClick={() => setDraftsOpen(false)}>Annuler</Button>
+              <Button
+                size="sm"
+                variant="danger"
+                loading={draftsBusy}
+                icon={<Trash2 className="h-4 w-4" />}
+                onClick={confirmDeleteDrafts}
+              >
+                Supprimer les {drafts.length} produit(s)
+              </Button>
+            </div>
           </div>
         )}
       </Modal>

@@ -14,6 +14,12 @@ public interface IShopifyApiClient
     Task<ShopifyVariantItem?> GetVariantAsync(long shopifyVariantId, CancellationToken ct = default);
 
     /// <summary>
+    /// Pushes a new SKU to a Shopify variant. Used by the manual link flow to keep the local and
+    /// Shopify SKU identical once two variants are linked.
+    /// </summary>
+    Task<bool> UpdateVariantSkuAsync(long shopifyVariantId, string sku, CancellationToken ct = default);
+
+    /// <summary>
     /// Reads current Shopify stock for up to 50 inventory items in a single call. Used to compare
     /// before writing, so a full reconciliation costs ~60 reads instead of ~2,949 writes.
     /// </summary>

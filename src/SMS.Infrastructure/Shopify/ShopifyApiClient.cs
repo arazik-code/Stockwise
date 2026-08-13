@@ -114,6 +114,43 @@ public class ShopifyApiClient : IShopifyApiClient
         return response?.Variant;
     }
 
+    public async Task<bool> UpdateVariantSkuAsync(long shopifyVariantId, string sku, CancellationToken ct = default)
+    {
+        var url = $"/admin/api/{_options.ApiVersion}/variants/{shopifyVariantId}.json";
+        var payload = new { variant = new { id = shopifyVariantId, sku } };
+
+        const int maxAttempts = 4;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var response = await _http.PutAsJsonAsync(url, payload, ct);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests && attempt < maxAttempts)
+                {
+                    var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(2);
+                    _logger.LogWarning("Shopify rate limit hit updating SKU for variant {ShopifyVariantId}, retrying in {Delay}s (attempt {Attempt}/{Max})",
+                        shopifyVariantId, retryAfter.TotalSeconds, attempt, maxAttempts);
+                    await Task.Delay(retryAfter, ct);
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (attempt >= maxAttempts)
+                {
+                    _logger.LogError(ex, "Failed to update SKU for Shopify variant {ShopifyVariantId}", shopifyVariantId);
+                    return false;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public async Task<IReadOnlyList<ShopifyInventoryLevelItem>> GetInventoryLevelsAsync(
         IReadOnlyList<long> inventoryItemIds, long locationId, CancellationToken ct = default)
     {

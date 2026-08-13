@@ -109,3 +109,26 @@ public class OnlineProductStatsDto
     public int OrderCount { get; set; }
     public DateTime? LastOrderAt { get; set; }
 }
+
+public class DraftProductDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
+    public long? ShopifyProductId { get; set; }
+    public int VariantCount { get; set; }
+}
+
+public class DeleteDraftProductsResultDto
+{
+    public int TotalDrafts { get; set; }
+    public int Deleted { get; set; }
+    public List<SkippedDraftProductDto> Skipped { get; set; } = [];
+}
+
+public class SkippedDraftProductDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+}

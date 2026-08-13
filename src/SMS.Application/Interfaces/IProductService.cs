@@ -19,4 +19,6 @@ public interface IProductService
     Task<int> GenerateMissingBarcodesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<OnlineProductStatsDto>> GetOnlineStatsAsync(CancellationToken ct = default);
     decimal GetEffectivePrice(Product product, ProductVariant variant);
+    Task<IReadOnlyList<DraftProductDto>> GetDraftProductsAsync(CancellationToken ct = default);
+    Task<DeleteDraftProductsResultDto> DeleteDraftProductsAsync(CancellationToken ct = default);
 }

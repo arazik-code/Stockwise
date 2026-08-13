@@ -134,6 +134,67 @@ public class ProductAppService : IProductService
         return true;
     }
 
+    // "Draft" = a product this store no longer sells: it came from Shopify but its live Shopify
+    // status is not "active" (ShopifyProductAppService.ImportCatalogFromShopifyAsync already flips
+    // IsActive to false on sync for these). Purely local products (ShopifyProductId == null) are
+    // never included here, however inactive - only Shopify-synced clutter is a "draft".
+    public async Task<IReadOnlyList<DraftProductDto>> GetDraftProductsAsync(CancellationToken ct = default)
+    {
+        return await _unitOfWork.Set<Product>()
+            .AsNoTracking()
+            .Where(p => !p.IsActive && p.ShopifyProductId != null)
+            .OrderBy(p => p.Name)
+            .Select(p => new DraftProductDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                ImageUrl = p.ImageUrl,
+                ShopifyProductId = p.ShopifyProductId,
+                VariantCount = p.Variants.Count
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<DeleteDraftProductsResultDto> DeleteDraftProductsAsync(CancellationToken ct = default)
+    {
+        var drafts = await _unitOfWork.Set<Product>()
+            .Where(p => !p.IsActive && p.ShopifyProductId != null)
+            .ToListAsync(ct);
+
+        var result = new DeleteDraftProductsResultDto { TotalDrafts = drafts.Count };
+
+        foreach (var product in drafts)
+        {
+            // One transaction per product: a product with real sales/invoice/order/stock-movement
+            // history hits ProductVariant's DeleteBehavior.Restrict FK and throws - that must only
+            // abort this one product's delete, never the whole batch or products already committed.
+            await _unitOfWork.BeginTransactionAsync(ct);
+            try
+            {
+                _unitOfWork.Remove(product);
+                await _unitOfWork.SaveChangesAsync(ct);
+                await _unitOfWork.CommitTransactionAsync(ct);
+                result.Deleted++;
+            }
+            catch (DbUpdateException)
+            {
+                await _unitOfWork.RollbackTransactionAsync(ct);
+                result.Skipped.Add(new SkippedDraftProductDto
+                {
+                    Id = product.Id,
+                    Name = product.Name,
+                    Reason = "A un historique (ventes, factures, commandes en ligne ou mouvements de stock) - suppression bloquee pour proteger les donnees."
+                });
+            }
+            finally
+            {
+                _unitOfWork.ClearChangeTracker();
+            }
+        }
+
+        return result;
+    }
+
     public async Task<ProductVariantDto> AddVariantAsync(CreateProductVariantRequest request, CancellationToken ct = default)
     {
         var product = await _unitOfWork.Products.GetByIdAsync(request.ProductId, ct)

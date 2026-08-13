@@ -32,6 +32,7 @@ public record LinkVariantResultDto(
     int ProductVariantId,
     long? ShopifyVariantId = null,
     long? InventoryItemId = null,
-    int? QuantityPushed = null);
+    int? QuantityPushed = null,
+    string? SharedSku = null);
 
 public record AutoLinkResultDto(int Linked, int Ambiguous, int NoMatch, List<string> Details);

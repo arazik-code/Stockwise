@@ -38,6 +38,9 @@ publish.*/
 src/SMS.API/wwwroot/assets/
 src/SMS.API/wwwroot/index.html
 
+## User-uploaded product images — runtime data, never source
+src/SMS.API/wwwroot/uploads/
+
 ## Frontend build metadata
 *.tsbuildinfo
 

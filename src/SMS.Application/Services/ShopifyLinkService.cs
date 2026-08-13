@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -98,18 +99,27 @@ public class ShopifyLinkService : IShopifyLinkService
         var scored = new List<(CatalogEntry Entry, int Score, string Reason)>();
 
         var localBarcode = Normalize(variant.Barcode);
+        var localBarcodeDigits = NormalizeDigits(variant.Barcode);
         var localSku = Normalize(variant.Sku);
+        var localSkuIsPlaceholder = IsPlaceholderSku(variant.Sku);
         var localName = Normalize(variant.Product?.Name);
         var localSize = Normalize(variant.Size?.Value);
 
         foreach (var e in catalog)
         {
             var entryBarcode = Normalize(e.Barcode);
+            var entryBarcodeDigits = NormalizeDigits(e.Barcode);
             var entrySku = Normalize(e.Sku);
 
             // Highest-confidence signals first: a shared barcode or SKU is an exact identity match.
             if (localBarcode is not null && entryBarcode == localBarcode)
             { scored.Add((e, 100, "Code-barres identique")); continue; }
+
+            // Same digits but different formatting (spaces, dashes, a UPC-A vs EAN-13 leading zero) -
+            // still the same physical product, just typed/exported differently. Guarded to 8+ digits
+            // so short numeric SKUs never collide on this tier.
+            if (localBarcodeDigits is { Length: >= 8 } && entryBarcodeDigits == localBarcodeDigits)
+            { scored.Add((e, 97, "Code-barres identique (formatage different)")); continue; }
 
             if (localSku is not null && entrySku == localSku)
             { scored.Add((e, 95, "SKU identique")); continue; }
@@ -128,7 +138,19 @@ public class ShopifyLinkService : IShopifyLinkService
                 {
                     var sameSize = localSize is not null && Normalize(e.VariantTitle) == localSize;
                     scored.Add((e, sameSize ? 70 : 40, sameSize ? "Nom + taille correspondants" : "Nom similaire"));
+                    continue;
                 }
+            }
+
+            // A likely typo rather than a different product: real (non-placeholder) SKUs of similar
+            // length that differ by only 1-2 characters. Placeholder SKUs are excluded because two
+            // "SHP-1001"/"SHP-1002" style codes can be 1 edit apart while pointing at unrelated variants.
+            if (!localSkuIsPlaceholder && localSku is { Length: >= 4 } && entrySku is { Length: >= 4 } &&
+                !IsPlaceholderSku(e.Sku) && Math.Abs(localSku.Length - entrySku.Length) <= 2)
+            {
+                var distance = LevenshteinDistance(localSku, entrySku);
+                if (distance is >= 1 and <= 2)
+                { scored.Add((e, 60, "SKU proche (ecart mineur)")); }
             }
         }
 
@@ -186,12 +208,26 @@ public class ShopifyLinkService : IShopifyLinkService
         if (remote is null)
             return new(false, $"La variante {shopifyVariantId} est introuvable sur Shopify.", productVariantId);
 
+        // Give the two sides of the link one shared, unique SKU rather than leaving them to drift -
+        // a linked pair with different SKUs is confusing to reconcile by hand later and defeats the
+        // point of the link being the single source of truth for this item.
+        var sharedSku = await DetermineSharedSkuAsync(variant, remote.Sku, variant.Id, ct);
+        var skuNeedsShopifyPush = !string.Equals(remote.Sku?.Trim(), sharedSku, StringComparison.Ordinal);
+
+        variant.Sku = sharedSku;
         variant.ShopifyVariantId = shopifyVariantId;
         variant.UpdatedAt = DateTime.UtcNow;
 
-        await UpsertMappingAsync(shopifyVariantId, remote, ct);
+        await UpsertMappingAsync(shopifyVariantId, remote, sharedSku, ct);
         await _unitOfWork.SaveChangesAsync(ct);
         _cache.Remove(CatalogCacheKey);
+
+        if (skuNeedsShopifyPush)
+        {
+            var skuPushed = await _client.UpdateVariantSkuAsync(shopifyVariantId, sharedSku, ct);
+            if (!skuPushed)
+                _logger.LogWarning("Failed to push shared SKU {Sku} to Shopify variant {ShopifyVariantId}", sharedSku, shopifyVariantId);
+        }
 
         // Push immediately so the link is provably working rather than "probably working" -
         // the user sees the Shopify quantity change the moment they link.
@@ -200,12 +236,13 @@ public class ShopifyLinkService : IShopifyLinkService
         return new(
             push.Success,
             push.Success
-                ? "Variante liee et stock Shopify synchronise."
-                : $"Variante liee, mais la synchronisation du stock a echoue : {push.Message}",
+                ? $"Variante liee (SKU unifie {sharedSku}) et stock Shopify synchronise."
+                : $"Variante liee (SKU unifie {sharedSku}), mais la synchronisation du stock a echoue : {push.Message}",
             productVariantId,
             shopifyVariantId,
             push.InventoryItemId ?? remote.InventoryItemId,
-            push.QuantityPushed);
+            push.QuantityPushed,
+            sharedSku);
     }
 
     public async Task<LinkVariantResultDto> UnlinkAsync(int productVariantId, CancellationToken ct = default)
@@ -249,15 +286,21 @@ public class ShopifyLinkService : IShopifyLinkService
         foreach (var variant in unlinked)
         {
             var localBarcode = Normalize(variant.Barcode);
+            var localBarcodeDigits = NormalizeDigits(variant.Barcode);
             var localSku = Normalize(variant.Sku);
+            var selfReferenceId = variant.Sku.StartsWith("SHP-", StringComparison.OrdinalIgnoreCase)
+                ? variant.Sku[4..]
+                : null;
 
-            // Only exact-identity signals are allowed to link automatically. Fuzzy name matches are
-            // left for a human to confirm - silently mislinking two products would corrupt stock on
-            // the storefront, which is far worse than leaving a row for someone to click.
+            // Only exact-identity signals are allowed to link automatically. Fuzzy name/SKU matches
+            // are left for a human to confirm - silently mislinking two products would corrupt stock
+            // on the storefront, which is far worse than leaving a row for someone to click.
             var candidates = catalog.Where(e =>
                     !taken.Contains(e.ShopifyVariantId) &&
                     ((localBarcode is not null && Normalize(e.Barcode) == localBarcode) ||
-                     (localSku is not null && Normalize(e.Sku) == localSku)))
+                     (localBarcodeDigits is { Length: >= 8 } && NormalizeDigits(e.Barcode) == localBarcodeDigits) ||
+                     (localSku is not null && Normalize(e.Sku) == localSku) ||
+                     (selfReferenceId is not null && selfReferenceId == e.ShopifyVariantId.ToString())))
                 .ToList();
 
             if (candidates.Count == 0) { noMatch++; continue; }
@@ -294,7 +337,11 @@ public class ShopifyLinkService : IShopifyLinkService
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private async Task UpsertMappingAsync(long shopifyVariantId, ShopifyVariantItem remote, CancellationToken ct)
+        => await UpsertMappingAsync(shopifyVariantId, remote, null, ct);
+
+    private async Task UpsertMappingAsync(long shopifyVariantId, ShopifyVariantItem remote, string? skuOverride, CancellationToken ct)
     {
+        var sku = skuOverride ?? remote.Sku;
         var mapping = await _unitOfWork.Set<ShopifyProduct>()
             .FirstOrDefaultAsync(sp => sp.ShopifyVariantId == shopifyVariantId, ct);
 
@@ -304,17 +351,74 @@ public class ShopifyLinkService : IShopifyLinkService
             {
                 ShopifyProductId = 0,
                 ShopifyVariantId = shopifyVariantId,
-                Title = remote.Sku ?? string.Empty,
-                Sku = remote.Sku,
+                Title = sku ?? string.Empty,
+                Sku = sku,
                 ShopifyInventoryItemId = remote.InventoryItemId,
                 SyncedAt = DateTime.UtcNow
             }, ct);
         }
         else
         {
+            mapping.Sku = sku;
             mapping.ShopifyInventoryItemId = remote.InventoryItemId;
             mapping.SyncedAt = DateTime.UtcNow;
         }
+    }
+
+    // Chooses one SKU to apply to both the local variant and the Shopify variant being linked. A
+    // real (non-placeholder) local SKU wins - it's more likely to be a merchant/POS-assigned code
+    // than the importer's "SHP-<id>" filler. Otherwise fall back to Shopify's own SKU, and only
+    // generate a fresh one if neither side has anything meaningful. Always re-checked against the
+    // unique index so the shared SKU can never collide with an unrelated variant.
+    private async Task<string> DetermineSharedSkuAsync(ProductVariant variant, string? remoteSku, int excludeVariantId, CancellationToken ct)
+    {
+        var localSku = variant.Sku?.Trim();
+        var remote = remoteSku?.Trim();
+
+        var candidate = !IsPlaceholderSku(localSku)
+            ? localSku!
+            : !string.IsNullOrWhiteSpace(remote)
+                ? remote!
+                : $"PRD-{variant.ProductId}-{variant.Id}";
+
+        if (candidate.Length > 50) candidate = candidate[..50];
+
+        var collides = await _unitOfWork.Set<ProductVariant>()
+            .AsNoTracking()
+            .AnyAsync(v => v.Id != excludeVariantId && v.Sku == candidate, ct);
+
+        if (!collides) return candidate;
+
+        var suffixed = $"{candidate}-{excludeVariantId}";
+        return suffixed.Length > 50 ? suffixed[^50..] : suffixed;
+    }
+
+    private static bool IsPlaceholderSku(string? sku)
+        => string.IsNullOrWhiteSpace(sku) || Regex.IsMatch(sku.Trim(), @"^SHP-\d+$", RegexOptions.IgnoreCase);
+
+    private static string? NormalizeDigits(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+        return digits.Length == 0 ? null : digits;
+    }
+
+    private static int LevenshteinDistance(string a, string b)
+    {
+        var dp = new int[a.Length + 1, b.Length + 1];
+        for (var i = 0; i <= a.Length; i++) dp[i, 0] = i;
+        for (var j = 0; j <= b.Length; j++) dp[0, j] = j;
+
+        for (var i = 1; i <= a.Length; i++)
+        {
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                dp[i, j] = Math.Min(Math.Min(dp[i - 1, j] + 1, dp[i, j - 1] + 1), dp[i - 1, j - 1] + cost);
+            }
+        }
+
+        return dp[a.Length, b.Length];
     }
 
     private async Task<IReadOnlyList<ShopifyVariantCandidateDto>> DecorateWithLinkStateAsync(

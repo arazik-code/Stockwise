@@ -9,6 +9,26 @@ export interface OnlineProductStats {
   lastOrderAt?: string
 }
 
+export interface DraftProduct {
+  id: number
+  name: string
+  imageUrl?: string
+  shopifyProductId?: number
+  variantCount: number
+}
+
+export interface SkippedDraftProduct {
+  id: number
+  name: string
+  reason: string
+}
+
+export interface DeleteDraftProductsResult {
+  totalDrafts: number
+  deleted: number
+  skipped: SkippedDraftProduct[]
+}
+
 export const productsApi = {
   getAll: () => api.get<Product[]>('/products').then((r) => r.data),
   getOnlineStats: () => api.get<OnlineProductStats[]>('/products/online-stats').then((r) => r.data),
@@ -30,4 +50,6 @@ export const productsApi = {
   getVariantByBarcode: (barcode: string) => api.get<ProductVariant>(`/products/variants/barcode/${barcode}`).then((r) => r.data),
   getByBarcode: (barcode: string) => api.get<Product>(`/products/barcode/${barcode}`).then((r) => r.data),
   generateMissingBarcodes: () => api.post<{ generated: number }>('/products/generate-barcodes').then((r) => r.data),
+  getDrafts: () => api.get<DraftProduct[]>('/products/drafts').then((r) => r.data),
+  deleteDrafts: () => api.delete<DeleteDraftProductsResult>('/products/drafts').then((r) => r.data),
 }

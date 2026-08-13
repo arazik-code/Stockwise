@@ -103,6 +103,14 @@ public class ProductsController : ControllerBase
         return result ? NoContent() : NotFound();
     }
 
+    [HttpGet("drafts")]
+    public async Task<IActionResult> GetDrafts(CancellationToken ct)
+        => Ok(await _productService.GetDraftProductsAsync(ct));
+
+    [HttpDelete("drafts")]
+    public async Task<IActionResult> DeleteDrafts(CancellationToken ct)
+        => Ok(await _productService.DeleteDraftProductsAsync(ct));
+
     [HttpPost("generate-barcodes")]
     public async Task<IActionResult> GenerateMissingBarcodes(CancellationToken ct)
     {
