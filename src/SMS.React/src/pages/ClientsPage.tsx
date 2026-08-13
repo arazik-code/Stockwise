@@ -10,7 +10,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, type ClientCategoryValue } from '../ut
 import ClientQrCard from '../components/loyalty/ClientQrCard'
 import {
   Button, Checkbox, ConfirmDialog, DataTable, Input, Modal, Page,
-  StatCard, StatusBadge, Tabs, type Column,
+  shouldVirtualize, StatCard, StatusBadge, Tabs, VirtualTable, type Column,
 } from '../components/ui'
 
 type TransactionTab = 'purchases' | 'points'
@@ -294,14 +294,26 @@ export default function ClientsPage() {
           />
         </div>
 
-        <DataTable
-          columns={columns}
-          data={clients}
-          keyField={(c) => c.id}
-          loading={loading}
-          onRowClick={(c) => openDetail(c)}
-          emptyMessage={t('clients.noClients')}
-        />
+        {shouldVirtualize(clients.length) ? (
+          <VirtualTable
+            columns={columns}
+            data={clients}
+            keyField={(c) => c.id}
+            loading={loading}
+            onRowClick={(c) => openDetail(c)}
+            emptyMessage={t('clients.noClients')}
+            height={640}
+          />
+        ) : (
+          <DataTable
+            columns={columns}
+            data={clients}
+            keyField={(c) => c.id}
+            loading={loading}
+            onRowClick={(c) => openDetail(c)}
+            emptyMessage={t('clients.noClients')}
+          />
+        )}
       </div>
 
       {/* Create / Edit Modal */}

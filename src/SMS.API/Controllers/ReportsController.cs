@@ -111,6 +111,8 @@ public class ReportsController : ControllerBase
             {
                 ProductVariantId = s.ProductVariantId,
                 ProductName = s.ProductVariant.Product.Name,
+                ColorName = s.ProductVariant.Color.Name,
+                SizeValue = s.ProductVariant.Size.Value,
                 Sku = s.ProductVariant.Sku,
                 Category = s.ProductVariant.Product.Category.Name,
                 QuantityOnHand = s.QuantityOnHand,
@@ -169,6 +171,8 @@ public class ReportsController : ControllerBase
             {
                 ProductId = g.Key.ProductVariantId,
                 ProductName = g.Key.Name,
+                ColorName = g.Key.ColorName,
+                SizeValue = g.Key.SizeValue,
                 QuantitySold = g.Sum(si => si.Quantity),
                 Revenue = g.Sum(si => si.LineTotal)
             })

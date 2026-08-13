@@ -127,10 +127,23 @@ const saleCategory: Domain = {
 }
 
 /** Sale record status (RefundsPage). */
+// Sale.Status is the shared OrderStatus enum (SMS.Domain.Enums.OrderStatus), not a
+// sale-specific 3-state model - a POS sale completes as "Delivered" the instant it's rung up,
+// same as a fulfilled online order. Every value the enum can hold needs a label here, or an
+// untranslated raw enum string (e.g. "Delivered") leaks straight into the French UI.
 const sale: Domain = {
-  Completed: { tone: 'positive', label: 'Terminée',  icon: CheckCircle2, rank: 2 },
-  Pending:   { tone: 'caution',  label: 'En attente', icon: Clock,       rank: 1 },
-  Cancelled: { tone: 'muted',    label: 'Annulée',   icon: Ban,          rank: 0 },
+  Pending:           { tone: 'caution',  label: 'En attente',       icon: Clock,        rank: 1 },
+  Processing:        { tone: 'progress', label: 'En traitement',    icon: RefreshCw,    rank: 2 },
+  Confirmed:         { tone: 'info',     label: 'Confirmée',        icon: CheckCircle2, rank: 3 },
+  Packing:           { tone: 'special',  label: 'Emballage',        icon: Package,      rank: 4 },
+  ReadyToShip:       { tone: 'progress', label: 'Prête à expédier', icon: PackageCheck, rank: 5 },
+  Shipped:           { tone: 'info',     label: 'Expédiée',         icon: Send,         rank: 6 },
+  Delivered:         { tone: 'positive', label: 'Terminée',         icon: CheckCircle2, rank: 7 },
+  Returned:          { tone: 'caution',  label: 'Retournée',        icon: Undo2,        rank: 0 },
+  Refused:           { tone: 'critical', label: 'Refusée',          icon: PackageX,     rank: 0 },
+  Refunded:          { tone: 'negative', label: 'Remboursée',       icon: RotateCcw,    rank: 0 },
+  Cancelled:         { tone: 'muted',    label: 'Annulée',          icon: Ban,          rank: 0 },
+  InventoryConflict: { tone: 'critical', label: 'Conflit de stock', icon: AlertTriangle, rank: 0 },
 }
 
 /** Refund/exchange operations. Was the only place using -100 and `yellow`. */

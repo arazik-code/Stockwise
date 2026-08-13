@@ -36,7 +36,7 @@ export interface SalesByChannelItem {
 }
 
 export interface TopProductItem {
-  productVariantId: number
+  productId: number
   productName: string
   colorName: string
   sizeValue: string

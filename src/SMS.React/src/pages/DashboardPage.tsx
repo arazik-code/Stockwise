@@ -308,7 +308,7 @@ export default function DashboardPage() {
                       },
                     ]}
                     data={topProducts}
-                    keyField={(r) => r.productVariantId}
+                    keyField={(r) => r.productId}
                     sticky={false}
                   />
                 )}

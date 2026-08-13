@@ -9,8 +9,8 @@ import { salesApi } from '../api/sales'
 import { fournisseursApi } from '../api/fournisseurs'
 import { formatCurrency } from '../utils/format'
 import {
-  Badge, BreakdownRow, Button, Card, DataTable, Input, Page, SkeletonStats,
-  SkeletonTable, StatCard, StatusBadge, Tabs, type Column,
+  Badge, BreakdownRow, Button, Card, DataTable, Input, Page, shouldVirtualize, SkeletonStats,
+  SkeletonTable, StatCard, StatusBadge, Tabs, VirtualTable, type Column,
 } from '../components/ui'
 import type { InventoryReportItem, SalesByChannelItem, TopProductItem } from '../types/report'
 import type { DailySalesReport } from '../types/sale'
@@ -429,7 +429,11 @@ export default function ReportsPage() {
                   <div className="border-b border-border px-5 py-3">
                     <h3 className="text-sm font-semibold text-fg">{t('reports.inventory')} complet</h3>
                   </div>
-                  <DataTable columns={inventoryColumns} data={inventory} keyField={(i) => i.productVariantId} sticky={false} />
+                  {shouldVirtualize(inventory.length) ? (
+                    <VirtualTable columns={inventoryColumns} data={inventory} keyField={(i) => i.productVariantId} height={640} />
+                  ) : (
+                    <DataTable columns={inventoryColumns} data={inventory} keyField={(i) => i.productVariantId} sticky={false} />
+                  )}
                 </Card>
               </div>
             )}
@@ -450,7 +454,7 @@ export default function ReportsPage() {
                           const pct = (p.quantitySold / maxQty) * 100
                           const medals = ['🥇', '🥈', '🥉', '4.', '5.']
                           return (
-                            <div key={p.productVariantId} className="flex items-center gap-3">
+                            <div key={p.productId} className="flex items-center gap-3">
                               <span className="w-6 text-center text-sm">{medals[i]}</span>
                               <div className="flex-1">
                                 <div className="mb-1 flex items-center justify-between">
@@ -466,7 +470,7 @@ export default function ReportsPage() {
                         })}
                       </div>
                       <div className="border-t border-border">
-                        <DataTable columns={topProductsColumns} data={topProducts} keyField={(p) => p.productVariantId} sticky={false} />
+                        <DataTable columns={topProductsColumns} data={topProducts} keyField={(p) => p.productId} sticky={false} />
                       </div>
                     </>
                   )}
