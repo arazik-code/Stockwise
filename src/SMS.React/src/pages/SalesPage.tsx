@@ -238,7 +238,7 @@ export default function SalesPage() {
           {report && (
             <>
               {/* Summary cards */}
-              <div className={`grid grid-cols-2 gap-4 md:grid-cols-4 ${cashOnHand.isAdmin ? 'lg:grid-cols-7' : 'lg:grid-cols-6'}`}>
+              <div className={`grid grid-cols-2 gap-4 md:grid-cols-3 ${cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>
                 <StatCard label={t('sales.summary.totalRevenue')} value={formatCurrency(report.totalRevenue)} />
                 <StatCard label={t('sales.summary.totalSales')} value={report.totalSales.toString()} tone="positive" />
                 <StatCard label={t('sales.summary.avgOrder')} value={formatCurrency(report.averageOrderValue)} tone="special" />

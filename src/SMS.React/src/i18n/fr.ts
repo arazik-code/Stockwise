@@ -133,6 +133,7 @@ const fr = {
     updateSuccess: 'Produit mis à jour avec succès',
     deleteSuccess: 'Produit supprimé',
     deleteFailed: 'Échec de la suppression',
+    imageUploadError: "Produit enregistré, mais l'image n'a pas pu être téléchargée",
     sku: 'SKU',
     name: 'Nom',
     description: 'Description',

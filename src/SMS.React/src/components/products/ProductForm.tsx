@@ -16,7 +16,7 @@ import { Badge, Button, Input, Modal, Select, Textarea } from '../ui'
 
 interface ProductFormProps {
   product?: Product | null
-  onSubmit: (data: CreateProductRequest) => void
+  onSubmit: (data: CreateProductRequest, imageFile: File | null) => void
   onCancel: () => void
   onProductUpdated?: () => void
 }
@@ -34,6 +34,7 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
   const [colors, setColors] = useState<Color[]>([])
   const [sizes, setSizes] = useState<Size[]>([])
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [editingInfo, setEditingInfo] = useState(false)
   const isEditing = !!product
 
@@ -85,6 +86,10 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    // Local preview only - the actual upload goes through productsApi.uploadImage() (multipart)
+    // once the product is saved and has an id. Never send the raw file as a base64 string in the
+    // JSON payload: it silently blew past ImageUrl's 500-char column limit and 500'd on save.
+    setSelectedImageFile(file)
     const reader = new FileReader()
     reader.onloadend = () => setImagePreview(reader.result as string)
     reader.readAsDataURL(file)
@@ -92,7 +97,7 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({ ...form, imageUrl: imagePreview ?? undefined })
+    onSubmit(form, selectedImageFile)
     if (isEditing) setEditingInfo(false)
   }
 

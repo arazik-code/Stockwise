@@ -75,13 +75,26 @@ export function useSignalR() {
       }
     })
 
-    connection.start()
-      .then(() => connection.invoke('JoinPosRoom'))
-      .catch(console.error)
+    // start() is async; a fast navigation away from a SignalR-backed page (POS, the online
+    // dashboard, online orders) can unmount before it resolves. Calling stop() on a connection
+    // still mid-start throws "Failed to start the HttpConnection before stop() was called" -
+    // and because withAutomaticReconnect() then treats that as a dropped connection, it keeps
+    // retrying a connection that was already torn down, hammering /hubs/inventory and starving
+    // the browser's per-origin connection pool for every other request the next page needs.
+    // Only ever call stop() after start() has actually settled, success or failure.
+    let disposed = false
+    const startPromise = connection.start()
+      .then(() => {
+        if (!disposed) return connection.invoke('JoinPosRoom')
+      })
+      .catch((err) => {
+        if (!disposed) console.error(err)
+      })
     connectionRef.current = connection
 
     return () => {
-      connection.stop()
+      disposed = true
+      startPromise.finally(() => connection.stop())
     }
   }, [updateStock])
 }

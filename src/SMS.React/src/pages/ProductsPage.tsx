@@ -128,9 +128,16 @@ export default function ProductsPage() {
     }
   }
 
-  const handleCreate = async (data: CreateProductRequest) => {
+  const handleCreate = async (data: CreateProductRequest, imageFile: File | null) => {
     try {
-      await productsApi.create(data)
+      const created = await productsApi.create(data)
+      if (imageFile) {
+        try {
+          await productsApi.uploadImage(created.id, imageFile)
+        } catch {
+          showToast(t('products.imageUploadError'), 'warning')
+        }
+      }
       showToast(t('products.createSuccess'), 'success')
       setShowForm(false)
       loadProducts()
@@ -139,7 +146,7 @@ export default function ProductsPage() {
     }
   }
 
-  const handleUpdate = async (data: CreateProductRequest) => {
+  const handleUpdate = async (data: CreateProductRequest, imageFile: File | null) => {
     if (!editingProduct) return
     try {
       await productsApi.update(editingProduct.id, {
@@ -154,6 +161,13 @@ export default function ProductsPage() {
         categoryId: data.categoryId,
         fournisseurId: data.fournisseurId,
       })
+      if (imageFile) {
+        try {
+          await productsApi.uploadImage(editingProduct.id, imageFile)
+        } catch {
+          showToast(t('products.imageUploadError'), 'warning')
+        }
+      }
       showToast(t('products.updateSuccess'), 'success')
       setEditingProduct(null)
       setShowForm(false)
