@@ -5,6 +5,7 @@ import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import DeviceStatusIndicator from './DeviceStatusIndicator'
 import { ToastViewport } from '../ui/Toast'
+import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { useUIStore } from '../../store/uiStore'
 import { pageVariants } from '../../design/variants'
 
@@ -100,7 +101,17 @@ export default function MainLayout() {
               exit="exit"
               className="h-full"
             >
-              <Outlet />
+              {/* Scoped per-route, inside the pathname-keyed element: a crash in
+                  one page's render used to unmount the ENTIRE app (this was the
+                  only ErrorBoundary, sitting above MainLayout in App.tsx) - the
+                  sidebar and header disappeared along with the broken page, and
+                  since the fallback replaces everything there was no way to
+                  navigate elsewhere without a hard reload. Keying off pathname
+                  means switching routes always mounts a fresh boundary, even
+                  right after a crash. */}
+              <ErrorBoundary>
+                <Outlet />
+              </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </main>

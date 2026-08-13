@@ -91,7 +91,7 @@ export default function SalesPage() {
         s.saleNumber.toLowerCase().includes(q) ||
         (s.clientName ?? '').toLowerCase().includes(q) ||
         (s.userName ?? '').toLowerCase().includes(q) ||
-        s.channel.toLowerCase().includes(q)
+        (s.channel ?? '').toLowerCase().includes(q)
     )
   }, [report, search])
 
@@ -118,7 +118,7 @@ export default function SalesPage() {
     { key: 'saleNumber', header: t('sales.saleNumber'), render: (s) => <span className="num text-fg-muted">{s.saleNumber}</span> },
     { key: 'channel', header: t('sales.channel'), render: (s) => <StatusBadge domain="channel" value={s.channel} animate={false} showIcon={false} size="xs" /> },
     { key: 'category', header: t('sales.category'), render: (s) => <StatusBadge domain="saleCategory" value={s.category} animate={false} showIcon={false} size="xs" /> },
-    { key: 'payment', header: t('sales.payment'), render: (s) => <span className="text-xs text-fg-muted">{t(`sales.payments.${s.paymentMethod.toLowerCase()}`)}</span> },
+    { key: 'payment', header: t('sales.payment'), render: (s) => <span className="text-xs text-fg-muted">{t(`sales.payments.${(s.paymentMethod ?? '').toLowerCase()}`)}</span> },
     { key: 'client', header: t('sales.client'), render: (s) => <span className="text-xs text-fg-muted">{s.clientName ?? '-'}</span> },
     { key: 'lines', header: t('sales.items'), numeric: true, render: (s) => <span className="text-xs text-fg-muted">{s.items.length}</span> },
     {

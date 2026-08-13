@@ -253,6 +253,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseResponseCompression();
 
+app.UsePrivateNetworkAccess();
 app.UseCors("ReactSpa");
 
 app.UseSecurityHeaders();

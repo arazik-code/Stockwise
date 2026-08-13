@@ -325,7 +325,17 @@ export default function Sidebar() {
           // Permitted blur: fixed chrome, one instance, static backdrop.
           'lg:bg-surface/80 lg:backdrop-blur-[var(--blur-2)]',
           'transform transition-transform duration-300 ease-in-out',
-          'lg:static lg:z-auto lg:w-60 lg:min-h-screen lg:translate-x-0',
+          // h-screen, not min-h-screen: on desktop this becomes a normal
+          // flow flex item, so without a hard cap it grows to fit content
+          // (header + every nav item + footer) instead of the viewport.
+          // MainLayout's own root is capped for exactly this reason - once
+          // the nav list is tall enough to overflow (e.g. the online-mode
+          // sidebar's 8 sections), the whole <aside> outgrows the screen:
+          // the bottom nav items and footer render past the clipped root
+          // and the inner <nav>'s overflow-y-auto never engages because
+          // nothing above it in the chain has a definite height to scroll
+          // within.
+          'lg:static lg:z-auto lg:w-60 lg:h-screen lg:translate-x-0',
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -396,7 +406,11 @@ export default function Sidebar() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1">
+        {/* Must itself be a flex column: <nav>'s flex-1/overflow-y-auto are
+            inert without a flex container to size against, which let it
+            render at full content height and spill out past this wrapper -
+            painting over the footer below instead of scrolling under it. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <SidebarNavList
             key={mode}
             sections={mode === 'online' ? onlineSections : localSections}

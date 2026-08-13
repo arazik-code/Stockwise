@@ -61,7 +61,7 @@ export default function SaleDetail({ sale, onClose }: SaleDetailProps) {
   const totalQty = sale.items.reduce((sum, i) => sum + i.quantity, 0)
   const totalCost = sale.items.reduce((sum, i) => sum + (i.costPrice * i.quantity), 0)
   const profit = sale.totalAmount - totalCost
-  const categoryKey = `sales.categories.${sale.category.charAt(0).toLowerCase() + sale.category.slice(1)}`
+  const categoryKey = `sales.categories.${(sale.category ?? '').charAt(0).toLowerCase() + (sale.category ?? '').slice(1)}`
 
   return (
     /* closeOnEsc is safe to enable here: neither this component nor SalesPage
@@ -113,7 +113,7 @@ export default function SaleDetail({ sale, onClose }: SaleDetailProps) {
           />
           <InfoItem
             label={t('sales.detailModal.payment')}
-            value={t(`sales.payments.${sale.paymentMethod.toLowerCase()}`)}
+            value={t(`sales.payments.${(sale.paymentMethod ?? '').toLowerCase()}`)}
           />
           <InfoItem label={t('sales.detailModal.cashier')} value={sale.userName ?? '-'} />
           <InfoItem label={t('sales.detailModal.client')} value={sale.clientName ?? '-'} />
