@@ -41,7 +41,19 @@ export default function MainLayout() {
     // DEFINITE height so that <Page fill> (POS and the two designers, which use
     // fixed split panels that must not scroll the page) can resolve h-full.
     // Only <main> scrolls; the sidebar and header never move.
-    <div className="flex h-screen overflow-hidden bg-canvas" style={{ isolation: 'isolate' }}>
+    //
+    // shell-mesh here matters for a reason that has nothing to do with page
+    // content: the sidebar's glass rail backdrop-blurs whatever sits
+    // directly behind it, and without this the sidebar and main content
+    // area are adjacent flex columns with nothing behind either but flat
+    // --canvas - the blur had zero texture to diffuse, so the "glass"
+    // sidebar rendered visually identical to a flat panel. This mesh lives
+    // on the shared root so its blob falls inside the rail's own width, not
+    // page-mesh's subtler wash meant for large hero content. No
+    // [data-section] ancestor sets --acc-h/l/c here, so it resolves to the
+    // utility's own neutral defaults - a fixed wash for the persistent
+    // chrome, not a per-page hue.
+    <div className="shell-mesh flex h-screen overflow-hidden bg-canvas" style={{ isolation: 'isolate' }}>
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">

@@ -260,6 +260,29 @@
   background-repeat: no-repeat;
 }
 
+/* Same idea as page-mesh, tuned differently: page-mesh is calibrated to sit
+   quietly behind large hero content, so at 0.05-0.07 alpha it reads as
+   texture, not colour. The shell root needs the opposite - its only job is
+   to give the sidebar's glass rail something to blur, and a wash that
+   subtle disappears entirely once diffused across a 240px column. Higher
+   alpha, blob centred INSIDE the rail's width rather than bleeding off the
+   viewport edge. */
+@utility shell-mesh {
+  background-image:
+    radial-gradient(
+      ellipse 70% 60% at 14% 0%,
+      oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) var(--acc-h, 264) / 0.16),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 100% 100%,
+      oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) calc(var(--acc-h, 264) + 40) / 0.08),
+      transparent 60%
+    );
+  background-attachment: local;
+  background-repeat: no-repeat;
+}
+
 /* ══ Performance escape hatch ════════════════════════════════════════════════
  *
  * data-perf is probed once at boot (perfProbe.ts), persisted, and overridable
