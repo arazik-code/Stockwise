@@ -128,6 +128,14 @@
     0 6px 24px -6px oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) var(--acc-h, 264) / 0.38);
   --glow-soft:
     0 0 18px -4px oklch(var(--acc-l, 0.552) var(--acc-c, 0.19) var(--acc-h, 264) / 0.45);
+
+  /* Directional, not ambient: a full-height left rail (sidebar) needs
+     separation from the content to its RIGHT, which a symmetric e1-e4 shadow
+     doesn't give (their y-only offset reads as "resting on the page", not
+     "layered beside it"). Positive x-offset instead. */
+  --shadow-rail:
+    1px 0 0 var(--border-glass),
+    10px 0 32px -16px oklch(from var(--shadow-ink) l c h / 0.22);
 }
 
 /* ══ Density ═════════════════════════════════════════════════════════════════

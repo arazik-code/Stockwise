@@ -101,6 +101,7 @@
   --shadow-e4: var(--e4);
   --shadow-glow: var(--glow-accent);
   --shadow-glow-soft: var(--glow-soft);
+  --shadow-rail: var(--shadow-rail);
 
   /* ── Motion ───────────────────────────────────────────────────────────── */
   --ease-out-soft: var(--ease-out-soft);

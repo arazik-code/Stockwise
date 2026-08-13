@@ -194,7 +194,18 @@ function SidebarNavList({
   let itemIndex = -1
 
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+    <nav
+      className={cn(
+        'flex-1 space-y-5 overflow-y-auto px-3 py-4',
+        // Fades the list into its own edges instead of hard-cutting mid-row
+        // when scrolled - a small tell that this is a considered scroll
+        // surface, not a leftover overflow:auto. Purely visual: the real
+        // scrollable box is unchanged, so scroll math and hit-testing are
+        // untouched.
+        '[mask-image:linear-gradient(to_bottom,transparent,black_20px,black_calc(100%-20px),transparent)]',
+        '[-webkit-mask-image:linear-gradient(to_bottom,transparent,black_20px,black_calc(100%-20px),transparent)]'
+      )}
+    >
       {sections.map((section) => (
         <div key={section.label}>
           <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-fg-subtle">
@@ -322,8 +333,14 @@ export default function Sidebar() {
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-72 flex-shrink-0 flex-col',
           'border-r border-border bg-surface',
-          // Permitted blur: fixed chrome, one instance, static backdrop.
-          'lg:bg-surface/80 lg:backdrop-blur-[var(--blur-2)]',
+          // Permitted real blur: fixed chrome, one instance, static backdrop
+          // (see the blur budget in design/components.css - the sidebar rail
+          // is one of six surfaces allowed it). A translucent tint over the
+          // canvas mesh plus a directional rail shadow reads as a genuine
+          // glass pane layered above the content, not a flat panel with a
+          // blur filter switched on.
+          'lg:border-border-glass lg:bg-[color-mix(in_oklab,var(--surface-1)_82%,transparent)]',
+          'lg:shadow-rail lg:backdrop-blur-[var(--blur-2)] lg:backdrop-saturate-[1.6]',
           'transform transition-transform duration-300 ease-in-out',
           // h-screen, not min-h-screen: on desktop this becomes a normal
           // flow flex item, so without a hard cap it grows to fit content
@@ -339,11 +356,11 @@ export default function Sidebar() {
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="border-b border-border px-4 py-4">
+        <div className="border-b border-border px-4 py-4 lg:border-border-glass">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2.5">
               <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-[var(--accent)] text-[var(--accent-fg)] shadow-e1"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-[var(--accent)] text-[var(--accent-fg)] shadow-[var(--e1),var(--glow-soft)]"
                 aria-hidden="true"
               >
                 <meta.icon className="h-[18px] w-[18px]" />
@@ -419,9 +436,9 @@ export default function Sidebar() {
           />
         </div>
 
-        <div className="border-t border-border px-3 py-3">
+        <div className="border-t border-border px-3 py-3 lg:border-border-glass">
           {user && (
-            <div className="mb-2 flex items-center gap-3 rounded-field bg-surface-2 px-2 py-2">
+            <div className="mb-2 flex items-center gap-3 rounded-field border border-border/60 bg-surface-2/80 px-2 py-2 lg:border-border-glass lg:bg-[color-mix(in_oklab,var(--surface-2)_70%,transparent)]">
               <Avatar name={user.fullName} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-fg">{user.fullName}</p>
