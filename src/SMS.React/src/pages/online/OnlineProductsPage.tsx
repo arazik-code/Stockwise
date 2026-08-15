@@ -8,6 +8,8 @@ import { showToast } from '../../components/shared/Toast'
 import { shopifyApi, type ShopifyProductMapping } from '../../api/shopify'
 import { productsApi, type OnlineProductStats } from '../../api/products'
 import { categoriesApi, type Category } from '../../api/categories'
+import { colorsApi } from '../../api/colors'
+import type { Color } from '../../types/color'
 import type { Product, CreateProductRequest } from '../../types/product'
 import { formatCurrency, formatDateTime } from '../../utils/format'
 import {
@@ -374,16 +376,24 @@ interface MappingGroup {
   minPrice: number
   maxPrice: number
   priceMismatch: boolean
-  /** Set only when every size points at the same local product. */
-  localProductId: number | null
-  /** Some sizes linked, some not - only reachable from data written before grouping existed. */
-  partiallyLinked: boolean
   syncedAt: string
+
+  // The REAL link - a ProductColorway actually carries ShopifyProductId, which is what stock push
+  // and order matching read. Absent here means this Shopify product isn't connected to anything
+  // functionally, no matter what the legacy fields below say.
+  linkedProductId: number | null
+  linkedProductName: string | null
+  linkedColorId: number | null
+  linkedColorName: string | null
+
+  /** The old bookkeeping-only field (ShopifyProduct.LocalProductId) - kept only to detect drift. */
+  legacyLocalProductId: number | null
 }
 
 function ManualMappingView() {
   const [mappings, setMappings] = useState<ShopifyProductMapping[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [colors, setColors] = useState<Color[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -396,9 +406,10 @@ function ManualMappingView() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [m, p] = await Promise.all([shopifyApi.getProductMappings(), productsApi.getAll()])
+      const [m, p, c] = await Promise.all([shopifyApi.getProductMappings(), productsApi.getAll(), colorsApi.getAll()])
       setMappings(m)
       setProducts(p)
+      setColors(c)
     } finally {
       setLoading(false)
     }
@@ -434,18 +445,47 @@ function ManualMappingView() {
     }
   }
 
-  const handleLink = async (group: MappingGroup, localProductId: string) => {
+  // Pending (unconfirmed) product+colour picks, one per unlinked group - keyed by shopifyProductId.
+  // Kept separate from the group data itself so choosing values doesn't need a round-trip.
+  const [pendingLinks, setPendingLinks] = useState<Record<number, { productId: string; colorId: string }>>({})
+  const [linking, setLinking] = useState<number | null>(null)
+
+  const setPendingLink = (shopifyProductId: number, patch: Partial<{ productId: string; colorId: string }>) =>
+    setPendingLinks((prev) => {
+      const current = prev[shopifyProductId] ?? { productId: '', colorId: '' }
+      return { ...prev, [shopifyProductId]: { ...current, ...patch } }
+    })
+
+  const handleLinkColorway = async (group: MappingGroup) => {
+    const pending = pendingLinks[group.shopifyProductId]
+    if (!pending?.productId || !pending?.colorId) return
+
+    setLinking(group.shopifyProductId)
     try {
-      const { updated } = await shopifyApi.linkByShopifyProduct(
-        group.shopifyProductId,
-        localProductId ? Number(localProductId) : null
-      )
-      showToast(
-        localProductId
-          ? `Association mise à jour (${updated} taille(s))`
-          : `Association retirée (${updated} taille(s))`,
-        'success'
-      )
+      const result = await shopifyApi.linkColorway(group.shopifyProductId, Number(pending.productId), Number(pending.colorId))
+      if (result.success) {
+        showToast(result.message, 'success')
+        setPendingLinks((prev) => {
+          const next = { ...prev }
+          delete next[group.shopifyProductId]
+          return next
+        })
+        load()
+      } else {
+        showToast(result.message, 'error')
+      }
+    } catch (e: any) {
+      showToast(e?.response?.data?.message ?? 'Erreur lors de l\'association', 'error')
+    } finally {
+      setLinking(null)
+    }
+  }
+
+  const handleUnlinkColorway = async (group: MappingGroup) => {
+    if (!confirm(`Délier "${group.title}" de ${group.linkedProductName} — ${group.linkedColorName} ? Le stock local existant est conservé, seul le lien Shopify est retiré.`)) return
+    try {
+      await shopifyApi.unlinkColorway(group.shopifyProductId)
+      showToast('Lien retiré', 'success')
       load()
     } catch {
       showToast('Erreur', 'error')
@@ -494,37 +534,38 @@ function ManualMappingView() {
     }
 
     return Array.from(byShopifyProduct, ([shopifyProductId, rows]): MappingGroup => {
-      const linked = rows.filter((r) => r.localProductId != null)
       const prices = rows.map((r) => r.price)
       const skus = rows.map((r) => r.sku).filter((s): s is string => !!s)
+      // Every row in a group shares one Shopify product, so the real link (read off the
+      // colourway) is identical across all of them - just read it from the first row.
+      const first = rows[0]
       return {
         shopifyProductId,
-        title: rows[0].title,
+        title: first.title,
         rows,
         variantCount: rows.length,
         skus,
         minPrice: Math.min(...prices),
         maxPrice: Math.max(...prices),
         priceMismatch: rows.some((r) => r.priceMismatch),
-        // A group is only "linked" when every one of its sizes points at the same local product.
-        // Anything else is partial - which the old per-size UI could produce silently.
-        localProductId: linked.length === rows.length && new Set(linked.map((r) => r.localProductId)).size === 1
-          ? linked[0].localProductId!
-          : null,
-        partiallyLinked: linked.length > 0 && linked.length < rows.length,
-        syncedAt: rows.reduce((latest, r) => (r.syncedAt > latest ? r.syncedAt : latest), rows[0].syncedAt),
+        linkedProductId: first.linkedProductId ?? null,
+        linkedProductName: first.linkedProductName ?? null,
+        linkedColorId: first.linkedColorId ?? null,
+        linkedColorName: first.linkedColorName ?? null,
+        legacyLocalProductId: first.localProductId ?? null,
+        syncedAt: rows.reduce((latest, r) => (r.syncedAt > latest ? r.syncedAt : latest), first.syncedAt),
       }
     }).sort((a, b) => a.title.localeCompare(b.title, 'fr'))
   }, [mappings])
 
-  const unlinkedCount = groups.filter((g) => g.localProductId == null).length
+  const unlinkedCount = groups.filter((g) => g.linkedProductId == null).length
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return groups.filter((g) => {
       if (q && !(g.title.toLowerCase().includes(q) || g.skus.some((s) => s.toLowerCase().includes(q)))) return false
-      if (linkFilter === 'linked' && g.localProductId == null) return false
-      if (linkFilter === 'unlinked' && g.localProductId != null) return false
+      if (linkFilter === 'linked' && g.linkedProductId == null) return false
+      if (linkFilter === 'unlinked' && g.linkedProductId != null) return false
       return true
     })
   }, [groups, search, linkFilter])
@@ -592,18 +633,66 @@ function ManualMappingView() {
     {
       key: 'local',
       header: 'Produit local',
-      width: '17rem',
-      render: (g) => (
-        <div className="space-y-1">
-          <Select size="sm" value={g.localProductId ?? ''} onChange={(e) => handleLink(g, e.target.value)}>
-            <option value="">— Non associé —</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
-          {g.partiallyLinked && (
-            <Badge tone="caution" size="xs">Partiellement associé — rechoisissez</Badge>
-          )}
-        </div>
-      ),
+      width: '20rem',
+      render: (g) => {
+        if (g.linkedProductId) {
+          return (
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-fg">{g.linkedProductName}</p>
+                <p className="flex items-center gap-1.5 text-xs text-fg-subtle">
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-chip border border-border"
+                    style={{ backgroundColor: colors.find((c) => c.id === g.linkedColorId)?.hexCode }}
+                  />
+                  {g.linkedColorName}
+                </p>
+              </div>
+              <IconButton
+                icon={<X className="h-3.5 w-3.5" />}
+                label="Délier"
+                size="xs"
+                variant="ghost"
+                onClick={() => handleUnlinkColorway(g)}
+              />
+            </div>
+          )
+        }
+
+        const pending = pendingLinks[g.shopifyProductId] ?? { productId: '', colorId: '' }
+        return (
+          <div className="space-y-1.5">
+            <Select
+              size="sm"
+              value={pending.productId}
+              onChange={(e) => setPendingLink(g.shopifyProductId, { productId: e.target.value })}
+            >
+              <option value="">Produit local…</option>
+              {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+            <div className="flex gap-1.5">
+              <Select
+                size="sm"
+                value={pending.colorId}
+                onChange={(e) => setPendingLink(g.shopifyProductId, { colorId: e.target.value })}
+                className="flex-1"
+              >
+                <option value="">Couleur…</option>
+                {colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+              <Button
+                size="sm"
+                variant="soft"
+                disabled={!pending.productId || !pending.colorId}
+                loading={linking === g.shopifyProductId}
+                onClick={() => handleLinkColorway(g)}
+              >
+                Lier
+              </Button>
+            </div>
+          </div>
+        )
+      },
     },
     {
       key: 'synced',

@@ -19,6 +19,13 @@ export interface ShopifyProductMapping {
   localPrice?: number
   priceMismatch: boolean
   syncedAt: string
+
+  /** The real link (ProductColorway.ShopifyProductId) - what stock push/order matching actually use. */
+  linkedColorwayId?: number
+  linkedProductId?: number
+  linkedProductName?: string
+  linkedColorId?: number
+  linkedColorName?: string
 }
 
 export interface CreateShopifyProductMappingRequest {
@@ -71,6 +78,14 @@ export interface OrderBackfillResult {
   ordersNotFoundOnShopify: number
 }
 
+export interface LinkColorwayResult {
+  success: boolean
+  message: string
+  variantsCreated: number
+  variantsUpdated: number
+  colorwayId: number
+}
+
 export const shopifyApi = {
   getSyncStatus: () => api.get<ShopifySyncStatus>('/shopify/sync/status').then((r) => r.data),
   triggerSync: () => api.post<{ message: string }>('/shopify/sync/trigger').then((r) => r.data),
@@ -87,6 +102,15 @@ export const shopifyApi = {
     api.put<{ updated: number }>(`/shopify-products/by-shopify-product/${shopifyProductId}/link`, { localProductId }).then((r) => r.data),
   deleteByShopifyProduct: (shopifyProductId: number) =>
     api.delete<{ deleted: number }>(`/shopify-products/by-shopify-product/${shopifyProductId}`).then((r) => r.data),
+  // The real link: creates/reuses a colourway under the chosen local product+colour and pulls in
+  // every size as a real local variant with stock from Shopify. Unlike linkByShopifyProduct above
+  // (a bookkeeping flag only), this is what actually drives stock sync and order matching.
+  linkColorway: (shopifyProductId: number, localProductId: number, colorId: number) =>
+    api.post<LinkColorwayResult>(`/shopify-products/by-shopify-product/${shopifyProductId}/link-colorway`, { localProductId, colorId })
+      .then((r) => r.data),
+  // Clears only the real link - the colourway, its local variants and their stock are untouched.
+  unlinkColorway: (shopifyProductId: number) =>
+    api.delete(`/shopify-products/by-shopify-product/${shopifyProductId}/link-colorway`),
   importProducts: () => api.post<ShopifyImportResult>('/shopify-products/import', {}, { timeout: 120000 }).then((r) => r.data),
   importCatalog: () => api.post<ShopifyCatalogImportResult>('/shopify-products/import-catalog', {}, { timeout: 300000 }).then((r) => r.data),
   rematchConflicts: () => api.post<OrderRematchResult>('/shopify/orders/rematch', {}, { timeout: 60000 }).then((r) => r.data),

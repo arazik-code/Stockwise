@@ -65,6 +65,25 @@ public class ShopifyProductsController : ControllerBase
         return updated == 0 ? NotFound() : Ok(new { updated });
     }
 
+    // The real link: creates/reuses a colourway under the chosen local product+colour, pulls in
+    // every size of this Shopify product as a real local ProductVariant, and seeds stock from
+    // Shopify. Unlike LinkByShopifyProduct above (a bookkeeping flag only), this is what stock
+    // push and order matching actually read.
+    [HttpPost("by-shopify-product/{shopifyProductId:long}/link-colorway")]
+    public async Task<IActionResult> LinkColorway(
+        long shopifyProductId, [FromBody] LinkColorwayRequest request, CancellationToken ct)
+    {
+        var result = await _service.LinkColorwayAsync(shopifyProductId, request, ct);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    [HttpDelete("by-shopify-product/{shopifyProductId:long}/link-colorway")]
+    public async Task<IActionResult> UnlinkColorway(long shopifyProductId, CancellationToken ct)
+    {
+        var unlinked = await _service.UnlinkColorwayAsync(shopifyProductId, ct);
+        return unlinked ? Ok() : NotFound();
+    }
+
     [HttpDelete("by-shopify-product/{shopifyProductId:long}")]
     public async Task<IActionResult> DeleteByShopifyProduct(long shopifyProductId, CancellationToken ct)
     {

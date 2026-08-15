@@ -18,6 +18,23 @@ public interface IShopifyProductService
     /// </summary>
     Task<int> LinkByShopifyProductAsync(long shopifyProductId, int? localProductId, CancellationToken ct = default);
 
+    /// <summary>
+    /// The real link. LinkByShopifyProductAsync above only sets a bookkeeping field nothing else
+    /// reads - this creates/reuses a ProductColorway under the chosen local product and colour,
+    /// pulls in each of the Shopify product's sizes as real local ProductVariants with their own
+    /// ShopifyVariantId, and seeds stock from Shopify's live counts. Safe to call again for a
+    /// colourway that's already linked (idempotent), and linking one colour never touches another
+    /// colourway's rows, since each is its own ProductColorway keyed on (ProductId, ColorId).
+    /// </summary>
+    Task<LinkColorwayResultDto> LinkColorwayAsync(long shopifyProductId, LinkColorwayRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Clears the real link only - the colourway, its local variants and their stock all stay
+    /// exactly as they are. Also clears each of those variants' ShopifyVariantId, so a colourway
+    /// and its sizes can never disagree about whether they're Shopify-linked.
+    /// </summary>
+    Task<bool> UnlinkColorwayAsync(long shopifyProductId, CancellationToken ct = default);
+
     Task<bool> DeleteAsync(int id, CancellationToken ct = default);
 
     /// <summary>Deletes every mapping row belonging to one Shopify product. Returns rows removed.</summary>

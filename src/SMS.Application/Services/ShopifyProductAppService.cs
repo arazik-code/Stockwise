@@ -16,12 +16,16 @@ public class ShopifyProductAppService : IShopifyProductService
     private readonly IShopifyApiClient? _shopifyClient;
     private readonly ILogger<ShopifyProductAppService> _logger;
     private readonly IShopifySyncService _syncService;
+    private readonly IColorwayResolver _colorways;
 
-    public ShopifyProductAppService(IUnitOfWork unitOfWork, ILogger<ShopifyProductAppService> logger, IShopifySyncService syncService, IShopifyApiClient? shopifyClient = null)
+    public ShopifyProductAppService(
+        IUnitOfWork unitOfWork, ILogger<ShopifyProductAppService> logger, IShopifySyncService syncService,
+        IColorwayResolver colorways, IShopifyApiClient? shopifyClient = null)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
         _syncService = syncService;
+        _colorways = colorways;
         _shopifyClient = shopifyClient;
     }
 
@@ -553,7 +557,15 @@ public class ShopifyProductAppService : IShopifyProductService
             .OrderByDescending(sp => sp.SyncedAt)
             .ToListAsync(ct);
 
-        return mappings.Select(MapToDto).ToList();
+        // The real link, as opposed to the LocalProductId column above: keyed by ShopifyProductId
+        // since that's what LinkColorwayAsync stamps on the colourway it created/reused.
+        var colorwayByShopifyProductId = await _unitOfWork.Set<ProductColorway>()
+            .Include(c => c.Product)
+            .Include(c => c.Color)
+            .Where(c => c.ShopifyProductId != null)
+            .ToDictionaryAsync(c => c.ShopifyProductId!.Value, ct);
+
+        return mappings.Select(sp => MapToDto(sp, colorwayByShopifyProductId.GetValueOrDefault(sp.ShopifyProductId))).ToList();
     }
 
     public async Task<ShopifyProductMappingDto> CreateAsync(CreateShopifyProductMappingRequest request, CancellationToken ct = default)
@@ -610,6 +622,215 @@ public class ShopifyProductAppService : IShopifyProductService
         return mappings.Count;
     }
 
+    public async Task<LinkColorwayResultDto> LinkColorwayAsync(long shopifyProductId, LinkColorwayRequest request, CancellationToken ct = default)
+    {
+        if (_shopifyClient is null)
+            return new LinkColorwayResultDto { Success = false, Message = "Shopify n'est pas configuré." };
+
+        var productExists = await _unitOfWork.Set<Product>().AnyAsync(p => p.Id == request.LocalProductId, ct);
+        if (!productExists)
+            return new LinkColorwayResultDto { Success = false, Message = "Produit local introuvable." };
+
+        var color = await _unitOfWork.Set<Color>().FirstOrDefaultAsync(c => c.Id == request.ColorId, ct);
+        if (color is null)
+            return new LinkColorwayResultDto { Success = false, Message = "Couleur introuvable." };
+
+        // A Shopify product must not silently jump from one local product to another - that would
+        // strand whatever local variants/stock it was already feeding.
+        var existingLink = await _unitOfWork.Set<ProductColorway>()
+            .FirstOrDefaultAsync(c => c.ShopifyProductId == shopifyProductId, ct);
+        if (existingLink is not null && existingLink.ProductId != request.LocalProductId)
+        {
+            return new LinkColorwayResultDto
+            {
+                Success = false,
+                Message = $"Ce produit Shopify est déjà lié à un autre produit local (#{existingLink.ProductId}). Déliez-le d'abord."
+            };
+        }
+
+        List<ShopifyProductItem> allProducts;
+        try
+        {
+            allProducts = await _shopifyClient.GetAllProductsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch Shopify catalog while linking product {ShopifyProductId} to colourway", shopifyProductId);
+            return new LinkColorwayResultDto { Success = false, Message = "Impossible de joindre Shopify." };
+        }
+
+        var sp = allProducts.FirstOrDefault(p => p.Id == shopifyProductId);
+        if (sp is null)
+            return new LinkColorwayResultDto { Success = false, Message = $"Produit Shopify {shopifyProductId} introuvable." };
+
+        var colorway = await _colorways.GetOrCreateAsync(request.LocalProductId, request.ColorId, ct);
+
+        var minPrice = sp.Variants.Count > 0
+            ? sp.Variants.Min(v => ShopifySyncAppService.ParseShopifyDecimal(v.Price))
+            : 0m;
+        var imageUrl = sp.Image?.Src ?? sp.Images?.FirstOrDefault()?.Src;
+
+        colorway.ShopifyProductId = sp.Id;
+        colorway.ShopifyTitle = sp.Title;
+        colorway.IsActive = string.Equals(sp.Status, "active", StringComparison.OrdinalIgnoreCase);
+        if (imageUrl is not null) colorway.ImageUrl = imageUrl;
+        if (minPrice > 0) colorway.OnlinePrice = minPrice;
+        colorway.UpdatedAt = DateTime.UtcNow;
+
+        var sizeCache = (await _unitOfWork.Set<Size>().AsNoTracking().ToListAsync(ct))
+            .ToDictionary(s => s.Value.Trim().ToUpperInvariant());
+        var scratchResult = new ShopifyCatalogImportResultDto();
+        var (_, sizeOptionIndex) = DetermineOptionRoles(sp.Options);
+        var imagesById = sp.Images?.ToDictionary(i => i.Id) ?? [];
+
+        var existingLocalVariants = await _unitOfWork.Set<ProductVariant>()
+            .Include(v => v.StockItem)
+            .Where(v => v.ColorwayId == colorway.Id)
+            .ToDictionaryAsync(v => v.SizeId, ct);
+
+        var conflicts = new List<string>();
+        var created = 0;
+        var updated = 0;
+
+        foreach (var sv in sp.Variants)
+        {
+            // Guard: this Shopify variant already belongs to a different local variant. Skip it and
+            // report it rather than silently stealing the link out from under that other product -
+            // mirrors ShopifyLinkService.LinkAsync's same check at the single-variant level.
+            var conflictingVariant = await _unitOfWork.Set<ProductVariant>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(v => v.ShopifyVariantId == sv.Id && v.ColorwayId != colorway.Id, ct);
+            if (conflictingVariant is not null)
+            {
+                conflicts.Add($"Taille {sv.Option1 ?? sv.Id.ToString()} déjà liée à la variante locale #{conflictingVariant.Id}.");
+                continue;
+            }
+
+            var sizeText = sizeOptionIndex.HasValue
+                ? NullIfDefaultTitle(new[] { sv.Option1, sv.Option2, sv.Option3 }[sizeOptionIndex.Value])
+                : NullIfDefaultTitle(sv.Option1);
+            var size = string.IsNullOrWhiteSpace(sizeText)
+                ? await GetOrCreateSizeAsync(sizeCache, "Unique", scratchResult, ct)
+                : await GetOrCreateSizeAsync(sizeCache, sizeText!, scratchResult, ct);
+
+            var variantImageUrl = sv.ImageId.HasValue && imagesById.TryGetValue(sv.ImageId.Value, out var img)
+                ? img.Src
+                : imageUrl;
+            var qty = Math.Max(sv.InventoryQuantity ?? 0, 0);
+
+            if (existingLocalVariants.TryGetValue(size.Id, out var variant))
+            {
+                // Sku is deliberately left untouched here, unlike ImportCatalogFromShopifyAsync's
+                // equivalent branch: reusing an existing local variant means a human already
+                // created it by hand under this exact product/colour/size, and its SKU is more
+                // likely to be an intentional in-store code than something to overwrite.
+                variant.ShopifyVariantId = sv.Id;
+                if (!string.IsNullOrWhiteSpace(sv.Barcode)) variant.Barcode = sv.Barcode;
+                if (variantImageUrl is not null) variant.ImageUrl = variantImageUrl;
+                variant.UpdatedAt = DateTime.UtcNow;
+                updated++;
+
+                if (variant.StockItem is not null)
+                {
+                    variant.StockItem.QuantityOnHand = qty;
+                    variant.StockItem.LastUpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    await _unitOfWork.AddAsync(new StockItem
+                    {
+                        ProductVariantId = variant.Id,
+                        QuantityOnHand = qty,
+                        ReorderLevel = 5,
+                        LastUpdatedAt = DateTime.UtcNow
+                    }, ct);
+                }
+            }
+            else
+            {
+                // Sku is unique across ALL variants store-wide, not just this colourway - fall back
+                // to the SHP-{id} placeholder if Shopify's own SKU already belongs to an unrelated
+                // variant, rather than letting SaveChangesAsync fail the whole batch on it.
+                var candidateSku = !string.IsNullOrWhiteSpace(sv.Sku) ? sv.Sku : $"SHP-{sv.Id}";
+                var skuTaken = await _unitOfWork.Set<ProductVariant>().AsNoTracking().AnyAsync(v => v.Sku == candidateSku, ct);
+                var newVariant = new ProductVariant
+                {
+                    ProductId = request.LocalProductId,
+                    ColorId = request.ColorId,
+                    ColorwayId = colorway.Id,
+                    SizeId = size.Id,
+                    Sku = skuTaken ? $"SHP-{sv.Id}" : candidateSku,
+                    Barcode = sv.Barcode,
+                    ImageUrl = variantImageUrl,
+                    ShopifyVariantId = sv.Id,
+                    IsActive = true
+                };
+                await _unitOfWork.AddAsync(newVariant, ct);
+                created++;
+
+                await _unitOfWork.AddAsync(new StockItem
+                {
+                    ProductVariant = newVariant,
+                    QuantityOnHand = qty,
+                    ReorderLevel = 5,
+                    LastUpdatedAt = DateTime.UtcNow
+                }, ct);
+            }
+        }
+
+        // Keep the legacy mapping table in sync too, so it doesn't drift from the real link above -
+        // some older tooling still reads LocalProductId for display purposes.
+        var legacyMappings = await _unitOfWork.Set<ShopifyProduct>()
+            .Where(m => m.ShopifyProductId == shopifyProductId)
+            .ToListAsync(ct);
+        foreach (var mapping in legacyMappings)
+            mapping.LocalProductId = request.LocalProductId;
+
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        var message = $"{created} taille(s) créée(s), {updated} mise(s) à jour.";
+        if (conflicts.Count > 0)
+            message += $" {conflicts.Count} ignorée(s) - déjà liée(s) ailleurs.";
+
+        return new LinkColorwayResultDto
+        {
+            Success = true,
+            Message = message,
+            VariantsCreated = created,
+            VariantsUpdated = updated,
+            ColorwayId = colorway.Id
+        };
+    }
+
+    public async Task<bool> UnlinkColorwayAsync(long shopifyProductId, CancellationToken ct = default)
+    {
+        var colorway = await _unitOfWork.Set<ProductColorway>()
+            .FirstOrDefaultAsync(c => c.ShopifyProductId == shopifyProductId, ct);
+        if (colorway is null) return false;
+
+        colorway.ShopifyProductId = null;
+        colorway.ShopifyTitle = null;
+        colorway.UpdatedAt = DateTime.UtcNow;
+
+        var variants = await _unitOfWork.Set<ProductVariant>()
+            .Where(v => v.ColorwayId == colorway.Id && v.ShopifyVariantId != null)
+            .ToListAsync(ct);
+        foreach (var variant in variants)
+        {
+            variant.ShopifyVariantId = null;
+            variant.UpdatedAt = DateTime.UtcNow;
+        }
+
+        var legacyMappings = await _unitOfWork.Set<ShopifyProduct>()
+            .Where(m => m.ShopifyProductId == shopifyProductId)
+            .ToListAsync(ct);
+        foreach (var mapping in legacyMappings)
+            mapping.LocalProductId = null;
+
+        await _unitOfWork.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<int> DeleteByShopifyProductAsync(long shopifyProductId, CancellationToken ct = default)
     {
         var mappings = await _unitOfWork.Set<ShopifyProduct>()
@@ -635,7 +856,7 @@ public class ShopifyProductAppService : IShopifyProductService
         return true;
     }
 
-    private static ShopifyProductMappingDto MapToDto(ShopifyProduct sp) => new()
+    private static ShopifyProductMappingDto MapToDto(ShopifyProduct sp, ProductColorway? linkedColorway = null) => new()
     {
         Id = sp.Id,
         ShopifyProductId = sp.ShopifyProductId,
@@ -647,6 +868,11 @@ public class ShopifyProductAppService : IShopifyProductService
         LocalProductName = sp.LocalProduct?.Name,
         LocalPrice = sp.LocalProduct?.OnlinePrice ?? sp.LocalProduct?.Price,
         PriceMismatch = sp.LocalProduct is not null && (sp.LocalProduct.OnlinePrice ?? sp.LocalProduct.Price) != sp.Price,
-        SyncedAt = sp.SyncedAt
+        SyncedAt = sp.SyncedAt,
+        LinkedColorwayId = linkedColorway?.Id,
+        LinkedProductId = linkedColorway?.ProductId,
+        LinkedProductName = linkedColorway?.Product?.Name,
+        LinkedColorId = linkedColorway?.ColorId,
+        LinkedColorName = linkedColorway?.Color?.Name
     };
 }
