@@ -392,7 +392,14 @@ public partial class MainForm : Form
             settings.MarginRight = 0;
 
             // Empty PrinterName means "the OS default printer" - no dialog, no user interaction.
-            await printView.CoreWebView2.PrintAsync(settings);
+            // Bounded the same way as the navigation above: an offline printer or a stuck driver
+            // can leave PrintAsync's returned task never completing, and unlike a timed-out
+            // navigation there is no later retry to notice - the receipt would just silently
+            // never print, with nothing in the UI ever telling the cashier why. Racing it against
+            // a timeout guarantees this method always returns and reaches the finally block below,
+            // so the hidden WebView2 instance is always disposed rather than left running forever.
+            var printTask = printView.CoreWebView2.PrintAsync(settings);
+            await Task.WhenAny(printTask, Task.Delay(TimeSpan.FromSeconds(15)));
         }
         catch
         {

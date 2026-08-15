@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { AnimatePresence, motion } from 'motion/react'
-import { Minus, Plus, ShoppingCart, X } from 'lucide-react'
+import { ImageOff, Minus, Plus, ShoppingCart, X } from 'lucide-react'
 import { useCartStore } from '../../store/cartStore'
 import { formatCurrency } from '../../utils/format'
 import {
@@ -78,8 +78,32 @@ export default function Cart({ onCheckout, loyaltyClient, loyaltyEnabled, loyalt
                       : 'border-border bg-surface'
                   )}
                 >
-                  {/* Product name + remove */}
-                  <div className="mb-2 flex items-start justify-between gap-2">
+                  {/* Thumbnail + name + remove. The thumbnail is what makes this a
+                      confirmation, not just a receipt line: on a fast scan burst the
+                      cashier can catch "wrong size grabbed" at a glance instead of
+                      having to parse text, the same way the product grid tile reads. */}
+                  <div className="mb-2 flex items-start gap-3">
+                    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-field border border-border bg-surface-2">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <ImageOff className="h-5 w-5 text-fg-subtle" aria-hidden="true" />
+                      )}
+                      {item.colorHexCode && (
+                        <span
+                          className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-chip border border-[var(--surface-1)] shadow-e1"
+                          style={{ backgroundColor: item.colorHexCode }}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
+
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="truncate text-base font-semibold text-fg">{item.name}</span>
@@ -94,14 +118,16 @@ export default function Cart({ onCheckout, loyaltyClient, loyaltyEnabled, loyalt
                         {item.colorName && item.sizeValue && <span aria-hidden="true">·</span>}
                         {item.sizeValue && <span className="num font-medium">{item.sizeValue}</span>}
                       </div>
+                      {item.sku && <div className="num mt-0.5 text-xs text-fg-subtle">{item.sku}</div>}
                     </div>
+
                     <IconButton
                       icon={<X className="h-4 w-4" />}
                       label={t('common.delete')}
                       variant="danger-ghost"
                       size="sm"
                       onClick={() => removeItem(item.productVariantId)}
-                      className="-mr-1 -mt-1"
+                      className="-mr-1 -mt-1 shrink-0"
                     />
                   </div>
 

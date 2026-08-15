@@ -161,6 +161,7 @@ export default function ExchangeDialog({ onClose, onReadyForCheckout }: Exchange
       price: variant.price,
       costPrice: 0,
       colorName: variant.colorName,
+      colorHexCode: variant.colorHexCode,
       sizeValue: variant.sizeValue,
       isLiquidation: false,
       imageUrl: variant.imageUrl,

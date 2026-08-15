@@ -7,6 +7,7 @@ import { salesApi } from '../../api/sales'
 import { refundsApi } from '../../api/refunds'
 import { formatCurrency } from '../../utils/format'
 import { printReceipt, printExchangeReceipt, buildReceiptData, type ReceiptData } from '../../utils/printReceipt'
+import { isDesktopShell } from '../../utils/printBridge'
 import { Button, Input, KeyHint, Modal, Tabs } from '../ui'
 import type { Client } from '../../api/clients'
 
@@ -129,22 +130,29 @@ export default function CheckoutDialog({
       setReceiptData(receipt)
       clearCart()
 
-      // Auto-print after short delay
-      if (isExchange && exchangeContext) {
-        setTimeout(() => printExchangeReceipt(receipt, {
-          originalSaleNumber: exchangeContext.originalSaleNumber,
-          returnedItems: exchangeContext.returnedItems,
-          totalRefundAmount: exchangeContext.totalRefundAmount,
-          exchangeItems: cartSnapshot.map((i) => ({
-            productName: i.name,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            lineTotal: i.lineTotal,
-          })),
-          priceDifference,
-        }), 800)
-      } else {
-        setTimeout(() => printReceipt(receipt), 800)
+      // Auto-print only inside the desktop shell, where printing goes straight to the OS
+      // default printer with no dialog (see printBridge.ts). In a plain browser tab,
+      // window.print() opens a real, OS-level modal dialog - reproduced directly: once it's
+      // open, the tab stops responding to ANY input until it's dismissed. Auto-firing that,
+      // unannounced, 800ms after the cashier finishes a sale is exactly what "the app just
+      // froze" looks like. There, printing stays a deliberate action via the button below.
+      if (isDesktopShell()) {
+        if (isExchange && exchangeContext) {
+          setTimeout(() => printExchangeReceipt(receipt, {
+            originalSaleNumber: exchangeContext.originalSaleNumber,
+            returnedItems: exchangeContext.returnedItems,
+            totalRefundAmount: exchangeContext.totalRefundAmount,
+            exchangeItems: cartSnapshot.map((i) => ({
+              productName: i.name,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              lineTotal: i.lineTotal,
+            })),
+            priceDifference,
+          }), 800)
+        } else {
+          setTimeout(() => printReceipt(receipt), 800)
+        }
       }
 
       if (onSaleComplete) {
@@ -261,7 +269,11 @@ export default function CheckoutDialog({
           </pre>
         </div>
 
-        <div className="flex gap-3">
+        {/* grid, not flex: two shrink-0 fullWidth buttons in a flex row both
+            claim 100% of the row and neither can shrink to make room for the
+            other, blowing the pair out past the dialog. A grid gives each
+            button its own column instead. */}
+        <div className="grid grid-cols-2 gap-3">
           <Button variant="soft" fullWidth icon={<Printer className="h-5 w-5" />} onClick={() => printReceipt(receiptData)}>
             Imprimer
           </Button>
@@ -270,7 +282,11 @@ export default function CheckoutDialog({
           </Button>
         </div>
 
-        <p className="mt-3 text-xs text-fg-subtle">Entrée pour fermer et imprimer</p>
+        <p className="mt-3 text-xs text-fg-subtle">
+          {isDesktopShell()
+            ? 'Entrée pour fermer et imprimer'
+            : "Entrée pour fermer et imprimer — une fenêtre d'impression du système va s'ouvrir"}
+        </p>
       </Modal>
     )
   }
@@ -285,7 +301,9 @@ export default function CheckoutDialog({
       title={t('pos.checkout')}
       footer={
         <div className="flex w-full flex-col gap-3">
-          <div className="flex gap-3">
+          {/* grid, not flex - see the note on the post-sale Imprimer/Fermer row above.
+              This is the button that was rendering ~320px outside the dialog. */}
+          <div className="grid grid-cols-2 gap-3">
             <Button variant="outline" fullWidth onClick={onClose}>
               {t('common.cancel')}
             </Button>

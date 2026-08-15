@@ -887,7 +887,9 @@ export default function InvoicesPage() {
                             </>
                           )}
                         </div>
-                        <div className="flex gap-2 border-t border-border p-2">
+                        {/* grid, not flex: two shrink-0 fullWidth buttons in a flex row both
+                            claim 100% width and can't shrink for each other - see Button.tsx. */}
+                        <div className="grid grid-cols-2 gap-2 border-t border-border p-2">
                           <Button
                             type="button"
                             size="xs"

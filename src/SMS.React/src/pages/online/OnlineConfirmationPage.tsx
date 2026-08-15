@@ -191,7 +191,9 @@ export default function OnlineConfirmationPage() {
               </div>
 
               {hasWhatsApp(current.customerPhone) && (
-                <div className="mb-4 flex gap-2">
+                // grid, not flex: two shrink-0 fullWidth buttons in a flex row both
+                // claim 100% width and can't shrink for each other - see Button.tsx.
+                <div className="mb-4 grid grid-cols-2 gap-2">
                   <Button
                     fullWidth
                     size="sm"

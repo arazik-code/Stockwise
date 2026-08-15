@@ -143,7 +143,9 @@ export default function CashDrawerModal({ onClose }: CashDrawerModalProps) {
             className="resize-none"
           />
 
-          <div className="mb-5 flex gap-2">
+          {/* grid, not flex: two shrink-0 fullWidth buttons in a flex row both
+              claim 100% width and can't shrink for each other - see Button.tsx. */}
+          <div className="mb-5 grid grid-cols-2 gap-2">
             <Button variant="outline" fullWidth onClick={onClose}>
               Annuler
             </Button>

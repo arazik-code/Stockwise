@@ -8,7 +8,9 @@ export interface CartItem {
   name: string
   sku: string
   colorName: string
+  colorHexCode?: string
   sizeValue: string
+  imageUrl?: string
   unitPrice: number
   quantity: number
   lineTotal: number
@@ -56,7 +58,9 @@ export const useCartStore = create<CartState>()(
                 name: productName,
                 sku: variant.sku,
                 colorName: variant.colorName,
+                colorHexCode: variant.colorHexCode,
                 sizeValue: variant.sizeValue,
+                imageUrl: variant.imageUrl,
                 unitPrice: variant.price,
                 quantity: 1,
                 lineTotal: variant.price,
