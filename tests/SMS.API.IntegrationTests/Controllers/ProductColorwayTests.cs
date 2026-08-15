@@ -1,7 +1,9 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using SMS.Application.DTOs.Colors;
 using SMS.Application.DTOs.Products;
+using SMS.Application.DTOs.Shopify;
 using SMS.Application.DTOs.Sizes;
 
 namespace SMS.API.IntegrationTests.Controllers;
@@ -135,6 +137,86 @@ public class ProductColorwayTests : IClassFixture<SmsWebApplicationFactory>
         Assert.NotNull(product);
         Assert.False(product.IsShopifyLinked);
         Assert.Null(Assert.Single(product.Colorways).ShopifyProductId);
+    }
+
+    // ── Shopify mapping rows, grouped by product ────────────────────────────────────────────────
+    // The mapping table holds a row per Shopify VARIANT (the inventory push needs each variant's
+    // InventoryItemId), but the local link it carries is product-level. Linking one size at a time
+    // asked the same question once per size and could leave a product half linked.
+
+    [Fact]
+    public async Task LinkingByShopifyProduct_LinksEverySizeAtOnce()
+    {
+        var productId = await CreateProductAsync("Mapping Target " + Guid.NewGuid());
+        long shopifyProductId = Random.Shared.NextInt64(9_000_000_000, 9_999_999_999);
+
+        // Three sizes of one Shopify product, as the importer would create them.
+        foreach (var variantOffset in new[] { 1, 2, 3 })
+        {
+            var created = await _client.PostAsJsonAsync("/api/shopify-products", new CreateShopifyProductMappingRequest
+            {
+                ShopifyProductId = shopifyProductId,
+                ShopifyVariantId = shopifyProductId + variantOffset,
+                Title = "Derby Noir",
+                Sku = $"DN-4{variantOffset}",
+                Price = 100m
+            });
+            created.EnsureSuccessStatusCode();
+        }
+
+        var link = await _client.PutAsJsonAsync(
+            $"/api/shopify-products/by-shopify-product/{shopifyProductId}/link",
+            new LinkShopifyProductMappingRequest { LocalProductId = productId });
+        link.EnsureSuccessStatusCode();
+
+        var all = await _client.GetFromJsonAsync<List<ShopifyProductMappingDto>>("/api/shopify-products");
+        var group = all!.Where(m => m.ShopifyProductId == shopifyProductId).ToList();
+
+        Assert.Equal(3, group.Count);
+        Assert.All(group, m => Assert.Equal(productId, m.LocalProductId));
+
+        // And unlinking clears the whole group just as symmetrically.
+        var unlink = await _client.PutAsJsonAsync(
+            $"/api/shopify-products/by-shopify-product/{shopifyProductId}/link",
+            new LinkShopifyProductMappingRequest { LocalProductId = null });
+        unlink.EnsureSuccessStatusCode();
+
+        all = await _client.GetFromJsonAsync<List<ShopifyProductMappingDto>>("/api/shopify-products");
+        Assert.All(all!.Where(m => m.ShopifyProductId == shopifyProductId), m => Assert.Null(m.LocalProductId));
+    }
+
+    [Fact]
+    public async Task DeletingByShopifyProduct_RemovesEverySizeRow()
+    {
+        long shopifyProductId = Random.Shared.NextInt64(8_000_000_000, 8_999_999_999);
+
+        foreach (var variantOffset in new[] { 1, 2 })
+        {
+            var created = await _client.PostAsJsonAsync("/api/shopify-products", new CreateShopifyProductMappingRequest
+            {
+                ShopifyProductId = shopifyProductId,
+                ShopifyVariantId = shopifyProductId + variantOffset,
+                Title = "Derby Marron",
+                Price = 100m
+            });
+            created.EnsureSuccessStatusCode();
+        }
+
+        var delete = await _client.DeleteAsync($"/api/shopify-products/by-shopify-product/{shopifyProductId}");
+        delete.EnsureSuccessStatusCode();
+
+        var all = await _client.GetFromJsonAsync<List<ShopifyProductMappingDto>>("/api/shopify-products");
+        Assert.DoesNotContain(all!, m => m.ShopifyProductId == shopifyProductId);
+    }
+
+    [Fact]
+    public async Task LinkingAnUnknownShopifyProduct_ReturnsNotFound()
+    {
+        var response = await _client.PutAsJsonAsync(
+            "/api/shopify-products/by-shopify-product/7000000000123/link",
+            new LinkShopifyProductMappingRequest { LocalProductId = null });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

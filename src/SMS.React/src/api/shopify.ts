@@ -81,6 +81,12 @@ export const shopifyApi = {
   linkProductMapping: (id: number, localProductId: number | null) =>
     api.put<ShopifyProductMapping>(`/shopify-products/${id}/link`, { localProductId }).then((r) => r.data),
   deleteProductMapping: (id: number) => api.delete(`/shopify-products/${id}`),
+  // Group-level: one Shopify product covers several mapping rows (one per size), and the local
+  // link is a product-level pointer, so it is set for the whole group in one transaction.
+  linkByShopifyProduct: (shopifyProductId: number, localProductId: number | null) =>
+    api.put<{ updated: number }>(`/shopify-products/by-shopify-product/${shopifyProductId}/link`, { localProductId }).then((r) => r.data),
+  deleteByShopifyProduct: (shopifyProductId: number) =>
+    api.delete<{ deleted: number }>(`/shopify-products/by-shopify-product/${shopifyProductId}`).then((r) => r.data),
   importProducts: () => api.post<ShopifyImportResult>('/shopify-products/import', {}, { timeout: 120000 }).then((r) => r.data),
   importCatalog: () => api.post<ShopifyCatalogImportResult>('/shopify-products/import-catalog', {}, { timeout: 300000 }).then((r) => r.data),
   rematchConflicts: () => api.post<OrderRematchResult>('/shopify/orders/rematch', {}, { timeout: 60000 }).then((r) => r.data),

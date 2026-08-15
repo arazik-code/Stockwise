@@ -358,6 +358,29 @@ function CatalogAnalyticsView() {
 // Manual Shopify mapping — the original lightweight linking tool
 // ══════════════════════════════════════════════════════════════
 
+/**
+ * One Shopify product and all of its size rows, folded back together.
+ *
+ * The mapping table is stored per Shopify variant because ShopifyInventoryPusher resolves a
+ * variant's InventoryItemId through it. But the local link it carries is product-level, so the
+ * screen groups the rows and acts on the whole product.
+ */
+interface MappingGroup {
+  shopifyProductId: number
+  title: string
+  rows: ShopifyProductMapping[]
+  variantCount: number
+  skus: string[]
+  minPrice: number
+  maxPrice: number
+  priceMismatch: boolean
+  /** Set only when every size points at the same local product. */
+  localProductId: number | null
+  /** Some sizes linked, some not - only reachable from data written before grouping existed. */
+  partiallyLinked: boolean
+  syncedAt: string
+}
+
 function ManualMappingView() {
   const [mappings, setMappings] = useState<ShopifyProductMapping[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -411,21 +434,29 @@ function ManualMappingView() {
     }
   }
 
-  const handleLink = async (mapping: ShopifyProductMapping, localProductId: string) => {
+  const handleLink = async (group: MappingGroup, localProductId: string) => {
     try {
-      await shopifyApi.linkProductMapping(mapping.id, localProductId ? Number(localProductId) : null)
-      showToast('Association mise à jour', 'success')
+      const { updated } = await shopifyApi.linkByShopifyProduct(
+        group.shopifyProductId,
+        localProductId ? Number(localProductId) : null
+      )
+      showToast(
+        localProductId
+          ? `Association mise à jour (${updated} taille(s))`
+          : `Association retirée (${updated} taille(s))`,
+        'success'
+      )
       load()
     } catch {
       showToast('Erreur', 'error')
     }
   }
 
-  const handleDelete = async (mapping: ShopifyProductMapping) => {
-    if (!confirm(`Supprimer l'association "${mapping.title}" ?`)) return
+  const handleDelete = async (group: MappingGroup) => {
+    if (!confirm(`Supprimer la référence "${group.title}" et ses ${group.variantCount} taille(s) ?`)) return
     try {
-      await shopifyApi.deleteProductMapping(mapping.id)
-      showToast('Association supprimée', 'success')
+      await shopifyApi.deleteByShopifyProduct(group.shopifyProductId)
+      showToast('Référence supprimée', 'success')
       load()
     } catch {
       showToast('Erreur', 'error')
@@ -449,17 +480,54 @@ function ManualMappingView() {
     }
   }
 
-  const unlinkedCount = mappings.filter((m) => !m.localProductId).length
+  // Shopify sells one product per colourway with sizes inside it, and the mapping table stores a
+  // row per SIZE - the inventory push needs each variant's own InventoryItemId. Listing those rows
+  // raw showed the same product title once per size, which reads as duplicate imports, and offered
+  // to link the same local product over and over. Group them back up: one row per Shopify product,
+  // acting on all of its sizes at once.
+  const groups = useMemo(() => {
+    const byShopifyProduct = new Map<number, ShopifyProductMapping[]>()
+    for (const m of mappings) {
+      const bucket = byShopifyProduct.get(m.shopifyProductId)
+      if (bucket) bucket.push(m)
+      else byShopifyProduct.set(m.shopifyProductId, [m])
+    }
+
+    return Array.from(byShopifyProduct, ([shopifyProductId, rows]): MappingGroup => {
+      const linked = rows.filter((r) => r.localProductId != null)
+      const prices = rows.map((r) => r.price)
+      const skus = rows.map((r) => r.sku).filter((s): s is string => !!s)
+      return {
+        shopifyProductId,
+        title: rows[0].title,
+        rows,
+        variantCount: rows.length,
+        skus,
+        minPrice: Math.min(...prices),
+        maxPrice: Math.max(...prices),
+        priceMismatch: rows.some((r) => r.priceMismatch),
+        // A group is only "linked" when every one of its sizes points at the same local product.
+        // Anything else is partial - which the old per-size UI could produce silently.
+        localProductId: linked.length === rows.length && new Set(linked.map((r) => r.localProductId)).size === 1
+          ? linked[0].localProductId!
+          : null,
+        partiallyLinked: linked.length > 0 && linked.length < rows.length,
+        syncedAt: rows.reduce((latest, r) => (r.syncedAt > latest ? r.syncedAt : latest), rows[0].syncedAt),
+      }
+    }).sort((a, b) => a.title.localeCompare(b.title, 'fr'))
+  }, [mappings])
+
+  const unlinkedCount = groups.filter((g) => g.localProductId == null).length
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return mappings.filter((m) => {
-      if (q && !(m.title.toLowerCase().includes(q) || (m.sku ?? '').toLowerCase().includes(q))) return false
-      if (linkFilter === 'linked' && !m.localProductId) return false
-      if (linkFilter === 'unlinked' && m.localProductId) return false
+    return groups.filter((g) => {
+      if (q && !(g.title.toLowerCase().includes(q) || g.skus.some((s) => s.toLowerCase().includes(q)))) return false
+      if (linkFilter === 'linked' && g.localProductId == null) return false
+      if (linkFilter === 'unlinked' && g.localProductId != null) return false
       return true
     })
-  }, [mappings, search, linkFilter])
+  }, [groups, search, linkFilter])
 
   useEffect(() => { setPage(1) }, [search, linkFilter])
 
@@ -467,27 +535,53 @@ function ManualMappingView() {
   const currentPage = Math.min(page, pageCount)
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  const columns: Column<ShopifyProductMapping>[] = [
+  const columns: Column<MappingGroup>[] = [
     {
       key: 'title',
       header: 'Produit Shopify',
-      render: (m) => <span className="font-medium text-fg">{m.title}</span>,
+      render: (g) => (
+        <div className="min-w-0">
+          <span className="block truncate font-medium text-fg">{g.title}</span>
+          <span className="num text-[11px] text-fg-subtle">#{g.shopifyProductId}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'sizes',
+      header: 'Tailles',
+      align: 'center',
+      width: '7rem',
+      render: (g) => (
+        <Badge tone="neutral" size="sm">
+          <span className="num">{g.variantCount}</span>&nbsp;taille(s)
+        </Badge>
+      ),
     },
     {
       key: 'sku',
       header: 'SKU',
-      width: '8rem',
-      render: (m) => <span className="num text-fg-muted">{m.sku || '—'}</span>,
+      width: '10rem',
+      // One SKU per size, so a single value is only meaningful when they all agree.
+      render: (g) => {
+        const unique = Array.from(new Set(g.skus))
+        if (unique.length === 0) return <span className="text-fg-subtle">—</span>
+        if (unique.length === 1) return <span className="num text-fg-muted">{unique[0]}</span>
+        return <span className="num text-fg-subtle" title={unique.join(', ')}>{unique.length} SKU distincts</span>
+      },
     },
     {
       key: 'price',
       header: 'Prix Shopify',
       numeric: true,
-      width: '9rem',
-      render: (m) => (
+      width: '10rem',
+      render: (g) => (
         <span className="inline-flex items-center justify-end gap-1.5">
-          <span className="num text-fg">{formatCurrency(m.price)}</span>
-          {m.priceMismatch && (
+          <span className="num text-fg">
+            {g.minPrice === g.maxPrice
+              ? formatCurrency(g.minPrice)
+              : `${formatCurrency(g.minPrice)} – ${formatCurrency(g.maxPrice)}`}
+          </span>
+          {g.priceMismatch && (
             <span title="Différent du prix local">
               <AlertTriangle className="h-3.5 w-3.5 text-[var(--caution)]" />
             </span>
@@ -498,33 +592,38 @@ function ManualMappingView() {
     {
       key: 'local',
       header: 'Produit local',
-      width: '16rem',
-      render: (m) => (
-        <Select size="sm" value={m.localProductId ?? ''} onChange={(e) => handleLink(m, e.target.value)}>
-          <option value="">— Non associé —</option>
-          {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </Select>
+      width: '17rem',
+      render: (g) => (
+        <div className="space-y-1">
+          <Select size="sm" value={g.localProductId ?? ''} onChange={(e) => handleLink(g, e.target.value)}>
+            <option value="">— Non associé —</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          {g.partiallyLinked && (
+            <Badge tone="caution" size="xs">Partiellement associé — rechoisissez</Badge>
+          )}
+        </div>
       ),
     },
     {
       key: 'synced',
       header: 'Synchronisé',
       width: '10rem',
-      render: (m) => <span className="text-fg-subtle">{formatDateTime(m.syncedAt)}</span>,
+      render: (g) => <span className="text-fg-subtle">{formatDateTime(g.syncedAt)}</span>,
     },
     {
       key: 'actions',
       header: 'Action',
       align: 'center',
       width: '6rem',
-      render: (m) => (
+      render: (g) => (
         <div className="flex justify-center">
           <IconButton
             icon={<Trash2 className="h-3.5 w-3.5" />}
             label="Supprimer"
             size="xs"
             variant="danger-ghost"
-            onClick={() => handleDelete(m)}
+            onClick={() => handleDelete(g)}
           />
         </div>
       ),
@@ -543,13 +642,17 @@ function ManualMappingView() {
           Le catalogue complet (images, couleurs, tailles, stock) est géré depuis l'onglet{' '}
           <span className="font-medium">Catalogue &amp; Analytique</span> ci-dessus.
           Cette table sert uniquement à l'association manuelle fine par référence Shopify brute.
+          Chaque ligne regroupe un produit Shopify et toutes ses tailles : associer une ligne
+          associe l'ensemble de ses tailles au même produit local.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <p className="text-sm text-fg-subtle">
-            <span className="num">{mappings.length}</span> produit(s) Shopify référencé(s)
+            <span className="num">{groups.length}</span> produit(s) Shopify référencé(s)
+            {' · '}
+            <span className="num">{mappings.length}</span> variante(s)
           </p>
           {unlinkedCount > 0 && (
             <Badge tone="caution" size="sm">
@@ -623,10 +726,10 @@ function ManualMappingView() {
         </div>
       ) : (
         <>
-          <DataTable<ShopifyProductMapping>
+          <DataTable<MappingGroup>
             columns={columns}
             data={paged}
-            keyField={(m) => m.id}
+            keyField={(g) => g.shopifyProductId}
           />
           {pageCount > 1 && (
             <Pagination

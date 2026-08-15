@@ -595,6 +595,36 @@ public class ShopifyProductAppService : IShopifyProductService
         return MapToDto(mapping);
     }
 
+    public async Task<int> LinkByShopifyProductAsync(long shopifyProductId, int? localProductId, CancellationToken ct = default)
+    {
+        var mappings = await _unitOfWork.Set<ShopifyProduct>()
+            .Where(sp => sp.ShopifyProductId == shopifyProductId)
+            .ToListAsync(ct);
+
+        if (mappings.Count == 0) return 0;
+
+        foreach (var mapping in mappings)
+            mapping.LocalProductId = localProductId;
+
+        await _unitOfWork.SaveChangesAsync(ct);
+        return mappings.Count;
+    }
+
+    public async Task<int> DeleteByShopifyProductAsync(long shopifyProductId, CancellationToken ct = default)
+    {
+        var mappings = await _unitOfWork.Set<ShopifyProduct>()
+            .Where(sp => sp.ShopifyProductId == shopifyProductId)
+            .ToListAsync(ct);
+
+        if (mappings.Count == 0) return 0;
+
+        foreach (var mapping in mappings)
+            _unitOfWork.Remove(mapping);
+
+        await _unitOfWork.SaveChangesAsync(ct);
+        return mappings.Count;
+    }
+
     public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
         var mapping = (await _unitOfWork.FindAsync<ShopifyProduct>(sp => sp.Id == id, ct)).FirstOrDefault();

@@ -53,6 +53,25 @@ public class ShopifyProductsController : ControllerBase
         return mapping is null ? NotFound() : Ok(mapping);
     }
 
+    // Group-level operations, keyed by the Shopify PRODUCT rather than one of its variants.
+    // The mapping table stores a row per Shopify variant because the inventory push resolves a
+    // variant's InventoryItemId through it, but LocalProductId is a product-level pointer - so the
+    // UI groups the rows and acts on a whole product at once.
+    [HttpPut("by-shopify-product/{shopifyProductId:long}/link")]
+    public async Task<IActionResult> LinkByShopifyProduct(
+        long shopifyProductId, [FromBody] LinkShopifyProductMappingRequest request, CancellationToken ct)
+    {
+        var updated = await _service.LinkByShopifyProductAsync(shopifyProductId, request.LocalProductId, ct);
+        return updated == 0 ? NotFound() : Ok(new { updated });
+    }
+
+    [HttpDelete("by-shopify-product/{shopifyProductId:long}")]
+    public async Task<IActionResult> DeleteByShopifyProduct(long shopifyProductId, CancellationToken ct)
+    {
+        var deleted = await _service.DeleteByShopifyProductAsync(shopifyProductId, ct);
+        return deleted == 0 ? NotFound() : Ok(new { deleted });
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
