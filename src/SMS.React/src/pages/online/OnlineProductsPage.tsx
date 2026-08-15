@@ -294,7 +294,7 @@ function CatalogAnalyticsView() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="truncate text-sm font-semibold text-fg">{p.name}</p>
-                      {p.shopifyProductId && <Badge tone="special" size="xs">Shopify</Badge>}
+                      {p.isShopifyLinked && <Badge tone="special" size="xs">Shopify</Badge>}
                     </div>
                     <p className="text-xs text-fg-subtle">{p.categoryName} {p.brand ? `· ${p.brand}` : ''}</p>
                     <ProgressBar value={revenuePct} tone="positive" size="sm" className="mt-1.5 max-w-xs" />

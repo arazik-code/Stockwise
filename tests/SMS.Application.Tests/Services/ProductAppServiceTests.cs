@@ -1,4 +1,5 @@
 using SMS.Application.DTOs.Products;
+using SMS.Application.Interfaces;
 using SMS.Application.Services;
 using SMS.Domain.Entities;
 using SMS.Domain.Interfaces;
@@ -9,14 +10,22 @@ public class ProductAppServiceTests
 {
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IProductRepository> _productRepoMock;
+    private readonly Mock<IColorwayResolver> _colorwayResolverMock;
     private readonly ProductAppService _service;
 
     public ProductAppServiceTests()
     {
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _productRepoMock = new Mock<IProductRepository>();
+        _colorwayResolverMock = new Mock<IColorwayResolver>();
+        // Every variant hangs off a colourway; these tests don't exercise the grouping itself, so
+        // the resolver just hands back a stable row for whatever (product, colour) it's asked for.
+        _colorwayResolverMock
+            .Setup(c => c.GetOrCreateAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int productId, int colorId, CancellationToken _) =>
+                new ProductColorway { Id = 1, ProductId = productId, ColorId = colorId });
         _unitOfWorkMock.Setup(u => u.Products).Returns(_productRepoMock.Object);
-        _service = new ProductAppService(_unitOfWorkMock.Object);
+        _service = new ProductAppService(_unitOfWorkMock.Object, _colorwayResolverMock.Object);
     }
 
     [Fact]

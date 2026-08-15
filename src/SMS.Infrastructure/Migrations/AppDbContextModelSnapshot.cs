@@ -1298,9 +1298,6 @@ namespace SMS.Infrastructure.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<long?>("ShopifyProductId")
-                        .HasColumnType("bigint");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1313,9 +1310,62 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("FournisseurId");
 
-                    b.HasIndex("ShopifyProductId");
-
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ProductColorway", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ColorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("OnlinePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ShopifyProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ShopifyTitle")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ColorId");
+
+                    b.HasIndex("ShopifyProductId")
+                        .IsUnique()
+                        .HasFilter("\"ShopifyProductId\" IS NOT NULL");
+
+                    b.HasIndex("ProductId", "ColorId")
+                        .IsUnique();
+
+                    b.ToTable("ProductColorways");
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.ProductVariant", b =>
@@ -1331,6 +1381,9 @@ namespace SMS.Infrastructure.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<int>("ColorId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ColorwayId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
@@ -1377,6 +1430,11 @@ namespace SMS.Infrastructure.Migrations
 
                     b.HasIndex("Sku")
                         .IsUnique();
+
+                    b.HasIndex("ColorwayId", "SizeId")
+                        .IsUnique();
+
+                    b.HasIndex("ColorwayId", "ProductId", "ColorId");
 
                     b.HasIndex("ProductId", "ColorId", "SizeId")
                         .IsUnique();
@@ -2349,6 +2407,25 @@ namespace SMS.Infrastructure.Migrations
                     b.Navigation("Fournisseur");
                 });
 
+            modelBuilder.Entity("SMS.Domain.Entities.ProductColorway", b =>
+                {
+                    b.HasOne("SMS.Domain.Entities.Color", "Color")
+                        .WithMany("Colorways")
+                        .HasForeignKey("ColorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SMS.Domain.Entities.Product", "Product")
+                        .WithMany("Colorways")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Color");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("SMS.Domain.Entities.ProductVariant", b =>
                 {
                     b.HasOne("SMS.Domain.Entities.Color", "Color")
@@ -2369,7 +2446,16 @@ namespace SMS.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SMS.Domain.Entities.ProductColorway", "Colorway")
+                        .WithMany("Variants")
+                        .HasForeignKey("ColorwayId", "ProductId", "ColorId")
+                        .HasPrincipalKey("Id", "ProductId", "ColorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("Color");
+
+                    b.Navigation("Colorway");
 
                     b.Navigation("Product");
 
@@ -2571,6 +2657,8 @@ namespace SMS.Infrastructure.Migrations
 
             modelBuilder.Entity("SMS.Domain.Entities.Color", b =>
                 {
+                    b.Navigation("Colorways");
+
                     b.Navigation("Variants");
                 });
 
@@ -2597,6 +2685,13 @@ namespace SMS.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("SMS.Domain.Entities.Product", b =>
+                {
+                    b.Navigation("Colorways");
+
+                    b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("SMS.Domain.Entities.ProductColorway", b =>
                 {
                     b.Navigation("Variants");
                 });

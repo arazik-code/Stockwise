@@ -25,6 +25,7 @@ public class SyncSnapshotAppService : ISyncSnapshotService
         var products = await _unitOfWork.FindAsync<Product>(_ => true, ct);
         var colors = await _unitOfWork.FindAsync<Color>(_ => true, ct);
         var sizes = await _unitOfWork.FindAsync<Size>(_ => true, ct);
+        var colorways = await _unitOfWork.FindAsync<ProductColorway>(_ => true, ct);
         var variants = await _unitOfWork.FindAsync<ProductVariant>(_ => true, ct);
         var stockItems = await _unitOfWork.FindAsync<StockItem>(_ => true, ct);
         var clients = await _unitOfWork.FindAsync<Client>(_ => true, ct);
@@ -67,8 +68,19 @@ public class SyncSnapshotAppService : ISyncSnapshotService
                 OnlinePrice = p.OnlinePrice,
                 CategoryId = p.CategoryId,
                 FournisseurId = p.FournisseurId,
-                IsActive = p.IsActive,
-                ShopifyProductId = p.ShopifyProductId
+                IsActive = p.IsActive
+            }).ToList(),
+            ProductColorways = colorways.Select(c => new SyncProductColorwayDto
+            {
+                Id = c.Id,
+                ProductId = c.ProductId,
+                ColorId = c.ColorId,
+                ImageUrl = c.ImageUrl,
+                OnlinePrice = c.OnlinePrice,
+                ShopifyProductId = c.ShopifyProductId,
+                ShopifyTitle = c.ShopifyTitle,
+                SortOrder = c.SortOrder,
+                IsActive = c.IsActive
             }).ToList(),
             Colors = colors.Select(c => new SyncColorDto
             {
@@ -87,6 +99,7 @@ public class SyncSnapshotAppService : ISyncSnapshotService
             {
                 Id = v.Id,
                 ProductId = v.ProductId,
+                ColorwayId = v.ColorwayId,
                 ColorId = v.ColorId,
                 SizeId = v.SizeId,
                 Sku = v.Sku,
@@ -261,7 +274,6 @@ public class SyncSnapshotAppService : ISyncSnapshotService
                 entity.CategoryId = dto.CategoryId;
                 entity.FournisseurId = dto.FournisseurId;
                 entity.IsActive = dto.IsActive;
-                entity.ShopifyProductId = dto.ShopifyProductId;
                 entity.UpdatedAt = DateTime.UtcNow;
             }
             else
@@ -280,13 +292,98 @@ public class SyncSnapshotAppService : ISyncSnapshotService
                     OnlinePrice = dto.OnlinePrice,
                     CategoryId = dto.CategoryId,
                     FournisseurId = dto.FournisseurId,
-                    IsActive = dto.IsActive,
-                    ShopifyProductId = dto.ShopifyProductId
+                    IsActive = dto.IsActive
                 }, ct);
             }
             result.ProductsUpserted++;
         }
         await _unitOfWork.SaveChangesAsync(ct);
+
+        // Colourways must land between Products and ProductVariants: a variant's composite FK
+        // points at one, so inserting variants first would violate it.
+        //
+        // Backward compatibility: a sender running a build from before colourways existed sends no
+        // ProductColorways array at all, and its variants carry ColorwayId 0. Rather than reject
+        // that snapshot, rebuild the colourways from the variants' own (ProductId, ColorId) pairs -
+        // which is exactly the information a colourway is made of. Those rebuilt rows get
+        // database-assigned Ids rather than invented ones, because the receiver may already hold
+        // real colourways whose Ids we must not collide with. A terminal and the VPS can therefore
+        // be upgraded in either order without a sync outage.
+        var existingColorways = (await _unitOfWork.FindAsync<ProductColorway>(_ => true, ct)).ToList();
+        var colorwaysById = existingColorways.ToDictionary(x => x.Id);
+
+        if (snapshot.ProductColorways.Count > 0)
+        {
+            foreach (var dto in snapshot.ProductColorways)
+            {
+                if (colorwaysById.TryGetValue(dto.Id, out var entity))
+                {
+                    entity.ProductId = dto.ProductId;
+                    entity.ColorId = dto.ColorId;
+                    entity.ImageUrl = dto.ImageUrl;
+                    entity.OnlinePrice = dto.OnlinePrice;
+                    entity.ShopifyProductId = dto.ShopifyProductId;
+                    entity.ShopifyTitle = dto.ShopifyTitle;
+                    entity.SortOrder = dto.SortOrder;
+                    entity.IsActive = dto.IsActive;
+                    entity.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    var created = new ProductColorway
+                    {
+                        Id = dto.Id,
+                        ProductId = dto.ProductId,
+                        ColorId = dto.ColorId,
+                        ImageUrl = dto.ImageUrl,
+                        OnlinePrice = dto.OnlinePrice,
+                        ShopifyProductId = dto.ShopifyProductId,
+                        ShopifyTitle = dto.ShopifyTitle,
+                        SortOrder = dto.SortOrder,
+                        IsActive = dto.IsActive
+                    };
+                    await _unitOfWork.AddAsync(created, ct);
+                    existingColorways.Add(created);
+                }
+                result.ProductColorwaysUpserted++;
+            }
+        }
+        else
+        {
+            var known = existingColorways.Select(c => (c.ProductId, c.ColorId)).ToHashSet();
+            var sortByProduct = existingColorways
+                .GroupBy(c => c.ProductId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            foreach (var pair in snapshot.ProductVariants
+                         .Select(v => (v.ProductId, v.ColorId))
+                         .Distinct())
+            {
+                if (!known.Add(pair)) continue;
+
+                sortByProduct.TryGetValue(pair.ProductId, out var sort);
+                sortByProduct[pair.ProductId] = sort + 1;
+
+                var created = new ProductColorway
+                {
+                    ProductId = pair.ProductId,
+                    ColorId = pair.ColorId,
+                    SortOrder = sort,
+                    IsActive = true
+                };
+                await _unitOfWork.AddAsync(created, ct);
+                existingColorways.Add(created);
+                result.ProductColorwaysUpserted++;
+            }
+        }
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        // Maps (ProductId, ColorId) -> colourway Id. Built from the post-save local rows so it
+        // covers both branches above, and so a variant arriving with ColorwayId 0 from an older
+        // sender can still be pointed at the right row.
+        var colorwayIdByPair = existingColorways
+            .GroupBy(c => (c.ProductId, c.ColorId))
+            .ToDictionary(g => g.Key, g => g.First().Id);
 
         var existingVariants = (await _unitOfWork.FindAsync<ProductVariant>(_ => true, ct)).ToDictionary(x => x.Id);
         foreach (var dto in snapshot.ProductVariants)
@@ -295,6 +392,7 @@ public class SyncSnapshotAppService : ISyncSnapshotService
             {
                 entity.ProductId = dto.ProductId;
                 entity.ColorId = dto.ColorId;
+                entity.ColorwayId = ResolveColorwayId(dto, colorwayIdByPair);
                 entity.SizeId = dto.SizeId;
                 entity.Sku = dto.Sku;
                 entity.Barcode = dto.Barcode;
@@ -311,6 +409,7 @@ public class SyncSnapshotAppService : ISyncSnapshotService
                     Id = dto.Id,
                     ProductId = dto.ProductId,
                     ColorId = dto.ColorId,
+                    ColorwayId = ResolveColorwayId(dto, colorwayIdByPair),
                     SizeId = dto.SizeId,
                     Sku = dto.Sku,
                     Barcode = dto.Barcode,
@@ -523,5 +622,20 @@ public class SyncSnapshotAppService : ISyncSnapshotService
         await _unitOfWork.SaveChangesAsync(ct);
 
         return result;
+    }
+
+    // A variant from a current sender already names its colourway. One from a pre-colourway sender
+    // carries 0, and is matched by the (ProductId, ColorId) pair the colourway was rebuilt from.
+    private static int ResolveColorwayId(
+        SyncProductVariantDto dto,
+        IReadOnlyDictionary<(int ProductId, int ColorId), int> colorwayIdByPair)
+    {
+        if (dto.ColorwayId != 0) return dto.ColorwayId;
+
+        return colorwayIdByPair.TryGetValue((dto.ProductId, dto.ColorId), out var id)
+            ? id
+            : throw new InvalidOperationException(
+                $"Snapshot variant {dto.Id} references product {dto.ProductId} / colour {dto.ColorId}, " +
+                "which has no colourway - the snapshot's products and variants disagree.");
     }
 }

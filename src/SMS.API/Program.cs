@@ -22,6 +22,7 @@ QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 builder.Services.AddInfrastructure(builder.Configuration);
 
+builder.Services.AddScoped<IColorwayResolver, ColorwayResolver>();
 builder.Services.AddScoped<IProductService, ProductAppService>();
 builder.Services.AddScoped<IStockService, StockAppService>();
 builder.Services.AddScoped<ISaleService, SaleAppService>();

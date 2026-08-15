@@ -158,13 +158,22 @@ public class ShopifyProductAppService : IShopifyProductService
             var batchProductIds = batch.Select(sp => sp.Id).ToHashSet();
             var batchVariantIds = batch.SelectMany(sp => sp.Variants.Select(v => v.Id)).ToHashSet();
 
-            var existingProducts = await _unitOfWork.Set<Product>()
-                .Where(p => p.ShopifyProductId != null && batchProductIds.Contains(p.ShopifyProductId.Value))
-                .ToDictionaryAsync(p => p.ShopifyProductId!.Value, ct);
+            // The Shopify link lives on the colourway, so an already-imported Shopify product is
+            // found by walking back up from its colourway to the owning product.
+            var existingColorways = await _unitOfWork.Set<ProductColorway>()
+                .Include(c => c.Product)
+                .Where(c => c.ShopifyProductId != null && batchProductIds.Contains(c.ShopifyProductId.Value))
+                .ToDictionaryAsync(c => c.ShopifyProductId!.Value, ct);
+            var existingProducts = existingColorways.ToDictionary(kv => kv.Key, kv => kv.Value.Product);
             var existingVariants = await _unitOfWork.Set<ProductVariant>()
                 .Include(v => v.StockItem)
                 .Where(v => v.ShopifyVariantId != null && batchVariantIds.Contains(v.ShopifyVariantId.Value))
                 .ToDictionaryAsync(v => v.ShopifyVariantId!.Value, ct);
+
+            // Per-batch, and keyed on the Product instance rather than its Id: a product created
+            // earlier in this batch has no Id until the batch saves. Rebuilt each batch because
+            // ClearChangeTracker() below detaches everything it holds.
+            var colorwayCache = new Dictionary<(Product Product, int ColorId), ProductColorway>();
 
             foreach (var sp in batch)
             {
@@ -207,8 +216,7 @@ public class ShopifyProductAppService : IShopifyProductService
                         Price = minPrice,        // seed local price from Shopify (editable afterwards)
                         OnlinePrice = minPrice,  // online price tracks Shopify
                         CategoryId = category.Id,
-                        IsActive = isActive,
-                        ShopifyProductId = sp.Id
+                        IsActive = isActive
                     };
                     await _unitOfWork.AddAsync(product, ct);
                     result.ProductsCreated++;
@@ -239,12 +247,23 @@ public class ShopifyProductAppService : IShopifyProductService
                         ? img.Src
                         : imageUrl;
 
+                    // The colourway is what actually corresponds to this Shopify product, so it -
+                    // not the local Product - carries the link, the storefront title and the price.
+                    var colorway = await GetOrCreateColorwayAsync(colorwayCache, product, color, ct);
+                    colorway.ShopifyProductId = sp.Id;
+                    colorway.ShopifyTitle = sp.Title;
+                    colorway.IsActive = isActive;
+                    if (imageUrl is not null) colorway.ImageUrl = imageUrl;
+                    if (minPrice > 0) colorway.OnlinePrice = minPrice;
+                    colorway.UpdatedAt = DateTime.UtcNow;
+
                     ProductVariant variant;
                     StockItem? existingStockItem = null;
                     if (existingVariants.TryGetValue(sv.Id, out var foundVariant))
                     {
                         variant = foundVariant;
                         existingStockItem = variant.StockItem;
+                        variant.Colorway = colorway;
                         variant.ColorId = color.Id;
                         variant.SizeId = size.Id;
                         if (!string.IsNullOrWhiteSpace(sv.Sku)) variant.Sku = sv.Sku;
@@ -258,6 +277,7 @@ public class ShopifyProductAppService : IShopifyProductService
                         variant = new ProductVariant
                         {
                             Product = product,
+                            Colorway = colorway,
                             ColorId = color.Id,
                             SizeId = size.Id,
                             Sku = !string.IsNullOrWhiteSpace(sv.Sku) ? sv.Sku : $"SHP-{sv.Id}",
@@ -331,6 +351,38 @@ public class ShopifyProductAppService : IShopifyProductService
         }
 
         return count;
+    }
+
+    // Resolves the (product x colour) colourway a variant hangs off, reusing one already created
+    // in this batch, then one already in the database, and only then creating a new row. The
+    // returned entity may still be pending insert - callers attach variants to it by navigation
+    // rather than by Id, so EF fills in the composite FK when the batch saves.
+    private async Task<ProductColorway> GetOrCreateColorwayAsync(
+        Dictionary<(Product, int), ProductColorway> cache, Product product, Color color, CancellationToken ct)
+    {
+        if (cache.TryGetValue((product, color.Id), out var cached)) return cached;
+
+        ProductColorway? colorway = null;
+        if (product.Id != 0)
+        {
+            colorway = await _unitOfWork.Set<ProductColorway>()
+                .FirstOrDefaultAsync(c => c.ProductId == product.Id && c.ColorId == color.Id, ct);
+        }
+
+        if (colorway is null)
+        {
+            colorway = new ProductColorway
+            {
+                Product = product,
+                ColorId = color.Id,
+                SortOrder = cache.Count(kv => kv.Key.Item1 == product),
+                IsActive = true
+            };
+            await _unitOfWork.AddAsync(colorway, ct);
+        }
+
+        cache[(product, color.Id)] = colorway;
+        return colorway;
     }
 
     private async Task<Color> GetOrCreateColorAsync(Dictionary<string, Color> cache, string name, ShopifyCatalogImportResultDto result, CancellationToken ct)

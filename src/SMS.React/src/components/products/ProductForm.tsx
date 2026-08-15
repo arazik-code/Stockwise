@@ -230,7 +230,7 @@ export default function ProductForm({ product, onSubmit, onCancel, onProductUpda
       description={
         isEditing ? (
           <span className="inline-flex items-center gap-2">
-            {product?.shopifyProductId && (
+            {product?.isShopifyLinked && (
               <Badge tone="positive" size="xs">Importé de Shopify</Badge>
             )}
             {product?.barcode && (

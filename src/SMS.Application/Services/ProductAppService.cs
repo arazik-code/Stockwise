@@ -10,10 +10,12 @@ namespace SMS.Application.Services;
 public class ProductAppService : IProductService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IColorwayResolver _colorways;
 
-    public ProductAppService(IUnitOfWork unitOfWork)
+    public ProductAppService(IUnitOfWork unitOfWork, IColorwayResolver colorways)
     {
         _unitOfWork = unitOfWork;
+        _colorways = colorways;
     }
 
     public async Task<IReadOnlyList<ProductDto>> GetAllAsync(CancellationToken ct = default)
@@ -136,20 +138,22 @@ public class ProductAppService : IProductService
 
     // "Draft" = a product this store no longer sells: it came from Shopify but its live Shopify
     // status is not "active" (ShopifyProductAppService.ImportCatalogFromShopifyAsync already flips
-    // IsActive to false on sync for these). Purely local products (ShopifyProductId == null) are
-    // never included here, however inactive - only Shopify-synced clutter is a "draft".
+    // IsActive to false on sync for these). Purely local products are never included here, however
+    // inactive - only Shopify-synced clutter is a "draft". Shopify-sourced now means "any of its
+    // colourways carries a Shopify link", since the link moved off Product onto ProductColorway.
     public async Task<IReadOnlyList<DraftProductDto>> GetDraftProductsAsync(CancellationToken ct = default)
     {
         return await _unitOfWork.Set<Product>()
             .AsNoTracking()
-            .Where(p => !p.IsActive && p.ShopifyProductId != null)
+            .Where(p => !p.IsActive && p.Colorways.Any(c => c.ShopifyProductId != null))
             .OrderBy(p => p.Name)
             .Select(p => new DraftProductDto
             {
                 Id = p.Id,
                 Name = p.Name,
                 ImageUrl = p.ImageUrl,
-                ShopifyProductId = p.ShopifyProductId,
+                IsShopifyLinked = true,
+                ColorwayCount = p.Colorways.Count,
                 VariantCount = p.Variants.Count
             })
             .ToListAsync(ct);
@@ -158,7 +162,7 @@ public class ProductAppService : IProductService
     public async Task<DeleteDraftProductsResultDto> DeleteDraftProductsAsync(CancellationToken ct = default)
     {
         var drafts = await _unitOfWork.Set<Product>()
-            .Where(p => !p.IsActive && p.ShopifyProductId != null)
+            .Where(p => !p.IsActive && p.Colorways.Any(c => c.ShopifyProductId != null))
             .ToListAsync(ct);
 
         var result = new DeleteDraftProductsResultDto { TotalDrafts = drafts.Count };
@@ -211,10 +215,13 @@ public class ProductAppService : IProductService
             ? sku
             : request.Barcode;
 
+        var colorway = await _colorways.GetOrCreateAsync(request.ProductId, request.ColorId, ct);
+
         var variant = new ProductVariant
         {
             ProductId = request.ProductId,
             ColorId = request.ColorId,
+            ColorwayId = colorway.Id,
             SizeId = request.SizeId,
             Sku = sku,
             Barcode = barcode,
@@ -253,7 +260,15 @@ public class ProductAppService : IProductService
         var variant = variants.FirstOrDefault();
         if (variant is null) return null;
 
-        if (request.ColorId.HasValue) variant.ColorId = request.ColorId.Value;
+        // Changing a variant's colour moves it to a different colourway. The composite FK means
+        // ColorId and ColorwayId have to move together in the same write, and the colourway it
+        // left behind may now be empty.
+        var previousColorwayId = variant.ColorwayId;
+        if (request.ColorId.HasValue && request.ColorId.Value != variant.ColorId)
+        {
+            variant.ColorId = request.ColorId.Value;
+            variant.ColorwayId = (await _colorways.GetOrCreateAsync(variant.ProductId, request.ColorId.Value, ct)).Id;
+        }
         if (request.SizeId.HasValue) variant.SizeId = request.SizeId.Value;
         if (request.Sku is not null) variant.Sku = request.Sku;
         if (request.Barcode is not null) variant.Barcode = request.Barcode;
@@ -269,6 +284,9 @@ public class ProductAppService : IProductService
 
         variant.UpdatedAt = DateTime.UtcNow;
         await _unitOfWork.SaveChangesAsync(ct);
+
+        if (previousColorwayId != variant.ColorwayId)
+            await _colorways.RemoveIfOrphanedAsync(previousColorwayId, ct);
 
         var stockItems = await _unitOfWork.Stock.GetAllWithVariantAsync(ct);
         var stockItem = stockItems.FirstOrDefault(s => s.ProductVariantId == variantId);
@@ -376,7 +394,28 @@ public class ProductAppService : IProductService
         FournisseurId = p.FournisseurId,
         FournisseurNom = p.Fournisseur?.Nom,
         IsActive = p.IsActive,
-        ShopifyProductId = p.ShopifyProductId,
+        IsShopifyLinked = p.Colorways.Any(c => c.ShopifyProductId != null),
+        Colorways = p.Colorways
+            .OrderBy(c => c.SortOrder)
+            .Select(c => new ProductColorwayDto
+            {
+                Id = c.Id,
+                ProductId = c.ProductId,
+                ColorId = c.ColorId,
+                ColorName = c.Color?.Name ?? string.Empty,
+                ColorHexCode = c.Color?.HexCode ?? "#000000",
+                ImageUrl = c.ImageUrl ?? p.ImageUrl,
+                OnlinePrice = c.OnlinePrice ?? p.OnlinePrice,
+                ShopifyProductId = c.ShopifyProductId,
+                ShopifyTitle = c.ShopifyTitle,
+                SortOrder = c.SortOrder,
+                IsActive = c.IsActive,
+                VariantCount = p.Variants.Count(v => v.ColorwayId == c.Id && v.IsActive),
+                StockQuantity = p.Variants
+                    .Where(v => v.ColorwayId == c.Id && v.IsActive)
+                    .Sum(v => v.StockItem?.QuantityAvailable ?? 0)
+            })
+            .ToList(),
         Variants = p.Variants
             .Where(v => v.IsActive)
             .Select(v => MapVariantToDto(v, p, v.StockItem?.QuantityAvailable ?? 0))
@@ -393,6 +432,7 @@ public class ProductAppService : IProductService
         {
             Id = v.Id,
             ProductId = v.ProductId,
+            ColorwayId = v.ColorwayId,
             ColorId = v.ColorId,
             ColorName = v.Color?.Name ?? string.Empty,
             ColorHexCode = v.Color?.HexCode ?? "#000000",

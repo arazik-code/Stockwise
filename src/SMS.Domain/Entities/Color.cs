@@ -8,4 +8,5 @@ public class Color
     public int SortOrder { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public ICollection<ProductVariant> Variants { get; set; } = [];
+    public ICollection<ProductColorway> Colorways { get; set; } = [];
 }

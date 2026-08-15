@@ -14,13 +14,41 @@ export interface Product {
   fournisseurId?: number
   fournisseurNom?: string
   isActive: boolean
-  shopifyProductId?: number
+  /** True when any colourway of this product is linked to a Shopify product. */
+  isShopifyLinked: boolean
+  colorways: ProductColorway[]
   variants: ProductVariant[]
+}
+
+/**
+ * A (product x colour) colourway.
+ *
+ * Shopify ships one product per colourway - every product in this catalog has a single option,
+ * "Pointures" (size), with the colour living in the title - while the shop floor works from a
+ * colour x size matrix. The colourway is where those two views meet, so it is what carries the
+ * Shopify link, the merchandising photo and the online price.
+ */
+export interface ProductColorway {
+  id: number
+  productId: number
+  colorId: number
+  colorName: string
+  colorHexCode: string
+  /** Already resolved against the parent product's image on the server. */
+  imageUrl?: string
+  onlinePrice?: number
+  shopifyProductId?: number
+  shopifyTitle?: string
+  sortOrder: number
+  isActive: boolean
+  variantCount: number
+  stockQuantity: number
 }
 
 export interface ProductVariant {
   id: number
   productId: number
+  colorwayId: number
   colorId: number
   colorName: string
   colorHexCode: string

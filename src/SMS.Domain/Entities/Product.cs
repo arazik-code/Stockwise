@@ -17,7 +17,9 @@ public class Product
     public int? FournisseurId { get; set; }
     public Fournisseur? Fournisseur { get; set; }
     public bool IsActive { get; set; } = true;
-    public long? ShopifyProductId { get; set; }
+    // Shopify links live on ProductColorway, not here - one product has several colourways and
+    // Shopify models each of them as a separate product.
+    public ICollection<ProductColorway> Colorways { get; set; } = [];
     public ICollection<ProductVariant> Variants { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

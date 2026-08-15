@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Color> Colors => Set<Color>();
     public DbSet<Size> Sizes => Set<Size>();
+    public DbSet<ProductColorway> ProductColorways => Set<ProductColorway>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<StockItem> StockItems => Set<StockItem>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();

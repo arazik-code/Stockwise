@@ -13,7 +13,8 @@ export interface DraftProduct {
   id: number
   name: string
   imageUrl?: string
-  shopifyProductId?: number
+  isShopifyLinked: boolean
+  colorwayCount: number
   variantCount: number
 }
 

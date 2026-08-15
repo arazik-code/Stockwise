@@ -402,7 +402,7 @@ export default function ProductsPage() {
                       />
                     ) : placeholderIcon}
 
-                    {p.shopifyProductId && (
+                    {p.isShopifyLinked && (
                       <Badge tone="special" size="xs" className="absolute left-2 top-2 shadow-e1">
                         Shopify
                       </Badge>

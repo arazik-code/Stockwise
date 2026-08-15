@@ -17,14 +17,39 @@ public class ProductDto
     public int? FournisseurId { get; set; }
     public string? FournisseurNom { get; set; }
     public bool IsActive { get; set; }
-    public long? ShopifyProductId { get; set; }
+    /// <summary>True when any of this product's colourways is linked to a Shopify product.</summary>
+    public bool IsShopifyLinked { get; set; }
+    public List<ProductColorwayDto> Colorways { get; set; } = [];
     public List<ProductVariantDto> Variants { get; set; } = [];
+}
+
+/// <summary>
+/// A (product x colour) colourway. This is the level Shopify maps to one-for-one, and the level
+/// the POS shows as a single tile with its sizes inside.
+/// </summary>
+public class ProductColorwayDto
+{
+    public int Id { get; set; }
+    public int ProductId { get; set; }
+    public int ColorId { get; set; }
+    public string ColorName { get; set; } = string.Empty;
+    public string ColorHexCode { get; set; } = string.Empty;
+    /// <summary>Colourway photo, already resolved against the product's image as a fallback.</summary>
+    public string? ImageUrl { get; set; }
+    public decimal? OnlinePrice { get; set; }
+    public long? ShopifyProductId { get; set; }
+    public string? ShopifyTitle { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
+    public int VariantCount { get; set; }
+    public int StockQuantity { get; set; }
 }
 
 public class ProductVariantDto
 {
     public int Id { get; set; }
     public int ProductId { get; set; }
+    public int ColorwayId { get; set; }
     public int ColorId { get; set; }
     public string ColorName { get; set; } = string.Empty;
     public string ColorHexCode { get; set; } = string.Empty;
@@ -115,7 +140,8 @@ public class DraftProductDto
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? ImageUrl { get; set; }
-    public long? ShopifyProductId { get; set; }
+    public bool IsShopifyLinked { get; set; }
+    public int ColorwayCount { get; set; }
     public int VariantCount { get; set; }
 }
 

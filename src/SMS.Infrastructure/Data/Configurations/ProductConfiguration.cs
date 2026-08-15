@@ -21,7 +21,6 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.OnlinePrice).HasPrecision(18, 2);
 
         builder.HasIndex(p => p.Barcode).IsUnique();
-        builder.HasIndex(p => p.ShopifyProductId);
 
         builder.HasOne(p => p.Category)
             .WithMany(c => c.Products)

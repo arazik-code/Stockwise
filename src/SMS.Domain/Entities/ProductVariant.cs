@@ -7,6 +7,10 @@ public class ProductVariant
     public Product Product { get; set; } = null!;
     public int ColorId { get; set; }
     public Color Color { get; set; } = null!;
+    // The colourway this variant belongs to. ProductId/ColorId above are kept alongside it and
+    // held consistent by a composite FK - see ProductColorway's doc comment for why.
+    public int ColorwayId { get; set; }
+    public ProductColorway Colorway { get; set; } = null!;
     public int SizeId { get; set; }
     public Size Size { get; set; } = null!;
     public string Sku { get; set; } = string.Empty;

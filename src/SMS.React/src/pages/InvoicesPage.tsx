@@ -509,6 +509,7 @@ export default function InvoicesPage() {
           expanded.push({
             id: 0,
             productId: 0,
+            colorwayId: 0,
             colorId: 0,
             colorHexCode: '',
             sizeId: 0,

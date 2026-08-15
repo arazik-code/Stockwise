@@ -9,10 +9,12 @@ namespace SMS.Application.Services;
 public class InvoiceAppService : IInvoiceService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IColorwayResolver _colorways;
 
-    public InvoiceAppService(IUnitOfWork unitOfWork)
+    public InvoiceAppService(IUnitOfWork unitOfWork, IColorwayResolver colorways)
     {
         _unitOfWork = unitOfWork;
+        _colorways = colorways;
     }
 
     public async Task<IReadOnlyList<InvoiceDto>> GetAllAsync(CancellationToken ct = default)
@@ -172,10 +174,12 @@ public class InvoiceAppService : IInvoiceService
                 else
                 {
                     var sku = $"PRD-{item.ProductId.Value}-{item.ColorId.Value}-{item.SizeId.Value}";
+                    var colorway = await _colorways.GetOrCreateAsync(item.ProductId.Value, item.ColorId.Value, ct);
                     var newVariant = new ProductVariant
                     {
                         ProductId = item.ProductId.Value,
                         ColorId = item.ColorId.Value,
+                        ColorwayId = colorway.Id,
                         SizeId = item.SizeId.Value,
                         Sku = sku,
                         Barcode = sku,
@@ -325,10 +329,12 @@ public class InvoiceAppService : IInvoiceService
                 else
                 {
                     var sku = $"PRD-{item.ProductId.Value}-{item.ColorId.Value}-{item.SizeId.Value}";
+                    var colorway = await _colorways.GetOrCreateAsync(item.ProductId.Value, item.ColorId.Value, ct);
                     var newVariant = new ProductVariant
                     {
                         ProductId = item.ProductId.Value,
                         ColorId = item.ColorId.Value,
+                        ColorwayId = colorway.Id,
                         SizeId = item.SizeId.Value,
                         Sku = sku,
                         Barcode = sku,

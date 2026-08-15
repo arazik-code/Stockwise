@@ -16,6 +16,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
                 .ThenInclude(v => v.Color)
             .Include(p => p.Variants)
                 .ThenInclude(v => v.Size)
+            .Include(p => p.Colorways)
+                .ThenInclude(c => c.Color)
             .Include(p => p.Category)
             .Include(p => p.Fournisseur)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -28,6 +30,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
                 .ThenInclude(v => v.Color)
             .Include(p => p.Variants)
                 .ThenInclude(v => v.Size)
+            .Include(p => p.Colorways)
+                .ThenInclude(c => c.Color)
             .Include(p => p.Category)
             .Include(p => p.Fournisseur)
             .FirstOrDefaultAsync(p => p.Barcode == barcode && p.IsActive, ct);
@@ -43,6 +47,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
                 .ThenInclude(v => v.Size)
             .Include(p => p.Variants)
                 .ThenInclude(v => v.StockItem)
+            .Include(p => p.Colorways)
+                .ThenInclude(c => c.Color)
             .Include(p => p.Category)
             .Where(p => p.IsActive &&
                 (p.Name.ToLower().Contains(lowerQuery) ||
@@ -62,6 +68,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
                 .ThenInclude(v => v.Size)
             .Include(p => p.Variants)
                 .ThenInclude(v => v.StockItem)
+            .Include(p => p.Colorways)
+                .ThenInclude(c => c.Color)
             .Include(p => p.Category)
             .Where(p => p.CategoryId == categoryId && p.IsActive)
             .OrderBy(p => p.Name)
@@ -76,6 +84,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
                 .ThenInclude(v => v.Size)
             .Include(p => p.Variants)
                 .ThenInclude(v => v.StockItem)
+            .Include(p => p.Colorways)
+                .ThenInclude(c => c.Color)
             .Include(p => p.Category)
             .Where(p => p.FournisseurId == fournisseurId && p.IsActive)
             .OrderBy(p => p.Name)
@@ -90,6 +100,8 @@ public class ProductRepository : Repository<Product>, IProductRepository
                 .ThenInclude(v => v.Size)
             .Include(p => p.Variants)
                 .ThenInclude(v => v.StockItem)
+            .Include(p => p.Colorways)
+                .ThenInclude(c => c.Color)
             .Include(p => p.Category)
             .Include(p => p.Fournisseur)
             .Where(p => p.IsActive)

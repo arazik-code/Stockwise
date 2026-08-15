@@ -18,6 +18,10 @@ public class SyncSnapshotDto
     public List<SyncProductDto> Products { get; set; } = [];
     public List<SyncColorDto> Colors { get; set; } = [];
     public List<SyncSizeDto> Sizes { get; set; } = [];
+    // Colourways sit between Products and ProductVariants and must be inserted in that order, since
+    // a variant's composite FK points at one. An empty list means the sender predates colourways;
+    // ApplySnapshotAsync then rebuilds them from each variant's own (ProductId, ColorId).
+    public List<SyncProductColorwayDto> ProductColorways { get; set; } = [];
     public List<SyncProductVariantDto> ProductVariants { get; set; } = [];
     public List<SyncStockItemDto> StockItems { get; set; } = [];
     public List<SyncClientDto> Clients { get; set; } = [];
@@ -68,7 +72,23 @@ public class SyncProductDto
     public int CategoryId { get; set; }
     public int? FournisseurId { get; set; }
     public bool IsActive { get; set; }
+}
+
+/// <summary>
+/// A (product x colour) colourway. Added after the terminal sync shipped, so the receiving side
+/// treats an absent list as "reconstruct these from the variants" - see ApplySnapshotAsync.
+/// </summary>
+public class SyncProductColorwayDto
+{
+    public int Id { get; set; }
+    public int ProductId { get; set; }
+    public int ColorId { get; set; }
+    public string? ImageUrl { get; set; }
+    public decimal? OnlinePrice { get; set; }
     public long? ShopifyProductId { get; set; }
+    public string? ShopifyTitle { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
 }
 
 public class SyncColorDto
@@ -90,6 +110,8 @@ public class SyncProductVariantDto
 {
     public int Id { get; set; }
     public int ProductId { get; set; }
+    /// <summary>Zero when the snapshot came from a build predating colourways; rebuilt on apply.</summary>
+    public int ColorwayId { get; set; }
     public int ColorId { get; set; }
     public int SizeId { get; set; }
     public string Sku { get; set; } = string.Empty;
@@ -158,6 +180,7 @@ public class SyncApplyResultDto
     public int ProductsUpserted { get; set; }
     public int ColorsUpserted { get; set; }
     public int SizesUpserted { get; set; }
+    public int ProductColorwaysUpserted { get; set; }
     public int ProductVariantsUpserted { get; set; }
     public int StockItemsUpserted { get; set; }
     public int StockItemsSkippedDueToLocalActivity { get; set; }

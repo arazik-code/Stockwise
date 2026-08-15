@@ -12,6 +12,7 @@ public class InvoiceAppServiceTests
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IInvoiceRepository> _invoiceRepoMock;
     private readonly Mock<IStockRepository> _stockRepoMock;
+    private readonly Mock<IColorwayResolver> _colorwayResolverMock;
     private readonly InvoiceAppService _service;
 
     public InvoiceAppServiceTests()
@@ -19,9 +20,16 @@ public class InvoiceAppServiceTests
         _unitOfWorkMock = new Mock<IUnitOfWork>();
         _invoiceRepoMock = new Mock<IInvoiceRepository>();
         _stockRepoMock = new Mock<IStockRepository>();
+        _colorwayResolverMock = new Mock<IColorwayResolver>();
+        // Only used by the auto-create-a-missing-variant path; hand back a stable colourway so
+        // these tests keep exercising the invoice logic rather than the grouping.
+        _colorwayResolverMock
+            .Setup(c => c.GetOrCreateAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int productId, int colorId, CancellationToken _) =>
+                new ProductColorway { Id = 1, ProductId = productId, ColorId = colorId });
         _unitOfWorkMock.Setup(u => u.Invoices).Returns(_invoiceRepoMock.Object);
         _unitOfWorkMock.Setup(u => u.Stock).Returns(_stockRepoMock.Object);
-        _service = new InvoiceAppService(_unitOfWorkMock.Object);
+        _service = new InvoiceAppService(_unitOfWorkMock.Object, _colorwayResolverMock.Object);
     }
 
     [Fact]

@@ -27,6 +27,7 @@ public class SyncSnapshotAppServiceTests
         SetupEmpty<Color>();
         SetupEmpty<Size>();
         SetupEmpty<Product>();
+        SetupEmpty<ProductColorway>();
         SetupEmpty<ProductVariant>();
         SetupEmpty<StockItem>();
         SetupEmpty<Client>();
@@ -40,6 +41,7 @@ public class SyncSnapshotAppServiceTests
         SetupAddAsync<Color>();
         SetupAddAsync<Size>();
         SetupAddAsync<Product>();
+        SetupAddAsync<ProductColorway>();
         SetupAddAsync<ProductVariant>();
         SetupAddAsync<StockItem>();
         SetupAddAsync<Client>();
@@ -68,6 +70,97 @@ public class SyncSnapshotAppServiceTests
         => _unitOfWorkMock
             .Setup(u => u.FindAsync(It.IsAny<Expression<Func<T, bool>>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(items);
+
+    // ── Colourway tier: the terminal and the VPS run the same binary but are deployed separately,
+    // so a snapshot can arrive from either an older or a newer build than the receiver. ─────────
+
+    [Fact]
+    public async Task ApplySnapshotAsync_SnapshotWithColorways_UpsertsThemBeforeVariants()
+    {
+        var snapshot = new SyncSnapshotDto
+        {
+            ProductColorways = [new SyncProductColorwayDto { Id = 7, ProductId = 1, ColorId = 2, ShopifyProductId = 555, IsActive = true }],
+            ProductVariants = [new SyncProductVariantDto { Id = 1, ProductId = 1, ColorwayId = 7, ColorId = 2, SizeId = 3, Sku = "A-1" }]
+        };
+
+        ProductVariant? added = null;
+        _unitOfWorkMock.Setup(u => u.AddAsync(It.IsAny<ProductVariant>(), It.IsAny<CancellationToken>()))
+            .Callback<ProductVariant, CancellationToken>((v, _) => added = v)
+            .Returns(Task.CompletedTask);
+
+        var result = await _service.ApplySnapshotAsync(snapshot);
+
+        Assert.Equal(1, result.ProductColorwaysUpserted);
+        Assert.Equal(1, result.ProductVariantsUpserted);
+        Assert.Equal(7, added!.ColorwayId);
+    }
+
+    [Fact]
+    public async Task ApplySnapshotAsync_SnapshotFromPreColorwayBuild_RebuildsColorwaysFromVariants()
+    {
+        // An older sender: no ProductColorways array at all, and ColorwayId left at its 0 default.
+        // The receiver must reconstruct the colourways rather than reject the snapshot, and must
+        // let the database assign their Ids so it cannot collide with colourways it already holds.
+        var snapshot = new SyncSnapshotDto
+        {
+            ProductVariants =
+            [
+                new SyncProductVariantDto { Id = 1, ProductId = 1, ColorId = 2, SizeId = 3, Sku = "A-1" },
+                new SyncProductVariantDto { Id = 2, ProductId = 1, ColorId = 2, SizeId = 4, Sku = "A-2" },
+                new SyncProductVariantDto { Id = 3, ProductId = 1, ColorId = 9, SizeId = 3, Sku = "B-1" }
+            ]
+        };
+
+        var addedColorways = new List<ProductColorway>();
+        _unitOfWorkMock.Setup(u => u.AddAsync(It.IsAny<ProductColorway>(), It.IsAny<CancellationToken>()))
+            .Callback<ProductColorway, CancellationToken>((c, _) => addedColorways.Add(c))
+            .Returns(Task.CompletedTask);
+
+        var result = await _service.ApplySnapshotAsync(snapshot);
+
+        // Two distinct (product, colour) pairs across three variants.
+        Assert.Equal(2, result.ProductColorwaysUpserted);
+        Assert.Equal(3, result.ProductVariantsUpserted);
+        Assert.Equal([(1, 2), (1, 9)], addedColorways.Select(c => (c.ProductId, c.ColorId)));
+        Assert.All(addedColorways, c => Assert.Equal(0, c.Id)); // database-assigned, not invented
+    }
+
+    [Fact]
+    public async Task ApplySnapshotAsync_PreColorwayVariantMatchingAnExistingColorway_ReusesIt()
+    {
+        // Same older sender, but this receiver already has the colourway. Nothing new is created
+        // and the variant is pointed at the row that is already there.
+        Setup(new List<ProductColorway> { new() { Id = 42, ProductId = 1, ColorId = 2 } });
+
+        var snapshot = new SyncSnapshotDto
+        {
+            ProductVariants = [new SyncProductVariantDto { Id = 1, ProductId = 1, ColorId = 2, SizeId = 3, Sku = "A-1" }]
+        };
+
+        ProductVariant? added = null;
+        _unitOfWorkMock.Setup(u => u.AddAsync(It.IsAny<ProductVariant>(), It.IsAny<CancellationToken>()))
+            .Callback<ProductVariant, CancellationToken>((v, _) => added = v)
+            .Returns(Task.CompletedTask);
+
+        var result = await _service.ApplySnapshotAsync(snapshot);
+
+        Assert.Equal(0, result.ProductColorwaysUpserted);
+        Assert.Equal(42, added!.ColorwayId);
+    }
+
+    [Fact]
+    public async Task BuildSnapshotAsync_IncludesColorwaysAndStampsThemOnVariants()
+    {
+        Setup(new List<ProductColorway> { new() { Id = 7, ProductId = 1, ColorId = 2, ShopifyProductId = 555, ShopifyTitle = "Derby Noir" } });
+        Setup(new List<ProductVariant> { new() { Id = 1, ProductId = 1, ColorwayId = 7, ColorId = 2, SizeId = 3, Sku = "A-1" } });
+
+        var snapshot = await _service.BuildSnapshotAsync();
+
+        var colorway = Assert.Single(snapshot.ProductColorways);
+        Assert.Equal(555, colorway.ShopifyProductId);
+        Assert.Equal("Derby Noir", colorway.ShopifyTitle);
+        Assert.Equal(7, Assert.Single(snapshot.ProductVariants).ColorwayId);
+    }
 
     [Fact]
     public async Task ApplySnapshotAsync_NewStockItem_NoPriorSync_IsUpserted()
