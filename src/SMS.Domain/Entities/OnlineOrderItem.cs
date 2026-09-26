@@ -19,6 +19,13 @@ public class OnlineOrderItem
     public long? ShopifyVariantId { get; set; }
     public string? ShopifySku { get; set; }
 
+    // Shopify's own variant_title (e.g. "42", or "Bleu / 42" for a product with real colour
+    // options) - captured at ingest time so the order detail can show size/colour exactly as
+    // Shopify reported it, independent of whether this line has been matched to a local
+    // ProductVariant yet. Null for pre-existing orders synced before this field existed, and for
+    // line items Shopify itself has no variant title for.
+    public string? ShopifyVariantTitle { get; set; }
+
     public string ProductNameSnapshot { get; set; } = string.Empty;
     public string SkuSnapshot { get; set; } = string.Empty;
 

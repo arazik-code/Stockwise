@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  AlertTriangle, Ban, CheckCircle2, Clock, Copy, FileText, Pencil, Plus, Printer,
-  Search, Tags, Trash2, Wallet,
+  AlertTriangle, Archive, ArchiveRestore, Ban, CheckCircle2, Clock, Copy, FileText, Pencil, Plus, Printer,
+  Search, Tags, Trash2, Undo2, Wallet,
 } from 'lucide-react'
 import { invoicesApi } from '../api/invoices'
 import { fournisseursApi } from '../api/fournisseurs'
@@ -27,6 +27,11 @@ import type { Color } from '../types/color'
 import type { Size } from '../types/size'
 
 interface InvoiceLineForm {
+  // Stable React key, independent of array position - rows are inserted/removed/spliced at
+  // arbitrary indices (import, duplicate, generate-all-sizes), and keying by index there let React
+  // reuse a row's DOM/input state for a *different* line after a splice, which read as data
+  // jumping between rows.
+  rowId: number
   productId: number
   colorId: number
   sizeId: number
@@ -36,7 +41,10 @@ interface InvoiceLineForm {
   discountPercent: number
 }
 
-const emptyItem: InvoiceLineForm = { productId: 0, colorId: 0, sizeId: 0, variantId: 0, quantity: 1, unitCost: 0, discountPercent: 0 }
+let nextRowId = 1
+const newRowId = () => nextRowId++
+
+const makeEmptyItem = (): InvoiceLineForm => ({ rowId: newRowId(), productId: 0, colorId: 0, sizeId: 0, variantId: 0, quantity: 1, unitCost: 0, discountPercent: 0 })
 
 function todayStr() {
   return new Date().toISOString().split('T')[0]
@@ -81,9 +89,11 @@ export default function InvoicesPage() {
   const [payReference, setPayReference] = useState('')
   const [cancelReason, setCancelReason] = useState('')
   const [showReceive, setShowReceive] = useState<Invoice | null>(null)
+  const [undoPaymentTarget, setUndoPaymentTarget] = useState<{ invoiceId: number; paymentId: number; amount: number } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState('All')
   const [filterFournisseur, setFilterFournisseur] = useState(0)
+  const [showArchived, setShowArchived] = useState(false)
   const selection = useTableSelection<Invoice>()
 
   const [form, setForm] = useState<CreateInvoiceRequest>({
@@ -96,7 +106,7 @@ export default function InvoicesPage() {
     items: [],
   })
 
-  const [lineItems, setLineItems] = useState<InvoiceLineForm[]>([{ ...emptyItem }])
+  const [lineItems, setLineItems] = useState<InvoiceLineForm[]>([makeEmptyItem()])
   const [productSearch, setProductSearch] = useState('')
   const [importSearch, setImportSearch] = useState('')
   const [showImportDropdown, setShowImportDropdown] = useState(false)
@@ -109,7 +119,7 @@ export default function InvoicesPage() {
       // just to show the invoice list, before the create/edit form was ever opened. Deferred to
       // ensureFormDataLoaded(), called only when that form actually opens.
       const [inv, four, sum, template] = await Promise.all([
-        invoicesApi.getAll(),
+        showArchived ? invoicesApi.getArchived() : invoicesApi.getAll(),
         fournisseursApi.getAll(),
         invoicesApi.getSummary(),
         settingsApi.getInvoiceTemplate().catch(() => null),
@@ -122,7 +132,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [showArchived])
 
   useEffect(() => { load() }, [load])
 
@@ -191,7 +201,7 @@ export default function InvoicesPage() {
       reference: '',
       items: [],
     })
-    setLineItems([{ ...emptyItem }])
+    setLineItems([makeEmptyItem()])
     setShowCreate(true)
   }
 
@@ -210,9 +220,10 @@ export default function InvoicesPage() {
       items: [],
     })
     setLineItems(inv.items.map(i => ({
-      productId: 0,
-      colorId: 0,
-      sizeId: 0,
+      rowId: newRowId(),
+      productId: i.productId ?? 0,
+      colorId: i.colorId ?? 0,
+      sizeId: i.sizeId ?? 0,
       variantId: i.productVariantId ?? 0,
       quantity: i.quantity,
       unitCost: i.unitCost,
@@ -233,7 +244,7 @@ export default function InvoicesPage() {
 
   const handleFournisseurChange = (fournisseurId: number) => {
     setForm((prev) => ({ ...prev, fournisseurId }))
-    setLineItems([{ ...emptyItem }])
+    setLineItems([makeEmptyItem()])
     setProductSearch('')
   }
 
@@ -286,7 +297,7 @@ export default function InvoicesPage() {
     }))
   }
 
-  const addItem = () => setLineItems(prev => [...prev, { ...emptyItem }])
+  const addItem = () => setLineItems(prev => [...prev, makeEmptyItem()])
   const removeItem = (idx: number) => setLineItems(prev => prev.filter((_, i) => i !== idx))
 
   const generateAllSizes = (idx: number) => {
@@ -297,6 +308,7 @@ export default function InvoicesPage() {
     const newLines: InvoiceLineForm[] = allSizes.map(size => {
       const variant = product.variants.find(v => v.colorId === item.colorId && v.sizeId === size.id)
       return {
+        rowId: newRowId(),
         productId: item.productId,
         colorId: item.colorId,
         sizeId: size.id,
@@ -316,7 +328,7 @@ export default function InvoicesPage() {
 
   const duplicateItem = (idx: number) => {
     const original = lineItems[idx]
-    const copy: InvoiceLineForm = { ...original, variantId: 0 }
+    const copy: InvoiceLineForm = { ...original, rowId: newRowId(), variantId: 0 }
     setLineItems(prev => {
       const next = [...prev]
       next.splice(idx + 1, 0, copy)
@@ -357,6 +369,7 @@ export default function InvoicesPage() {
       if (!selectedImportProducts.has(product.id)) continue
       if (product.variants.length === 0) {
         newItems.push({
+          rowId: newRowId(),
           productId: product.id,
           colorId: 0,
           sizeId: 0,
@@ -369,6 +382,7 @@ export default function InvoicesPage() {
         for (const variant of product.variants) {
           if (!variant.isActive) continue
           newItems.push({
+            rowId: newRowId(),
             productId: product.id,
             colorId: variant.colorId,
             sizeId: variant.sizeId,
@@ -384,7 +398,11 @@ export default function InvoicesPage() {
       showToast(t('invoices.noVariantsToImport'), 'error')
       return
     }
-    setLineItems(prev => [...prev.filter(it => it.variantId > 0), ...newItems])
+    // Keep every row the user already populated, not just ones already resolved to a stock
+    // variant - variantId is legitimately 0 for a brand-new size/colour combo being ordered for
+    // the first time (the backend creates it on save), so filtering on variantId here silently
+    // wiped out real, unsaved line items the moment a second bulk import ran.
+    setLineItems(prev => [...prev.filter(it => it.productId > 0), ...newItems])
     setSelectedImportProducts(new Set())
     setImportSearch('')
     setShowImportDropdown(false)
@@ -398,6 +416,9 @@ export default function InvoicesPage() {
   }, 0)
   const calcTax = () => (calcSubTotal() - form.discountAmount) * form.taxRate / 100
   const calcTotal = () => calcSubTotal() - form.discountAmount + calcTax()
+  const populatedLineItems = lineItems.filter(it => it.productId > 0)
+  const lineItemCount = populatedLineItems.length
+  const totalPairs = populatedLineItems.reduce((sum, it) => sum + (it.quantity || 0), 0)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -467,6 +488,26 @@ export default function InvoicesPage() {
     }
   }
 
+  const handleArchive = async (inv: Invoice) => {
+    try {
+      await invoicesApi.archive(inv.id)
+      showToast(t('invoices.archiveSuccess'), 'success')
+      load()
+    } catch {
+      showToast(t('common.error'), 'error')
+    }
+  }
+
+  const handleUnarchive = async (inv: Invoice) => {
+    try {
+      await invoicesApi.unarchive(inv.id)
+      showToast(t('invoices.unarchiveSuccess'), 'success')
+      load()
+    } catch {
+      showToast(t('common.error'), 'error')
+    }
+  }
+
   const handleReceive = (inv: Invoice) => {
     setShowReceive(inv)
   }
@@ -483,12 +524,25 @@ export default function InvoicesPage() {
     }
   }
 
+  const handleUndoPayment = async () => {
+    if (!undoPaymentTarget) return
+    try {
+      const updated = await invoicesApi.undoPayment(undoPaymentTarget.invoiceId, undoPaymentTarget.paymentId)
+      showToast(t('invoices.undoPaymentSuccess'), 'success')
+      setUndoPaymentTarget(null)
+      setDetail((prev) => (prev && prev.id === updated.id ? updated : prev))
+      load()
+    } catch {
+      showToast(t('common.error'), 'error')
+    }
+  }
+
   const handleBulkCancel = async () => {
     const ids = Array.from(selection.selected)
     if (ids.length === 0) return
     try {
       const result = await invoicesApi.cancelMany(ids)
-      showToast(t('invoices.cancelManySuccess', { 0: result.cancelled }), 'success')
+      showToast(t('invoices.cancelManySuccess', { count: result.cancelled }), 'success')
       selection.clear()
       load()
     } catch {
@@ -612,24 +666,30 @@ export default function InvoicesPage() {
       width: '13rem',
       render: (inv) => (
         <div className="flex flex-wrap items-center justify-center gap-0.5">
-          {inv.status === 'Pending' && (
-            <IconButton icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={t('invoices.receive')} size="xs" onClick={() => handleReceive(inv)} />
-          )}
-          {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
-            <IconButton icon={<Wallet className="h-3.5 w-3.5" />} label={t('invoices.pay')} size="xs" onClick={() => openPay(inv)} />
-          )}
-          {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
+          {inv.archivedAt ? (
+            <IconButton icon={<ArchiveRestore className="h-3.5 w-3.5" />} label={t('invoices.unarchive')} size="xs" onClick={() => handleUnarchive(inv)} />
+          ) : (
             <>
-              <IconButton icon={<Pencil className="h-3.5 w-3.5" />} label={t('common.edit')} size="xs" onClick={() => openEdit(inv)} />
-              <IconButton icon={<Ban className="h-3.5 w-3.5" />} label={t('invoices.cancel')} size="xs" variant="danger-ghost" onClick={() => setShowCancel(inv)} />
+              {inv.status === 'Pending' && (
+                <IconButton icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={t('invoices.receive')} size="xs" onClick={() => handleReceive(inv)} />
+              )}
+              {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.balanceDue > 0 && (
+                <IconButton icon={<Wallet className="h-3.5 w-3.5" />} label={t('invoices.pay')} size="xs" onClick={() => openPay(inv)} />
+              )}
+              {inv.status !== 'Paid' && inv.status !== 'Cancelled' && inv.status !== 'Received' && (
+                <>
+                  <IconButton icon={<Pencil className="h-3.5 w-3.5" />} label={t('common.edit')} size="xs" onClick={() => openEdit(inv)} />
+                  <IconButton icon={<Ban className="h-3.5 w-3.5" />} label={t('invoices.cancel')} size="xs" variant="danger-ghost" onClick={() => setShowCancel(inv)} />
+                </>
+              )}
+              {!!inv.receivedAt && (
+                <IconButton icon={<Tags className="h-3.5 w-3.5" />} label="Imprimer les étiquettes" size="xs" onClick={() => handlePrintLabels(inv.id)} />
+              )}
+              <IconButton icon={<Archive className="h-3.5 w-3.5" />} label={t('invoices.archive')} size="xs" onClick={() => handleArchive(inv)} />
             </>
-          )}
-          {inv.status === 'Received' && (
-            <IconButton icon={<Tags className="h-3.5 w-3.5" />} label="Imprimer les étiquettes" size="xs" onClick={() => handlePrintLabels(inv.id)} />
           )}
           <IconButton icon={<Printer className="h-3.5 w-3.5" />} label="Imprimer la facture" size="xs" onClick={() => handlePrintInvoice(inv)} />
           <IconButton icon={<FileText className="h-3.5 w-3.5" />} label={t('invoices.summary')} size="xs" onClick={() => setDetail(inv)} />
-          <IconButton icon={<Ban className="h-3.5 w-3.5" />} label={t('invoices.cancel')} size="xs" variant="danger-ghost" onClick={() => setShowCancel(inv)} />
         </div>
       ),
     },
@@ -638,6 +698,7 @@ export default function InvoicesPage() {
   return (
     <Page
       section="invoices"
+      className="local-invoices"
       title={t('invoices.title')}
       actions={
         <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={openCreate} disabled={loadingFormData} loading={loadingFormData}>
@@ -655,7 +716,7 @@ export default function InvoicesPage() {
           </div>
         )}
 
-        <Toolbar>
+        <Toolbar className="local-toolbar">
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -684,6 +745,14 @@ export default function InvoicesPage() {
               <option key={f.id} value={f.id}>{f.nom}</option>
             ))}
           </Select>
+          <Button
+            size="sm"
+            variant={showArchived ? 'solid' : 'outline'}
+            icon={showArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            {showArchived ? t('invoices.showActive') : t('invoices.showArchived')}
+          </Button>
         </Toolbar>
 
         {selection.someSelected && (
@@ -710,9 +779,9 @@ export default function InvoicesPage() {
         ) : filteredInvoices.length === 0 ? (
           <div className="surface-glass">
             <EmptyState
-              icon={FileText}
+              icon={showArchived ? Archive : FileText}
               variant={searchQuery ? 'search' : 'default'}
-              title={t('invoices.noInvoices')}
+              title={showArchived ? t('invoices.noArchivedInvoices') : t('invoices.noInvoices')}
             />
           </div>
         ) : (
@@ -731,15 +800,29 @@ export default function InvoicesPage() {
         )}
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Create / Edit Modal. Only the line-items list scrolls (see the dedicated overflow-y-auto
+          section below) - the fournisseur/date/terms fields, totals and action buttons all stay
+          pinned, so filling in a long order never scrolls the fields you set once out of view. */}
       <Modal
         open={showCreate}
         onClose={() => setShowCreate(false)}
+        closeOnBackdrop={false}
         size="2xl"
         title={editingInvoice ? t('invoices.edit') : t('invoices.add')}
+        bodyClassName="flex flex-col p-0"
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" form="invoice-form">
+              {editingInvoice ? t('common.update') : t('common.save')}
+            </Button>
+          </>
+        }
       >
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+        <form id="invoice-form" onSubmit={handleCreate} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid grid-cols-3 gap-4 px-5 pb-4 pt-4">
             <div>
               <Select
                 required
@@ -773,7 +856,7 @@ export default function InvoicesPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-4 border-t border-border px-5 pb-4 pt-4">
             <Select
               label={t('invoices.paymentTerms')}
               value={form.paymentTerms}
@@ -809,8 +892,9 @@ export default function InvoicesPage() {
             />
           </div>
 
-          {/* Line Items with cascading dropdowns */}
-          <div>
+          {/* Line Items with cascading dropdowns. This wrapper (search, import/add controls,
+              column headers) stays fixed - only the row list below scrolls. */}
+          <div className="border-t border-border px-5 pt-4">
             <Input
               value={productSearch}
               onChange={(e) => setProductSearch(e.target.value)}
@@ -933,12 +1017,20 @@ export default function InvoicesPage() {
               <span className="text-right text-xs font-medium text-fg-subtle">{t('invoices.lineTotal')}</span>
               <span className="w-[24px]"></span>
             </div>
-            <div className="space-y-2">
+          </div>
+
+          {/* The one scrolling region in this form. Sized generously (as tall as the list used to
+              render before it had its own scrollbar) rather than shrunk to whatever flexbox leaves
+              over from the other fields - it only needs a cap so a long order scrolls its own
+              product list instead of growing the modal or scrolling the fournisseur/date fields
+              and totals out of view. */}
+          <div className="max-h-[55vh] min-h-[240px] overflow-y-auto px-5">
+            <div className="space-y-2 pb-1">
               {lineItems.map((item, idx) => {
                 const colors = getAvailableColors(item.productId)
                 const sizes = getAvailableSizes(item.productId, item.colorId)
                 return (
-                  <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto_80px_90px_70px_70px_auto] items-center gap-2">
+                  <div key={item.rowId} className="grid grid-cols-[1fr_1fr_1fr_auto_80px_90px_70px_70px_auto] items-center gap-2 rounded-field border border-transparent px-1 py-1 transition-colors hover:border-border hover:bg-surface-2">
                     <Select
                       size="sm"
                       value={item.productId}
@@ -1030,52 +1122,52 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              type="number"
-              step="0.01"
-              min={0}
-              label={`${t('invoices.discount')} (${t('common.total')})`}
-              value={form.discountAmount}
-              onChange={(e) => setForm({ ...form, discountAmount: parseFloat(e.target.value) || 0 })}
-            />
-            <Input
-              label={t('invoices.notes')}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2 rounded-card bg-sunken p-4">
-            <div className="flex justify-between text-sm">
-              <span className="text-fg-subtle">{t('invoices.subTotal')}</span>
-              <span className="num text-fg-muted">{formatCurrency(calcSubTotal())}</span>
+          <div className="space-y-4 border-t border-border px-5 pb-4 pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                label={`${t('invoices.discount')} (${t('common.total')})`}
+                value={form.discountAmount}
+                onChange={(e) => setForm({ ...form, discountAmount: parseFloat(e.target.value) || 0 })}
+              />
+              <Input
+                label={t('invoices.notes')}
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </div>
-            {form.discountAmount > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-fg-subtle">{t('invoices.discount')}</span>
-                <span className="num text-[var(--negative)]">-{formatCurrency(form.discountAmount)}</span>
-              </div>
-            )}
-            {form.taxRate > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-fg-subtle">{t('invoices.taxRate')} ({form.taxRate}%)</span>
-                <span className="num text-fg-muted">{formatCurrency(calcTax())}</span>
-              </div>
-            )}
-            <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
-              <span className="text-fg">{t('invoices.total')}</span>
-              <span className="num text-fg">{formatCurrency(calcTotal())}</span>
-            </div>
-          </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit">
-              {editingInvoice ? t('common.update') : t('common.save')}
-            </Button>
+            <div className="space-y-2 rounded-card bg-sunken p-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-fg-subtle">
+                  <span className="num">{lineItemCount}</span> {t('invoices.products')}
+                  {' · '}
+                  <span className="num">{totalPairs}</span> {t('invoices.totalPairs')}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-fg-subtle">{t('invoices.subTotal')}</span>
+                <span className="num text-fg-muted">{formatCurrency(calcSubTotal())}</span>
+              </div>
+              {form.discountAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-fg-subtle">{t('invoices.discount')}</span>
+                  <span className="num text-[var(--negative)]">-{formatCurrency(form.discountAmount)}</span>
+                </div>
+              )}
+              {form.taxRate > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-fg-subtle">{t('invoices.taxRate')} ({form.taxRate}%)</span>
+                  <span className="num text-fg-muted">{formatCurrency(calcTax())}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
+                <span className="text-fg">{t('invoices.total')}</span>
+                <span className="num text-fg">{formatCurrency(calcTotal())}</span>
+              </div>
+            </div>
           </div>
         </form>
       </Modal>
@@ -1186,6 +1278,26 @@ export default function InvoicesPage() {
         </div>
       </Modal>
 
+      {/* Undo Payment Confirmation Modal */}
+      <Modal
+        open={!!undoPaymentTarget}
+        onClose={() => setUndoPaymentTarget(null)}
+        size="sm"
+        title={t('invoices.undoPayment')}
+      >
+        <p className="mb-5 text-sm text-fg-muted">
+          {t('invoices.undoPaymentConfirm', { amount: undoPaymentTarget ? formatCurrency(undoPaymentTarget.amount) : '' })}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setUndoPaymentTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" onClick={handleUndoPayment}>
+            {t('common.confirm')}
+          </Button>
+        </div>
+      </Modal>
+
       {/* Detail Modal */}
       <Modal
         open={!!detail}
@@ -1196,7 +1308,7 @@ export default function InvoicesPage() {
         footer={
           detail ? (
             <>
-              {detail.status === 'Received' && (
+              {!!detail.receivedAt && (
                 <Button
                   size="sm"
                   variant="soft"
@@ -1274,6 +1386,11 @@ export default function InvoicesPage() {
             />
 
             <div className="space-y-1 border-t border-border pt-3 text-right text-sm">
+              <p className="text-fg-subtle">
+                <span className="num">{detail.items.length}</span> {t('invoices.products')}
+                {' · '}
+                <span className="num">{detail.items.reduce((sum, it) => sum + it.quantity, 0)}</span> {t('invoices.totalPairs')}
+              </p>
               <p className="text-fg-subtle">{t('invoices.subTotal')}: <span className="num text-fg-muted">{formatCurrency(detail.subTotal)}</span></p>
               {detail.discountAmount > 0 && (
                 <p className="text-fg-subtle">{t('invoices.discount')}: <span className="num text-[var(--negative)]">-{formatCurrency(detail.discountAmount)}</span></p>
@@ -1298,7 +1415,16 @@ export default function InvoicesPage() {
                         <span className="text-fg">{p.paymentMethod}</span>
                         {p.reference && <span className="ml-2 text-fg-subtle">({p.reference})</span>}
                       </div>
-                      <span className="num font-medium text-fg">{formatCurrency(p.amount)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="num font-medium text-fg">{formatCurrency(p.amount)}</span>
+                        <IconButton
+                          icon={<Undo2 className="h-3.5 w-3.5" />}
+                          label={t('invoices.undoPayment')}
+                          size="xs"
+                          variant="danger-ghost"
+                          onClick={() => setUndoPaymentTarget({ invoiceId: detail.id, paymentId: p.id, amount: p.amount })}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>

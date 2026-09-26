@@ -57,13 +57,13 @@ export default function BarcodeLabel({ variant, onPrint, labelSize = '50x25' }: 
         <div style={{ textAlign: 'center', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', minHeight: 0 }}>
           <svg ref={svgRef} style={{ display: 'block', margin: '0 auto', maxWidth: '100%', height: 'auto' }} />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', overflow: 'hidden', flexShrink: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: '9pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', overflow: 'hidden', flexShrink: 0 }}>
+          <span style={{ fontWeight: 900, fontSize: '11pt', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '1 1 auto', minWidth: 0, textAlign: 'left' }}>
             {variant.colorName} / {variant.sizeValue}
           </span>
           {variant.price > 0 && (
-            <span style={{ fontWeight: 700, fontSize: '9pt', whiteSpace: 'nowrap', marginLeft: '2mm' }}>
-              {new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(variant.price).replace('MAD', 'DH')}
+            <span style={{ fontWeight: 900, fontSize: '12pt', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: '2mm' }}>
+              {formatLabelPrice(variant.price)}
             </span>
           )}
         </div>
@@ -106,7 +106,7 @@ export function printLabels(
       <div class="lbar"><svg class="bc" data-code="${esc(v.barcode ?? '')}"></svg></div>
       <div class="lfoot">
         <span class="lcolor">${esc(v.colorName)} / ${esc(v.sizeValue)}</span>
-        ${v.price > 0 ? `<span class="lprice">${new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(v.price).replace('MAD', 'DH')}</span>` : ''}
+        ${v.price > 0 ? `<span class="lprice">${formatLabelPrice(v.price)}</span>` : ''}
       </div>
     </div>`).join('')
 
@@ -137,11 +137,11 @@ export function printLabels(
   }
   .lbar svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
   .lfoot {
-    display: flex; justify-content: space-between; align-items: baseline;
+    display: flex; align-items: baseline; justify-content: space-between;
     overflow: hidden; flex-shrink: 0;
   }
-  .lcolor { font-weight: 700; font-size: 9pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .lprice { font-weight: 700; font-size: 9pt; white-space: nowrap; margin-left: 2mm; }
+  .lcolor { font-weight: 900; font-size: 11pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; text-align: left; }
+  .lprice { font-weight: 900; font-size: 12pt; white-space: nowrap; flex-shrink: 0; margin-left: 2mm; }
   @media print { .label { border: none; } }
 </style>
 </head>
@@ -291,4 +291,13 @@ export function printProductBarcode(product: { name: string; barcode: string }, 
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function formatLabelPrice(price: number): string {
+  return new Intl.NumberFormat('fr-MA', {
+    style: 'currency',
+    currency: 'MAD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price).replace('MAD', 'DH')
 }

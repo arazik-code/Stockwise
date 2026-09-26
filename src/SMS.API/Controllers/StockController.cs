@@ -70,6 +70,13 @@ public class StockController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("movements/{movementId:long}/undo")]
+    public async Task<IActionResult> UndoAdjustment(long movementId, CancellationToken ct)
+    {
+        await _stockService.UndoAdjustmentAsync(movementId, ct: ct);
+        return Ok();
+    }
+
     [HttpGet("movements")]
     public async Task<IActionResult> GetMovements(
         [FromQuery] int? productVariantId,

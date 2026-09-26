@@ -97,6 +97,58 @@ public class StockAppService : IStockService
         }
     }
 
+    public async Task UndoAdjustmentAsync(long movementId, int? userId = null, CancellationToken ct = default)
+    {
+        var matches = await _unitOfWork.FindAsync<StockMovement>(m => m.Id == movementId, ct);
+        var movement = matches.FirstOrDefault()
+            ?? throw new KeyNotFoundException("Mouvement de stock introuvable");
+
+        if (movement.Type != StockMovementType.Adjustment)
+            throw new InvalidOperationException("Seuls les ajustements manuels peuvent être annulés");
+
+        // Only the most recent movement for this variant can be safely reversed - undoing an older
+        // one could conflict with a sale or another adjustment that happened after it, and silently
+        // "fixing" that by force would corrupt the audit trail instead of just reversing a mistake.
+        var newer = await _unitOfWork.FindAsync<StockMovement>(
+            m => m.ProductVariantId == movement.ProductVariantId && m.Id > movement.Id, ct);
+        if (newer.Count > 0)
+            throw new InvalidOperationException("Cet ajustement n'est plus le dernier mouvement pour cet article et ne peut plus être annulé directement");
+
+        var stockItem = await _unitOfWork.Stock.GetByVariantIdWithRowVersionAsync(movement.ProductVariantId, ct)
+            ?? throw new KeyNotFoundException($"Stock not found for product variant {movement.ProductVariantId}");
+
+        var newQuantity = stockItem.QuantityOnHand - movement.QuantityChange;
+        if (newQuantity < 0)
+            throw new InvalidOperationException("Impossible d'annuler : la quantité résultante serait négative");
+
+        stockItem.QuantityOnHand = newQuantity;
+        stockItem.LastUpdatedAt = DateTime.UtcNow;
+
+        // Reverses the effect via a compensating movement rather than deleting the original -
+        // the movement history is an audit trail and should never lose entries.
+        var undoMovement = new StockMovement
+        {
+            ProductVariantId = movement.ProductVariantId,
+            Type = StockMovementType.Adjustment,
+            QuantityChange = -movement.QuantityChange,
+            QuantityAfter = newQuantity,
+            Reference = "Undo",
+            Notes = $"Annulation de l'ajustement #{movement.Id}",
+            UserId = userId
+        };
+
+        await _unitOfWork.Stock.AddMovementAsync(undoMovement, ct);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        await _notifier.NotifyStockChangedAsync(movement.ProductVariantId, newQuantity, ct);
+
+        if (newQuantity <= stockItem.ReorderLevel)
+        {
+            var variantName = stockItem.ProductVariant?.Product?.Name ?? "Unknown";
+            await _notifier.NotifyLowStockAsync(movement.ProductVariantId, variantName, newQuantity, ct);
+        }
+    }
+
     public async Task SetQuantityAsync(int productVariantId, int newQuantity, string? notes = null, int? userId = null, CancellationToken ct = default)
     {
         if (newQuantity < 0)

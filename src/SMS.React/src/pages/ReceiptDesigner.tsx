@@ -7,8 +7,8 @@ import { invalidateReceiptTemplateCache } from '../utils/printReceipt'
 import { Button, Input, Page, Select, Switch, Tabs, Textarea } from '../components/ui'
 
 const DEFAULT_TEMPLATE: ReceiptTemplateConfig = {
-  shopName: 'FLEX SHOES',
-  shopTagline: 'Chaussures & Plus',
+  shopName: 'MY STORE',
+  shopTagline: 'Thank you for shopping with us',
   shopAddress: '',
   shopPhone: '',
   shopWebsite: 'www.flexshoes.ma',
@@ -32,7 +32,7 @@ const DEFAULT_TEMPLATE: ReceiptTemplateConfig = {
 }
 
 const PREVIEW_ITEMS = [
-  { name: 'Chaussures Sport Elite', color: 'Noir', size: '42', sku: 'PRD-001', quantity: 2, unitPrice: 299.00, lineTotal: 598.00 },
+  { name: 'Signature Eau de Parfum', color: 'Standard', size: '50 ml', sku: 'DEMO-006-01-01', quantity: 1, unitPrice: 399.00, lineTotal: 399.00 },
   { name: 'Sneakers Classic Premium', color: 'Blanc', size: '40', sku: 'PRD-002', quantity: 1, unitPrice: 199.00, lineTotal: 199.00 },
 ]
 
@@ -84,7 +84,7 @@ export default function ReceiptDesignerPage() {
 
   if (loading) {
     return (
-      <Page section="receiptDesign" title="Design Recu" bare fill>
+      <Page section="receiptDesign" title="Design Recu" className="local-receipt-designer" bare fill>
         <div className="flex flex-1 items-center justify-center text-sm text-fg-subtle">{t('common.loading')}</div>
       </Page>
     )
@@ -93,6 +93,7 @@ export default function ReceiptDesignerPage() {
   return (
     <Page
       section="receiptDesign"
+      className="local-receipt-designer"
       title="Design Recu"
       bare
       fill
@@ -149,7 +150,7 @@ export default function ReceiptDesignerPage() {
                   </div>
                 </div>
                 <Field label="Nom de la boutique" value={config.shopName} onChange={(v) => update({ shopName: v })} />
-                <Field label="Sous-titre" value={config.shopTagline} onChange={(v) => update({ shopTagline: v })} placeholder="Chaussures & Plus" />
+                <Field label="Sous-titre" value={config.shopTagline} onChange={(v) => update({ shopTagline: v })} placeholder="Thank you for shopping with us" />
                 <Field label="Adresse" value={config.shopAddress} onChange={(v) => update({ shopAddress: v })} placeholder="123 Rue Principale, Casablanca" />
                 <Field label="Telephone" value={config.shopPhone} onChange={(v) => update({ shopPhone: v })} placeholder="0522-XXXXXX" />
                 <Field label="Site web" value={config.shopWebsite} onChange={(v) => update({ shopWebsite: v })} placeholder="www.flexshoes.ma" />
@@ -259,7 +260,7 @@ function ReceiptPreview({ config }: { config: ReceiptTemplateConfig }) {
 
       {/* ── Shop Name ── */}
       <div style={{ textAlign: 'center', fontSize: 22, fontWeight: 'bold', letterSpacing: 5, textTransform: 'uppercase' as const, margin: '2px 0' }}>
-        {config.shopName || 'FLEX SHOES'}
+        {config.shopName || 'MY STORE'}
       </div>
       {config.shopTagline && (
         <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 'bold' as const, letterSpacing: 2, color: '#000', marginBottom: 2 }}>

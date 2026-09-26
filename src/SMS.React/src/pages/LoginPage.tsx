@@ -17,7 +17,7 @@ export default function LoginPage() {
     e.preventDefault()
     try {
       await login(username, password)
-      navigate('/')
+      navigate('/dashboard')
     } catch {
       // error is set in store
     }

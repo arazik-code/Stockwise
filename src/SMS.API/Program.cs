@@ -233,6 +233,10 @@ using (var scope = app.Services.CreateScope())
             await db.Database.MigrateAsync();
         }
         await SeedData.InitializeAsync(db);
+        if (builder.Configuration.GetValue<bool>("DemoData:Enabled"))
+        {
+            await DemoSeedData.InitializeAsync(db);
+        }
     }
     else
     {

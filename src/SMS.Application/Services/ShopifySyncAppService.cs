@@ -100,6 +100,7 @@ public class ShopifySyncAppService : IShopifySyncService
                     ShopifyProductId = variant is null ? lineItem.ProductId : null,
                     ShopifyVariantId = variant is null ? lineItem.VariantId : null,
                     ShopifySku = variant is null ? lineItem.Sku : null,
+                    ShopifyVariantTitle = lineItem.VariantTitle,
                     ProductNameSnapshot = variant?.Product?.Name ?? lineItem.Title,
                     SkuSnapshot = variant?.Sku ?? lineItem.Sku ?? string.Empty,
                     Quantity = lineItem.Quantity,
@@ -220,7 +221,8 @@ public class ShopifySyncAppService : IShopifySyncService
                     Title = li.Title,
                     Quantity = li.Quantity,
                     Price = ParseShopifyDecimal(li.Price),
-                    Sku = string.IsNullOrWhiteSpace(li.Sku) ? null : li.Sku
+                    Sku = string.IsNullOrWhiteSpace(li.Sku) ? null : li.Sku,
+                    VariantTitle = string.IsNullOrWhiteSpace(li.VariantTitle) ? null : li.VariantTitle
                 }).ToList();
 
                 // Prefer the shipping address (where goods go), then billing, then the customer record.
@@ -451,6 +453,7 @@ public class ShopifySyncAppService : IShopifySyncService
                     ShopifyProductId = variant is null ? li.ProductId : null,
                     ShopifyVariantId = variant is null ? li.VariantId : null,
                     ShopifySku = variant is null ? li.Sku : null,
+                    ShopifyVariantTitle = li.VariantTitle,
                     ProductNameSnapshot = variant?.Product?.Name ?? li.Title,
                     SkuSnapshot = variant?.Sku ?? li.Sku ?? string.Empty,
                     Quantity = li.Quantity,

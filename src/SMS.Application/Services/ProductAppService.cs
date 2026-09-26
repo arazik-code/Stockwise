@@ -309,9 +309,14 @@ public class ProductAppService : IProductService
 
     public async Task<ProductVariantDto?> GetVariantByBarcodeAsync(string barcode, CancellationToken ct = default)
     {
-        var variants = await _unitOfWork.FindAsync<ProductVariant>(
-            v => v.Barcode == barcode && v.IsActive, ct);
-        var variant = variants.FirstOrDefault();
+        // FindAsync<T> is a plain Where() with no eager loading - Color/Size must be included
+        // explicitly here, or the mapped DTO silently comes back with empty colour/size (the POS
+        // barcode-scan path is exactly where this showed up: a scanned item landed in the cart with
+        // no colour/size, only its SKU, because this was the one variant lookup that skipped them).
+        var variant = await _unitOfWork.Set<ProductVariant>()
+            .Include(v => v.Color)
+            .Include(v => v.Size)
+            .FirstOrDefaultAsync(v => v.Barcode == barcode && v.IsActive, ct);
         if (variant is null) return null;
 
         var stockItems = await _unitOfWork.Stock.GetAllWithVariantAsync(ct);

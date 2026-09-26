@@ -604,6 +604,7 @@ public class OnlineOrderAppService : IOnlineOrderService
             ShopifyProductId = i.ShopifyProductId,
             ShopifyVariantId = i.ShopifyVariantId,
             ShopifySku = i.ShopifySku,
+            ShopifyVariantTitle = i.ShopifyVariantTitle,
             ProductName = i.ProductNameSnapshot,
             Sku = i.SkuSnapshot,
             ColorName = i.ProductVariant?.Color?.Name,

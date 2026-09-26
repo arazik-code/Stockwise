@@ -53,7 +53,7 @@ export default function ReceiptPreview({ sale, onClose }: ReceiptPreviewProps) {
           is on screen. See CONTRACT.md §6. */}
       <div data-theme="light" data-perf="lean" className="paper p-4 font-mono text-sm space-y-3">
         <div className="text-center">
-          <div className="font-bold text-lg">SHOE STORE</div>
+          <div className="font-bold text-lg">MY STORE</div>
           <div className="text-xs text-gray-500">123 Main Street</div>
           <div className="text-xs text-gray-500">Tel: (555) 123-4567</div>
         </div>

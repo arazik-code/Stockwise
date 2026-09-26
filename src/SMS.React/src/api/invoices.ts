@@ -11,6 +11,8 @@ export const invoicesApi = {
   create: (data: CreateInvoiceRequest) => api.post<Invoice>('/invoices', data).then((r) => r.data),
   update: (id: number, data: CreateInvoiceRequest) => api.put<Invoice>(`/invoices/${id}`, data).then((r) => r.data),
   pay: (id: number, data: PayInvoiceRequest) => api.post<Invoice>(`/invoices/${id}/pay`, data).then((r) => r.data),
+  undoPayment: (id: number, paymentId: number) =>
+    api.post<Invoice>(`/invoices/${id}/payments/${paymentId}/undo`).then((r) => r.data),
   togglePaid: (id: number) => api.post<Invoice>(`/invoices/${id}/toggle-paid`).then((r) => r.data),
   cancel: (id: number, data?: CancelInvoiceRequest) =>
     api.post<Invoice>(`/invoices/${id}/cancel`, data).then((r) => r.data),
@@ -18,4 +20,7 @@ export const invoicesApi = {
   getLabels: (id: number) => api.get<InvoiceLabelData[]>(`/invoices/${id}/labels`).then((r) => r.data),
   cancelMany: (ids: number[]) => api.post<{ cancelled: number }>('/invoices/cancel-many', { ids }).then((r) => r.data),
   getSummary: () => api.get<InvoiceSummary>('/invoices/summary').then((r) => r.data),
+  getArchived: () => api.get<Invoice[]>('/invoices/archived').then((r) => r.data),
+  archive: (id: number) => api.post<Invoice>(`/invoices/${id}/archive`).then((r) => r.data),
+  unarchive: (id: number) => api.post<Invoice>(`/invoices/${id}/unarchive`).then((r) => r.data),
 }

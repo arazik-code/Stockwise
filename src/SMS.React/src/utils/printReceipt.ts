@@ -24,11 +24,11 @@ export interface ReceiptData {
 }
 
 const DEFAULT_TEMPLATE: ReceiptTemplateConfig = {
-  shopName: 'FLEX SHOES',
-  shopTagline: 'Chaussures & Plus',
+  shopName: 'MY STORE',
+  shopTagline: 'Thank you for shopping with us',
   shopAddress: '',
   shopPhone: '',
-  shopWebsite: 'www.flexshoes.ma',
+  shopWebsite: '',
   logoBase64: '',
   showTicketNumber: true,
   showDate: true,
@@ -82,7 +82,7 @@ async function buildReceiptHtml(data: ReceiptData, config: ReceiptTemplateConfig
     headerHtml += `<div class="logo"><img src="${config.logoBase64}" alt="Logo"></div>`
   }
 
-  headerHtml += `<div class="shop-name">${escapeHtml(config.shopName || 'FLEX SHOES')}</div>`
+  headerHtml += `<div class="shop-name">${escapeHtml(config.shopName || 'MY STORE')}</div>`
   if (config.shopTagline) {
     headerHtml += `<div class="shop-tagline">${escapeHtml(config.shopTagline)}</div>`
   }

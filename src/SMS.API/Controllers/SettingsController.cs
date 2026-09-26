@@ -160,7 +160,7 @@ public class SettingsController : ControllerBase
         var s = _config.GetSection("InvoiceTemplate");
         return Ok(new InvoiceTemplateSettings
         {
-            ShopName = s.GetValue<string>("ShopName") ?? "FLEX SHOES",
+            ShopName = s.GetValue<string>("ShopName") ?? "MY STORE",
             ShopAddress = s.GetValue<string>("ShopAddress") ?? "",
             ShopPhone = s.GetValue<string>("ShopPhone") ?? "",
             ShopEmail = s.GetValue<string>("ShopEmail") ?? "",
@@ -336,8 +336,8 @@ public class SettingsController : ControllerBase
         var s = _config.GetSection("ReceiptTemplate");
         return Ok(new ReceiptTemplateSettings
         {
-            ShopName = s.GetValue<string>("ShopName") ?? "FLEX SHOES",
-            ShopTagline = s.GetValue<string>("ShopTagline") ?? "Chaussures & Plus",
+            ShopName = s.GetValue<string>("ShopName") ?? "MY STORE",
+            ShopTagline = s.GetValue<string>("ShopTagline") ?? "Thank you for shopping with us",
             ShopAddress = s.GetValue<string>("ShopAddress") ?? "",
             ShopPhone = s.GetValue<string>("ShopPhone") ?? "",
             ShopWebsite = s.GetValue<string>("ShopWebsite") ?? "",

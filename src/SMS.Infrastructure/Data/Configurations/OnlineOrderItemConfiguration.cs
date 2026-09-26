@@ -13,6 +13,7 @@ public class OnlineOrderItemConfiguration : IEntityTypeConfiguration<OnlineOrder
         builder.Property(i => i.ProductNameSnapshot).IsRequired().HasMaxLength(200);
         builder.Property(i => i.SkuSnapshot).IsRequired().HasMaxLength(50);
         builder.Property(i => i.ShopifySku).HasMaxLength(50);
+        builder.Property(i => i.ShopifyVariantTitle).HasMaxLength(100);
         builder.Property(i => i.UnitPrice).HasPrecision(18, 2);
         builder.Property(i => i.DiscountAmount).HasPrecision(18, 2);
         builder.Property(i => i.LineTotal).HasPrecision(18, 2);

@@ -58,7 +58,7 @@ const localNavSections: NavSection[] = [
   {
     label: 'Dashboard',
     items: [
-      { to: '/', labelKey: 'dashboard', icon: Home, section: 'dashboard', end: true },
+      { to: '/dashboard', labelKey: 'dashboard', icon: Home, section: 'dashboard', end: true },
     ],
   },
   {
@@ -366,7 +366,7 @@ export default function Sidebar() {
                 <meta.icon className="h-[18px] w-[18px]" />
               </span>
               <div className="min-w-0">
-                <h1 className="truncate text-sm font-bold tracking-tight text-fg">FlexShoes</h1>
+                <h1 className="truncate text-sm font-bold tracking-tight text-fg">Stockwise</h1>
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.p
                     key={meta.subtitle}

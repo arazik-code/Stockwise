@@ -25,7 +25,7 @@ export default function AdminOverviewPage() {
   const pendingPasswordChange = users?.filter((u) => u.mustChangePassword && u.isActive).length ?? 0
 
   return (
-    <Page section="admin" title="Vue d'ensemble">
+    <Page section="admin" title="Vue d'ensemble" className="local-admin-overview">
       <div className="space-y-6">
         {loading ? (
           <SkeletonStats count={4} />

@@ -1,0 +1,46 @@
+.glass-fractal-frame{position:absolute;inset:10px -5px 16px;z-index:0;overflow:visible;border-radius:18px;mix-blend-mode:multiply}
+.glass-fractal-root{position:relative;width:100%;height:100%;min-height:345px;overflow:hidden;border-radius:18px;background:radial-gradient(ellipse at 95% 0%,#eeeeef 0%,#f6f6f6 45%,#fafafa 78%)}
+.glass-fractal-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;transition:opacity .5s ease}
+.glass-fractal-canvas.opacity-0{opacity:0}.glass-fractal-canvas.opacity-100{opacity:1}
+.glass-fractal-controls{position:absolute;left:50%;bottom:13px;z-index:20;display:flex;gap:3px;transform:translateX(-50%);padding:4px;border:1px solid rgba(26,28,27,.12);border-radius:999px;background:rgba(255,255,255,.78);box-shadow:0 8px 28px rgba(30,32,30,.1);backdrop-filter:blur(12px)}
+.glass-fractal-control{min-width:64px;padding:7px 12px;border:0;border-radius:999px;background:transparent;color:rgba(25,27,26,.63);font:600 9px/1 Inter,system-ui,sans-serif;cursor:pointer;transition:background .2s,color .2s,transform .2s}
+.glass-fractal-control:hover{background:rgba(0,0,0,.06);color:#191b1a}.glass-fractal-control:active{transform:scale(.96)}
+.glass-fractal-control.is-selected{background:#252824;color:#fff}.glass-fractal-control:focus-visible{outline:2px solid #7865b8;outline-offset:2px}
+.glass-fractal-loading,.glass-fractal-unavailable{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:15px;color:#747872}
+.glass-fractal-loading small,.glass-fractal-unavailable small{font-size:8px;font-weight:700;letter-spacing:1.2px}
+.glass-fractal-loading>span,.glass-fractal-fallback-shape{width:95px;height:110px;border:1px solid rgba(123,110,161,.4);border-radius:13px 13px 25px 25px;transform:rotate(30deg) skewY(-8deg);background:linear-gradient(135deg,rgba(255,255,255,.9),rgba(142,130,180,.11) 52%,rgba(255,255,255,.7));box-shadow:inset -13px -10px 25px rgba(120,101,184,.14),0 15px 40px rgba(64,57,82,.08);animation:fractalBreathe 3.3s ease-in-out infinite}
+.glass-fractal-unavailable{background:radial-gradient(ellipse,#f4f2f8,#f7f7f3 66%)}.glass-fractal-fallback-shape{display:block;animation:none}
+.hero-product>.product-orbit{z-index:-1}.hero-product .float-note{z-index:3}.hero-product .hero-index{z-index:2;color:#747872}
+.hero-product>.dashboard-window{z-index:2;background:rgba(255,255,255,.78);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);box-shadow:0 25px 75px rgba(44,47,40,.12),0 2px 5px rgba(44,47,40,.05)}
+.hero-product .window-topline{background:rgba(255,255,255,.46)}
+.hero-product .mini-stat,.hero-product .mini-chart,.hero-product .mini-activity{background:rgba(255,255,255,.75);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.hero-product .mini-heading button{background:rgba(255,255,255,.76)}
+@keyframes fractalBreathe{0%,100%{transform:rotate(30deg) skewY(-8deg) translateY(0)}50%{transform:rotate(30deg) skewY(-8deg) translateY(-7px)}}
+@media(max-width:800px){.glass-fractal-frame{inset:0 -5px 12px}.glass-fractal-root{min-height:320px}}
+@media(max-width:600px){.glass-fractal-frame{inset:0 -4px 13px}.glass-fractal-root{min-height:285px;border-radius:13px}.glass-fractal-controls{bottom:10px}.glass-fractal-control{min-width:58px;padding:7px 10px;font-size:8px}.glass-fractal-loading>span,.glass-fractal-fallback-shape{width:70px;height:83px}}
+@media(prefers-reduced-motion:reduce){.glass-fractal-loading>span{animation:none}}
+.hero-product::before{content:"";position:absolute;z-index:-1;inset:4% 4% 9% 11%;pointer-events:none;background:radial-gradient(ellipse at 68% 37%,rgba(133,112,185,.15),transparent 58%),radial-gradient(ellipse at 26% 71%,rgba(104,133,113,.08),transparent 48%);filter:blur(14px)}
+.glass-fractal-frame{inset:-16px -26px -2px -7px;opacity:.96}
+.glass-fractal-root{background:radial-gradient(ellipse at 84% 20%,#f0edf5 0%,#f4f2f6 33%,#f7f7f3 70%)}
+.hero-fx-label{position:absolute;z-index:1;top:8px;left:4%;display:flex;align-items:center;gap:8px;color:#85897f;font-size:7px;font-weight:700;letter-spacing:.9px}
+.hero-fx-label i{height:1px;width:18px;background:#bfc0b7}.hero-fx-label small{font-size:6px;font-weight:500;color:#989b94;letter-spacing:.8px}
+.hero-product>.dashboard-window{width:min(94%,550px);margin:24px 4% 0 0;background:rgba(255,255,255,.79);border-color:rgba(224,225,219,.86);box-shadow:0 32px 78px rgba(44,47,40,.15),0 3px 9px rgba(44,47,40,.06);backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px)}
+.hero-product .window-topline{background:rgba(255,255,255,.56)}
+.hero-product .mini-stat,.hero-product .mini-chart,.hero-product .mini-activity{background:rgba(255,255,255,.86);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.hero-product .mini-heading button{background:rgba(255,255,255,.88)}
+.hero-product .note-stock{left:3%;bottom:2px}.hero-product .note-order{right:2%;top:4px}
+@media(max-width:800px){.glass-fractal-frame{inset:-16px -20px 0}.hero-product>.dashboard-window{width:min(94%,550px);margin:30px auto 0 0}.hero-fx-label{top:6px;left:5%}}
+@media(max-width:600px){.glass-fractal-frame{inset:-14px -12px 0}.glass-fractal-root{min-height:340px}.hero-product>.dashboard-window{width:100%;margin:25px auto 0;transform:scale(.97);background:rgba(255,255,255,.86)}.hero-product .mini-stat,.hero-product .mini-chart,.hero-product .mini-activity{background:rgba(255,255,255,.92)}.hero-fx-label{left:3%;top:-9px}.hero-fx-label span{font-size:6px}.hero-product .note-stock{left:0;bottom:1px}.hero-product .note-order{right:0;top:-5px}}
+.landing-hero{isolation:isolate}
+.hero-copy{z-index:1}
+.hero-product{z-index:2}
+.hero-fractal-backdrop{position:absolute;z-index:0;top:-30px;bottom:-25px;left:-7%;width:72%;overflow:hidden;pointer-events:none;opacity:.27;mix-blend-mode:multiply;mask-image:radial-gradient(ellipse at 59% 44%,#000 16%,rgba(0,0,0,.92) 43%,rgba(0,0,0,.5) 65%,transparent 91%);-webkit-mask-image:radial-gradient(ellipse at 59% 44%,#000 16%,rgba(0,0,0,.92) 43%,rgba(0,0,0,.5) 65%,transparent 91%)}
+.hero-fractal-backdrop .glass-fractal-root{width:100%;height:100%;min-height:100%;border-radius:0;background:radial-gradient(ellipse at 55% 42%,#f0edf5 0%,#f5f3f7 42%,#f7f7f3 76%)}
+.hero-fractal-backdrop .glass-fractal-canvas{filter:saturate(1.2) contrast(1.03)}
+.hero-fractal-backdrop .glass-fractal-controls{display:none}
+@media(max-width:800px){.hero-fractal-backdrop{top:5px;bottom:auto;left:-5%;width:86%;height:380px}}
+@media(max-width:600px){.hero-fractal-backdrop{top:0;left:-11%;width:106%;height:360px;opacity:.25;mask-image:radial-gradient(ellipse at 58% 41%,#000 13%,rgba(0,0,0,.85) 45%,rgba(0,0,0,.4) 68%,transparent 91%);-webkit-mask-image:radial-gradient(ellipse at 58% 41%,#000 13%,rgba(0,0,0,.85) 45%,rgba(0,0,0,.4) 68%,transparent 91%)}}
+.hero-shape-status{position:relative;z-index:1;display:flex;align-items:center;gap:7px;margin-top:17px;color:#878b82;font-size:7px;font-weight:700;letter-spacing:.85px}
+.hero-shape-status i{width:16px;height:1px;background:#c6c6bf}.hero-shape-status b{color:#7662a9;font-size:7px;letter-spacing:1px}.hero-shape-status small{margin-left:3px;color:#9a9d95;font-size:6px;font-weight:500;letter-spacing:.65px}
+.shape-status-dot{width:6px;height:6px;border-radius:50%;background:#8b78bd;box-shadow:0 0 0 3px rgba(139,120,189,.1);animation:lpPulse 2.3s ease-in-out infinite}
+@media(max-width:600px){.hero-shape-status{gap:6px;margin-top:12px}.hero-shape-status small{font-size:5px}}

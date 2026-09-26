@@ -4,13 +4,13 @@ import { useAuthStore } from '../../store/authStore'
 const ONLINE_ROUTES = ['/online', '/online/orders', '/online/confirmation', '/online/products', '/online/clients', '/online/crm', '/online/delivery', '/online/finance', '/online/sync', '/online/link', '/online/whatsapp-templates']
 
 const ROLE_ROUTES: Record<string, string[]> = {
-  Admin: ['/', '/pos', '/products', '/fournisseurs', '/invoices', '/stock', '/sales', '/reports', '/settings', '/printer', '/offline-sales', '/refunds', '/clients', '/invoice-designer', '/receipt-designer', ...ONLINE_ROUTES, '/online/settings', '/admin', '/admin/users', '/admin/roles', '/admin/health', '/admin/audit-log'],
-  Cashier: ['/', '/pos', '/refunds', '/clients'],
-  StockManager: ['/', '/products', '/fournisseurs', '/invoices', '/stock', '/reports', ...ONLINE_ROUTES],
+  Admin: ['/dashboard', '/pos', '/products', '/fournisseurs', '/invoices', '/stock', '/sales', '/reports', '/settings', '/printer', '/offline-sales', '/refunds', '/clients', '/invoice-designer', '/receipt-designer', ...ONLINE_ROUTES, '/online/settings', '/admin', '/admin/users', '/admin/roles', '/admin/health', '/admin/audit-log'],
+  Cashier: ['/dashboard', '/pos', '/refunds', '/clients'],
+  StockManager: ['/dashboard', '/products', '/fournisseurs', '/invoices', '/stock', '/reports', ...ONLINE_ROUTES],
 }
 
 const DEFAULT_ROUTE: Record<string, string> = {
-  Admin: '/',
+  Admin: '/dashboard',
   Cashier: '/pos',
   StockManager: '/products',
 }
@@ -35,7 +35,7 @@ export default function ProtectedRoute() {
   if (user && !user.mustChangePassword && ALL_KNOWN_ROUTES.has(location.pathname)) {
     const allowed = ROLE_ROUTES[user.role] || ROLE_ROUTES['Admin']
     if (!allowed.includes(location.pathname)) {
-      return <Navigate to={DEFAULT_ROUTE[user.role] || '/'} replace />
+      return <Navigate to={DEFAULT_ROUTE[user.role] || '/dashboard'} replace />
     }
   }
 

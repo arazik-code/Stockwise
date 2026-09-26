@@ -49,7 +49,7 @@ import type { Size } from '../types/size'
 export default function SettingsPage() {
   const { t } = useTranslation()
   return (
-    <Page section="settings" title={t('settings.title')}>
+    <Page section="settings" title={t('settings.title')} className="local-settings">
       <div className="space-y-5">
         <StoreSettings />
         <TaxSettings />
@@ -64,7 +64,7 @@ export default function SettingsPage() {
 
 function StoreSettings() {
   const { t } = useTranslation()
-  const [form, setForm] = useState<StoreSettingsConfig>({ name: 'Shoe Store', phone: '', address: '' })
+  const [form, setForm] = useState<StoreSettingsConfig>({ name: 'My Store', phone: '', address: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 

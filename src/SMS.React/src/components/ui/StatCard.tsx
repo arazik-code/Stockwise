@@ -135,6 +135,7 @@ export function StatCard({
 
   return (
     <motion.div
+      data-stat-card
       data-tone={tone === 'accent' ? undefined : tone}
       onClick={onClick}
       whileHover={onClick ? { y: -3 } : undefined}

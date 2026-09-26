@@ -20,7 +20,13 @@ public class InvoiceAppService : IInvoiceService
     public async Task<IReadOnlyList<InvoiceDto>> GetAllAsync(CancellationToken ct = default)
     {
         var invoices = await _unitOfWork.Invoices.GetAllAsync(ct);
-        return invoices.OrderByDescending(i => i.CreatedAt).Select(MapToDto).ToList();
+        return invoices.Where(i => i.ArchivedAt is null).OrderByDescending(i => i.CreatedAt).Select(MapToDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<InvoiceDto>> GetArchivedAsync(CancellationToken ct = default)
+    {
+        var invoices = await _unitOfWork.Invoices.GetAllAsync(ct);
+        return invoices.Where(i => i.ArchivedAt is not null).OrderByDescending(i => i.ArchivedAt).Select(MapToDto).ToList();
     }
 
     public async Task<InvoiceDto?> GetByIdAsync(int id, CancellationToken ct = default)
@@ -32,13 +38,13 @@ public class InvoiceAppService : IInvoiceService
     public async Task<IReadOnlyList<InvoiceDto>> GetByFournisseurAsync(int fournisseurId, CancellationToken ct = default)
     {
         var invoices = await _unitOfWork.Invoices.GetByFournisseurAsync(fournisseurId, ct);
-        return invoices.OrderByDescending(i => i.CreatedAt).Select(MapToDto).ToList();
+        return invoices.Where(i => i.ArchivedAt is null).OrderByDescending(i => i.CreatedAt).Select(MapToDto).ToList();
     }
 
     public async Task<IReadOnlyList<InvoiceDto>> SearchAsync(
         string? query, string? status, int? fournisseurId, CancellationToken ct = default)
     {
-        var invoices = await _unitOfWork.Invoices.GetAllAsync(ct);
+        var invoices = (await _unitOfWork.Invoices.GetAllAsync(ct)).Where(i => i.ArchivedAt is null).ToList();
 
         if (!string.IsNullOrWhiteSpace(query))
         {
@@ -218,6 +224,7 @@ public class InvoiceAppService : IInvoiceService
                 ProductName = productName,
                 ProductSku = productSku,
                 Description = item.Description,
+                ProductId = item.ProductId,
                 ColorId = item.ColorId,
                 SizeId = item.SizeId,
                 ColorName = colorName,
@@ -373,6 +380,7 @@ public class InvoiceAppService : IInvoiceService
                 ProductName = productName,
                 ProductSku = productSku,
                 Description = item.Description,
+                ProductId = item.ProductId,
                 ColorId = item.ColorId,
                 SizeId = item.SizeId,
                 ColorName = colorName,
@@ -427,6 +435,47 @@ public class InvoiceAppService : IInvoiceService
         else if (invoice.PaidAmount > 0)
         {
             invoice.Status = InvoiceStatus.PartiallyPaid.ToString();
+        }
+        invoice.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Invoices.Update(invoice);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return MapToDto(invoice);
+    }
+
+    public async Task<InvoiceDto?> UndoPaymentAsync(int id, int paymentId, CancellationToken ct = default)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(id, ct);
+        if (invoice is null) return null;
+
+        var payment = invoice.Payments.FirstOrDefault(p => p.Id == paymentId);
+        if (payment is null)
+            throw new InvalidOperationException("Ce paiement est introuvable sur cette facture");
+
+        invoice.Payments.Remove(payment);
+        invoice.PaidAmount = Math.Max(0, invoice.PaidAmount - payment.Amount);
+
+        if (invoice.Status != InvoiceStatus.Cancelled.ToString())
+        {
+            if (invoice.PaidAmount >= invoice.TotalAmount && invoice.TotalAmount > 0)
+            {
+                invoice.Status = InvoiceStatus.Paid.ToString();
+            }
+            else if (invoice.PaidAmount > 0)
+            {
+                invoice.Status = InvoiceStatus.PartiallyPaid.ToString();
+                invoice.PaidAt = null;
+            }
+            else
+            {
+                invoice.Status = invoice.ReceivedAt is not null
+                    ? InvoiceStatus.Received.ToString()
+                    : invoice.DueDate.HasValue && invoice.DueDate < DateTime.UtcNow
+                        ? InvoiceStatus.Overdue.ToString()
+                        : InvoiceStatus.Pending.ToString();
+                invoice.PaidAt = null;
+            }
         }
         invoice.UpdatedAt = DateTime.UtcNow;
 
@@ -504,12 +553,40 @@ public class InvoiceAppService : IInvoiceService
         return MapToDto(invoice);
     }
 
+    public async Task<InvoiceDto?> ArchiveAsync(int id, CancellationToken ct = default)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(id, ct);
+        if (invoice is null) return null;
+
+        invoice.ArchivedAt = DateTime.UtcNow;
+        invoice.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Invoices.Update(invoice);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return MapToDto(invoice);
+    }
+
+    public async Task<InvoiceDto?> UnarchiveAsync(int id, CancellationToken ct = default)
+    {
+        var invoice = await _unitOfWork.Invoices.GetByIdAsync(id, ct);
+        if (invoice is null) return null;
+
+        invoice.ArchivedAt = null;
+        invoice.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Invoices.Update(invoice);
+        await _unitOfWork.SaveChangesAsync(ct);
+
+        return MapToDto(invoice);
+    }
+
     public async Task<InvoiceDto?> ReceiveAsync(int id, int? userId = null, CancellationToken ct = default)
     {
         var invoice = await _unitOfWork.Invoices.GetByIdAsync(id, ct);
         if (invoice is null) return null;
 
-        if (invoice.Status == InvoiceStatus.Received.ToString())
+        if (invoice.ReceivedAt is not null)
             throw new InvalidOperationException("Cette facture a déjà été réceptionnée");
 
         if (invoice.Status == InvoiceStatus.Cancelled.ToString())
@@ -548,6 +625,7 @@ public class InvoiceAppService : IInvoiceService
         }
 
         invoice.Status = InvoiceStatus.Received.ToString();
+        invoice.ReceivedAt = DateTime.UtcNow;
         invoice.UpdatedAt = DateTime.UtcNow;
 
         _unitOfWork.Invoices.Update(invoice);
@@ -659,16 +737,19 @@ public class InvoiceAppService : IInvoiceService
         InvoiceDate = i.InvoiceDate,
         DueDate = i.DueDate,
         PaidAt = i.PaidAt,
+        ReceivedAt = i.ReceivedAt,
         Notes = i.Notes,
         Reference = i.Reference,
         CreatedByUserName = i.CreatedByUser?.FullName,
         CreatedAt = i.CreatedAt,
+        ArchivedAt = i.ArchivedAt,
         Items = i.LineItems.Select(li => new InvoiceLineItemDto
         {
             Id = li.Id,
             ProductVariantId = li.ProductVariantId,
             ProductName = li.ProductName,
             VariantSku = li.ProductSku ?? string.Empty,
+            ProductId = li.ProductId,
             ColorId = li.ColorId,
             SizeId = li.SizeId,
             ColorName = li.ColorName ?? string.Empty,

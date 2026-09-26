@@ -47,7 +47,8 @@ public static class WebhookEndpoints
                     Title = li.Title,
                     Quantity = li.Quantity,
                     Price = ShopifySyncAppService.ParseShopifyDecimal(li.Price),
-                    Sku = string.IsNullOrWhiteSpace(li.Sku) ? null : li.Sku
+                    Sku = string.IsNullOrWhiteSpace(li.Sku) ? null : li.Sku,
+                    VariantTitle = string.IsNullOrWhiteSpace(li.VariantTitle) ? null : li.VariantTitle
                 }).ToList();
 
                 // Previously this webhook passed no phone/city/address/customerId at all - unlike
@@ -199,6 +200,7 @@ public class ShopifyLineItemPayload
     public int Quantity { get; set; }
     public string Price { get; set; } = "0";
     public string? Sku { get; set; }
+    public string? VariantTitle { get; set; }
 }
 
 public class ShopifyProductWebhookPayload

@@ -207,7 +207,7 @@ export default function ReportsPage() {
   ]
 
   return (
-    <Page section="reports" title={t('reports.title')}>
+    <Page section="reports" title={t('reports.title')} className="local-reports">
       <div className="space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <Tabs

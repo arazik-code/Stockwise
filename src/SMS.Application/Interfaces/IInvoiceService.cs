@@ -11,10 +11,14 @@ public interface IInvoiceService
     Task<InvoiceDto> CreateAsync(CreateInvoiceRequest request, int? userId = null, CancellationToken ct = default);
     Task<InvoiceDto?> UpdateAsync(int id, CreateInvoiceRequest request, CancellationToken ct = default);
     Task<InvoiceDto?> PayAsync(int id, PayInvoiceRequest request, int? userId = null, CancellationToken ct = default);
+    Task<InvoiceDto?> UndoPaymentAsync(int id, int paymentId, CancellationToken ct = default);
     Task<InvoiceDto?> TogglePaidAsync(int id, int? userId = null, CancellationToken ct = default);
     Task<InvoiceDto?> CancelAsync(int id, string? reason = null, CancellationToken ct = default);
     Task<InvoiceDto?> ReceiveAsync(int id, int? userId = null, CancellationToken ct = default);
     Task<int> CancelManyAsync(IEnumerable<int> ids, CancellationToken ct = default);
     Task<InvoiceSummaryDto> GetSummaryAsync(CancellationToken ct = default);
     Task<IReadOnlyList<InvoiceLabelDataDto>> GetLabelDataAsync(int id, CancellationToken ct = default);
+    Task<IReadOnlyList<InvoiceDto>> GetArchivedAsync(CancellationToken ct = default);
+    Task<InvoiceDto?> ArchiveAsync(int id, CancellationToken ct = default);
+    Task<InvoiceDto?> UnarchiveAsync(int id, CancellationToken ct = default);
 }

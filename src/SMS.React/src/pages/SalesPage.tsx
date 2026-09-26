@@ -154,14 +154,14 @@ export default function SalesPage() {
   return (
     <Page section="sales" title={t('sales.title')}>
       {loading && !report ? (
-        <div className="space-y-6">
+        <div className="local-sales space-y-6">
           <SkeletonStats count={6} />
           <Skeleton className="h-64" />
         </div>
       ) : (
         <div className="space-y-6">
           {/* Filter bar */}
-          <Card>
+          <Card className="sales-filter-panel">
             <div className="flex flex-wrap items-center gap-3">
               <Tabs
                 variant="segmented"
@@ -238,15 +238,15 @@ export default function SalesPage() {
           {report && (
             <>
               {/* Summary cards */}
-              <div className={`grid grid-cols-2 gap-4 md:grid-cols-3 ${cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>
-                <StatCard label={t('sales.summary.totalRevenue')} value={formatCurrency(report.totalRevenue)} />
+              <div className={`sales-kpis grid grid-cols-2 gap-4 md:grid-cols-3 ${cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6'}`}>
+                <StatCard label={t('sales.summary.totalRevenue')} value={formatCurrency(report.totalRevenue)} className="sales-revenue" />
                 <StatCard label={t('sales.summary.totalSales')} value={report.totalSales.toString()} tone="positive" />
                 <StatCard label={t('sales.summary.avgOrder')} value={formatCurrency(report.averageOrderValue)} tone="special" />
                 <StatCard label={t('sales.summary.itemsSold')} value={report.totalItemsSold.toString()} tone="caution" />
                 <StatCard label={t('sales.summary.totalProfit')} value={formatCurrency(report.totalProfit)} tone="positive" />
                 <StatCard label={t('sales.summary.totalDiscount')} value={formatCurrency(report.totalDiscount)} tone="negative" />
                 {cashOnHand.isAdmin && (
-                  <Card className="bg-[var(--ink-950)]">
+                  <Card className="sales-cash bg-[var(--ink-950)]">
                     <p className="mb-1 text-xs font-medium text-white/70">Solde caisse</p>
                     {cashOnHand.loading ? (
                       <Skeleton className="h-5" width="60%" />
@@ -257,16 +257,18 @@ export default function SalesPage() {
                 )}
               </div>
 
-              <Tabs
-                variant="pill"
-                layoutGroupId="sales-tab"
-                value={activeTab}
-                onChange={(v) => setActiveTab(v as typeof activeTab)}
-                items={tabs.map((tb) => ({ value: tb.key, label: tb.label }))}
-              />
+              <div className="sales-view-tabs">
+                <Tabs
+                  variant="pill"
+                  layoutGroupId="sales-tab"
+                  value={activeTab}
+                  onChange={(v) => setActiveTab(v as typeof activeTab)}
+                  items={tabs.map((tb) => ({ value: tb.key, label: tb.label }))}
+                />
+              </div>
 
               {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <div className="sales-breakdowns grid grid-cols-1 gap-6 lg:grid-cols-3">
                   <Card>
                     <h3 className="mb-4 text-sm font-semibold text-fg">{t('sales.breakdown.byPayment')}</h3>
                     <div className="space-y-3">
@@ -359,8 +361,8 @@ export default function SalesPage() {
               )}
 
               {/* Sales table */}
-              <Card padded={false}>
-                <Toolbar className="border-b border-border px-5 py-3">
+              <Card padded={false} className="sales-ledger">
+                <Toolbar className="sales-ledger-toolbar border-b border-border px-5 py-3">
                   <h3 className="text-sm font-semibold text-fg">
                     {t('sales.title')} (<span className="num">{filteredSales.length}</span>)
                   </h3>

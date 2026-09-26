@@ -48,4 +48,5 @@ public class ShopifyLineItemDto
     public int Quantity { get; set; }
     public decimal Price { get; set; }
     public string? Sku { get; set; }
+    public string? VariantTitle { get; set; }
 }

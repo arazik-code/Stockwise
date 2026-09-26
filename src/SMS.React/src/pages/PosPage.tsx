@@ -54,15 +54,11 @@ import type { Product, ProductVariant } from '../types/product'
  * chrome on a working till reads as a demo; this reads as an instrument.
  */
 
-// The POS grid defaults to just this category until the cashier searches by name or scans a
-// barcode - keeps the default screen small and fast to scan visually for the store's actual
-// walk-up items, instead of drowning them in the full shoe catalog.
-const DEFAULT_VIEW_CATEGORY = 'Accessoires'
-
 export default function PosPage() {
   const { t } = useTranslation()
   const { products, variants, loading, loadProducts, searchProducts } = useProducts()
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const isAdmin = useAuthStore((s) => s.user?.role === 'Admin')
   const [showCheckout, setShowCheckout] = useState(false)
   const [showExchange, setShowExchange] = useState(false)
@@ -207,16 +203,26 @@ export default function PosPage() {
   const handleSearch = useCallback(
     (query: string) => {
       setSearchQuery(query)
+      if (query.trim()) setSelectedCategory(null)
       searchProducts(query)
     },
     [searchProducts]
   )
 
   const isDefaultView = searchQuery.trim().length === 0
-  const displayVariants = useMemo(
-    () => (isDefaultView ? variants.filter((v) => v.categoryName === DEFAULT_VIEW_CATEGORY) : variants),
-    [variants, isDefaultView]
-  )
+  const categoryFilters = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const variant of variants) {
+      if (variant.stockQuantity <= 0) continue
+      const category = variant.categoryName?.trim() || 'Autres'
+      counts.set(category, (counts.get(category) ?? 0) + 1)
+    }
+    return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }, [variants])
+  const inStockCount = variants.filter((variant) => variant.stockQuantity > 0).length
+  const displayVariants = selectedCategory
+    ? variants.filter((variant) => (variant.categoryName?.trim() || 'Autres') === selectedCategory)
+    : variants
 
   const handleBarcodeScan = useCallback(
     async (barcode: string) => {
@@ -325,27 +331,60 @@ export default function PosPage() {
             size="sm"
             variant="outline"
             icon={<Repeat2 className="h-4 w-4" />}
+            aria-label={t('pos.exchange.title')}
             onClick={() => setShowExchange(true)}
           >
-            {t('pos.exchange.title')}
+            <span className="hidden sm:inline">{t('pos.exchange.title')}</span>
           </Button>
 
           <Button
             size="sm"
             variant={loyaltyClient ? 'soft' : 'outline'}
             icon={<UserRound className="h-4 w-4" />}
+            aria-label={loyaltyClient ? loyaltyClient.name : t('pos.loyalty')}
             onClick={() => (loyaltyClient ? setLoyaltyClient(null) : setShowClientLookup(true))}
           >
-            {loyaltyClient ? loyaltyClient.name : t('pos.loyalty')}
+            <span className="hidden max-w-40 truncate sm:inline">{loyaltyClient ? loyaltyClient.name : t('pos.loyalty')}</span>
           </Button>
         </div>
       }
     >
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Product side. Solid surface, never glass - see the note at the top. */}
-        <div className="w-full overflow-auto border-border bg-surface p-4 pb-28 lg:w-[40%] lg:border-r lg:pb-4">
+        <div className="w-full overflow-auto border-border bg-[var(--canvas)] px-4 pb-28 pt-5 sm:px-6 lg:w-[58%] lg:border-r lg:pb-5">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <div>
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--accent)]">Vente en magasin</p>
+              <h2 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">Votre catalogue</h2>
+              <p className="mt-1 text-xs text-fg-subtle">Retrouvez un article ou scannez son code-barres.</p>
+            </div>
+            <div className="hidden shrink-0 rounded-xl border border-border bg-surface px-3 py-2 text-right sm:block">
+              <div className="num text-lg font-semibold leading-none text-fg">{inStockCount}</div>
+              <div className="mt-1 text-[10px] font-medium text-fg-subtle">références en stock</div>
+            </div>
+          </div>
           <div className="mb-4">
             <ProductSearch ref={productSearchRef} onSearch={handleSearch} onBarcodeScan={handleBarcodeScan} />
+          </div>
+          <div className="mb-5 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrer par catégorie">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory(null)}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all duration-200 ${selectedCategory === null ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm' : 'border border-border bg-surface text-fg-muted hover:border-[var(--accent)] hover:text-fg'}`}
+            >
+              Tout <span className="num ml-1 opacity-70">{inStockCount}</span>
+            </button>
+            {categoryFilters.map(([category, count]) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
+                aria-pressed={selectedCategory === category}
+                className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all duration-200 ${selectedCategory === category ? 'bg-[var(--accent)] text-[var(--accent-fg)] shadow-sm' : 'border border-border bg-surface text-fg-muted hover:border-[var(--accent)] hover:text-fg'}`}
+              >
+                {category} <span className="num ml-1 opacity-70">{count}</span>
+              </button>
+            ))}
           </div>
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-12">
@@ -353,12 +392,12 @@ export default function PosPage() {
               <p className="text-sm text-fg-subtle">{t('pos.loadingProducts')}</p>
             </div>
           ) : (
-            <ProductGrid variants={displayVariants} defaultView={isDefaultView} defaultViewCategory={DEFAULT_VIEW_CATEGORY} />
+            <ProductGrid variants={displayVariants} defaultView={isDefaultView && selectedCategory === null} />
           )}
         </div>
 
         {/* Cart side. */}
-        <div className="hidden flex-col bg-canvas lg:flex lg:w-[60%]">
+        <div className="hidden flex-col bg-surface lg:flex lg:w-[42%]">
           {loyaltyClient && (
             <div className="border-b border-border bg-surface p-4">
               <LoyaltyDisplay

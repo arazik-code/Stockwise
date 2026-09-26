@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { History } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { History, Undo2 } from 'lucide-react'
 import { stockApi } from '../../api/stock'
-import { Badge, DataTable, EmptyState, SkeletonTable } from '../ui'
+import { showToast } from '../shared/Toast'
+import { Badge, DataTable, EmptyState, IconButton, Modal, Button, SkeletonTable } from '../ui'
 import type { StockMovement } from '../../types/stock'
 
 interface StockMovementHistoryProps {
@@ -18,23 +20,48 @@ const typeLabels: Record<string, string> = {
 }
 
 export default function StockMovementHistory({ productVariantId }: StockMovementHistoryProps) {
+  const { t } = useTranslation()
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [loading, setLoading] = useState(true)
+  const [undoTarget, setUndoTarget] = useState<StockMovement | null>(null)
+  const [undoing, setUndoing] = useState(false)
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true)
     stockApi
       .getMovements(productVariantId)
       .then(setMovements)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [productVariantId])
+  }
+
+  useEffect(load, [productVariantId])
+
+  const handleUndo = async () => {
+    if (!undoTarget) return
+    setUndoing(true)
+    try {
+      await stockApi.undoAdjustment(undoTarget.id)
+      showToast(t('stock.undoAdjustmentSuccess'), 'success')
+      setUndoTarget(null)
+      load()
+    } catch {
+      showToast(t('common.error'), 'error')
+    } finally {
+      setUndoing(false)
+    }
+  }
 
   if (loading) {
     return <SkeletonTable rows={6} cols={6} />
   }
 
+  // Only the most recent movement for a given variant can be reversed - matches the backend
+  // guard, which refuses to undo an adjustment that isn't the latest movement for that variant.
+  const latestMovementId = movements[0]?.id
+
   return (
+    <>
     <DataTable<StockMovement>
       columns={[
         {
@@ -109,6 +136,22 @@ export default function StockMovementHistory({ productVariantId }: StockMovement
           width: '10rem',
           render: (m) => <span className="text-fg-subtle">{m.reference ?? '-'}</span>,
         },
+        {
+          key: 'actions',
+          header: '',
+          align: 'center',
+          width: '3rem',
+          render: (m) =>
+            m.type === 'Adjustment' && m.id === latestMovementId ? (
+              <IconButton
+                icon={<Undo2 className="h-3.5 w-3.5" />}
+                label={t('stock.undoAdjustment')}
+                size="xs"
+                variant="danger-ghost"
+                onClick={() => setUndoTarget(m)}
+              />
+            ) : null,
+        },
       ]}
       data={movements}
       keyField={(m) => m.id}
@@ -117,5 +160,25 @@ export default function StockMovementHistory({ productVariantId }: StockMovement
         <EmptyState compact icon={History} title="No movements recorded" />
       }
     />
+
+    <Modal
+      open={!!undoTarget}
+      onClose={() => setUndoTarget(null)}
+      size="sm"
+      title={t('stock.undoAdjustment')}
+    >
+      <p className="mb-5 text-sm text-fg-muted">
+        {undoTarget && t('stock.undoAdjustmentConfirm', { change: undoTarget.quantityChange > 0 ? `+${undoTarget.quantityChange}` : `${undoTarget.quantityChange}` })}
+      </p>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => setUndoTarget(null)}>
+          {t('common.cancel')}
+        </Button>
+        <Button variant="danger" onClick={handleUndo} disabled={undoing} loading={undoing}>
+          {t('common.confirm')}
+        </Button>
+      </div>
+    </Modal>
+    </>
   )
 }

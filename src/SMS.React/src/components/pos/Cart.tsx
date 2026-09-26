@@ -117,8 +117,10 @@ export default function Cart({ onCheckout, loyaltyClient, loyaltyEnabled, loyalt
                         {item.colorName && <span className="font-medium">{item.colorName}</span>}
                         {item.colorName && item.sizeValue && <span aria-hidden="true">·</span>}
                         {item.sizeValue && <span className="num font-medium">{item.sizeValue}</span>}
+                        {!item.colorName && !item.sizeValue && item.sku && (
+                          <span className="num">{item.sku}</span>
+                        )}
                       </div>
-                      {item.sku && <div className="num mt-0.5 text-xs text-fg-subtle">{item.sku}</div>}
                     </div>
 
                     <IconButton

@@ -14,4 +14,6 @@ export const stockApi = {
     api.post('/stock/bulk-delete', variantIds).then((r) => r.data),
   getMovements: (productVariantId?: number, from?: string, to?: string) =>
     api.get<StockMovement[]>('/stock/movements', { params: { productVariantId, from, to } }).then((r) => r.data),
+  undoAdjustment: (movementId: number) =>
+    api.post(`/stock/movements/${movementId}/undo`).then((r) => r.data),
 }

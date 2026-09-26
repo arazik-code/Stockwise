@@ -9,6 +9,7 @@ import { RouteFallback } from './components/layout/RouteFallback'
 // making the login screen wait on a chunk fetch is the one place lazy loading
 // costs more than it saves.
 import LoginPage from './pages/LoginPage'
+import LandingPage from './pages/LandingPage'
 
 /**
  * Routes.
@@ -96,6 +97,7 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           {designEnabled && (
             <Route
@@ -112,7 +114,7 @@ export default function App() {
             <Route path="/change-password" element={withFallback(ChangePasswordPage, 'config')} />
 
             <Route element={<MainLayout />}>
-              <Route path="/" element={withFallback(DashboardPage, 'command')} />
+              <Route path="/dashboard" element={withFallback(DashboardPage, 'command')} />
               <Route path="/pos" element={withFallback(PosPage, 'console')} />
               <Route path="/products" element={withFallback(ProductsPage, 'catalog')} />
               <Route path="/fournisseurs" element={withFallback(FournisseursPage, 'ledger')} />

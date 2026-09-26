@@ -709,7 +709,7 @@ export default function RefundsPage() {
   // ── Render ──
 
   return (
-    <Page section="refunds" title={t('refunds.title')}>
+    <Page section="refunds" title={t('refunds.title')} className="local-refunds">
       <div className="mb-6">
         <Tabs
           variant="pill"

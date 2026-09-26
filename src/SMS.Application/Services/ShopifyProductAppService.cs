@@ -193,11 +193,27 @@ public class ShopifyProductAppService : IShopifyProductService
                 var description = StripHtml(sp.BodyHtml);
                 var isActive = string.Equals(sp.Status, "active", StringComparison.OrdinalIgnoreCase);
 
+                // Already linked to a colourway - by a prior import run, or by the manual "Association"
+                // screen picking a product/colour combo the title wouldn't derive on its own - so that
+                // colourway is authoritative for this Shopify product and must be reused as-is below,
+                // never re-derived independently (which risks landing on a *different* colourway and
+                // colliding on the unique ShopifyProductId index the moment both try to claim it).
+                var linkedColorway = existingColorways.GetValueOrDefault(sp.Id);
+
                 Product product;
                 if (existingProducts.TryGetValue(sp.Id, out var foundProduct))
                 {
                     product = foundProduct;
-                    product.Name = sp.Title;
+                    // Only keep syncing the product's name from Shopify's title while it's still a
+                    // plain single-colourway product (the common case - auto-created by an earlier
+                    // import, never touched since). The moment a second colourway is deliberately
+                    // linked onto it (the manual "Association" screen consolidating several Shopify
+                    // colour-products under one local product/name), the name becomes the user's to
+                    // manage - re-syncing it would just have whichever colourway's title is processed
+                    // last stomp the name every run, arbitrarily undoing the consolidation.
+                    var hasOtherLinkedColorway = product.Id != 0 && await _unitOfWork.Set<ProductColorway>()
+                        .AnyAsync(c => c.ProductId == product.Id && c.ShopifyProductId != null && c.ShopifyProductId != sp.Id, ct);
+                    if (!hasOtherLinkedColorway) product.Name = sp.Title;
                     product.Description = description;
                     if (imageUrl is not null) product.ImageUrl = imageUrl;
                     product.Brand = sp.Vendor;
@@ -232,17 +248,7 @@ public class ShopifyProductAppService : IShopifyProductService
                 foreach (var sv in sp.Variants)
                 {
                     var optionValues = new[] { sv.Option1, sv.Option2, sv.Option3 };
-                    // Shopify stamps "Default Title" on the single variant of a product with no real
-                    // options defined — it's a placeholder, not a merchandising color/size value.
-                    var colorName = colorOptionIndex.HasValue ? NullIfDefaultTitle(optionValues[colorOptionIndex.Value]) : null;
-                    // This catalog has no Shopify color option at all (see ExtractColorFromTitle doc
-                    // comment) - fall back to parsing it out of the product title before giving up.
-                    colorName ??= ExtractColorFromTitle(sp.Title);
                     var sizeName = sizeOptionIndex.HasValue ? NullIfDefaultTitle(optionValues[sizeOptionIndex.Value]) : null;
-
-                    var color = string.IsNullOrWhiteSpace(colorName)
-                        ? defaultColor
-                        : await GetOrCreateColorAsync(colorCache, colorName!, result, ct);
                     var size = string.IsNullOrWhiteSpace(sizeName)
                         ? defaultSize
                         : await GetOrCreateSizeAsync(sizeCache, sizeName!, result, ct);
@@ -253,7 +259,27 @@ public class ShopifyProductAppService : IShopifyProductService
 
                     // The colourway is what actually corresponds to this Shopify product, so it -
                     // not the local Product - carries the link, the storefront title and the price.
-                    var colorway = await GetOrCreateColorwayAsync(colorwayCache, product, color, ct);
+                    int colorId;
+                    ProductColorway colorway;
+                    if (linkedColorway is not null)
+                    {
+                        colorway = linkedColorway;
+                        colorId = linkedColorway.ColorId;
+                    }
+                    else
+                    {
+                        // Shopify stamps "Default Title" on the single variant of a product with no
+                        // real options defined — it's a placeholder, not a merchandising color value.
+                        var colorName = colorOptionIndex.HasValue ? NullIfDefaultTitle(optionValues[colorOptionIndex.Value]) : null;
+                        // This catalog has no Shopify color option at all (see ExtractColorFromTitle
+                        // doc comment) - fall back to parsing it out of the product title before giving up.
+                        colorName ??= ExtractColorFromTitle(sp.Title);
+                        var color = string.IsNullOrWhiteSpace(colorName)
+                            ? defaultColor
+                            : await GetOrCreateColorAsync(colorCache, colorName!, result, ct);
+                        colorway = await GetOrCreateColorwayAsync(colorwayCache, product, color, ct);
+                        colorId = color.Id;
+                    }
                     colorway.ShopifyProductId = sp.Id;
                     colorway.ShopifyTitle = sp.Title;
                     colorway.IsActive = isActive;
@@ -268,7 +294,7 @@ public class ShopifyProductAppService : IShopifyProductService
                         variant = foundVariant;
                         existingStockItem = variant.StockItem;
                         variant.Colorway = colorway;
-                        variant.ColorId = color.Id;
+                        variant.ColorId = colorId;
                         variant.SizeId = size.Id;
                         if (!string.IsNullOrWhiteSpace(sv.Sku)) variant.Sku = sv.Sku;
                         if (!string.IsNullOrWhiteSpace(sv.Barcode)) variant.Barcode = sv.Barcode;
@@ -282,7 +308,7 @@ public class ShopifyProductAppService : IShopifyProductService
                         {
                             Product = product,
                             Colorway = colorway,
-                            ColorId = color.Id,
+                            ColorId = colorId,
                             SizeId = size.Id,
                             Sku = !string.IsNullOrWhiteSpace(sv.Sku) ? sv.Sku : $"SHP-{sv.Id}",
                             Barcode = sv.Barcode,
@@ -647,6 +673,14 @@ public class ShopifyProductAppService : IShopifyProductService
                 Message = $"Ce produit Shopify est déjà lié à un autre produit local (#{existingLink.ProductId}). Déliez-le d'abord."
             };
         }
+        if (existingLink is not null && existingLink.ColorId != request.ColorId)
+        {
+            // Same product, different colour: the user is correcting an earlier mismatch, not
+            // creating a second link. Clear the old colourway's link first so it can't collide with
+            // the new one on the unique ShopifyProductId index - GetOrCreateAsync below then either
+            // reuses or creates the newly-chosen colourway cleanly.
+            await UnlinkColorwayAsync(shopifyProductId, ct);
+        }
 
         List<ShopifyProductItem> allProducts;
         try
@@ -688,6 +722,21 @@ public class ShopifyProductAppService : IShopifyProductService
             .Where(v => v.ColorwayId == colorway.Id)
             .ToDictionaryAsync(v => v.SizeId, ct);
 
+        // A local barcode is what's physically printed and stuck on the stock, so linking to
+        // Shopify must never overwrite one that already exists - only fill the gap when it's
+        // missing, and if Shopify has nothing either, mint a fresh scannable EAN-13 immediately
+        // rather than leaving the variant unscannable until someone runs a separate catalog-wide
+        // "generate missing barcodes" sweep.
+        var usedBarcodes = new HashSet<string>(
+            await _unitOfWork.Set<ProductVariant>().AsNoTracking()
+                .Where(v => v.Barcode != null && v.Barcode != "")
+                .Select(v => v.Barcode!)
+                .ToListAsync(ct));
+        string ResolveBarcode(string? localBarcode, string? shopifyBarcode) =>
+            !string.IsNullOrWhiteSpace(localBarcode) ? localBarcode
+            : !string.IsNullOrWhiteSpace(shopifyBarcode) ? shopifyBarcode
+            : BarcodeGenerator.GenerateEan13(usedBarcodes);
+
         var conflicts = new List<string>();
         var created = 0;
         var updated = 0;
@@ -725,7 +774,8 @@ public class ShopifyProductAppService : IShopifyProductService
                 // created it by hand under this exact product/colour/size, and its SKU is more
                 // likely to be an intentional in-store code than something to overwrite.
                 variant.ShopifyVariantId = sv.Id;
-                if (!string.IsNullOrWhiteSpace(sv.Barcode)) variant.Barcode = sv.Barcode;
+                variant.Barcode = ResolveBarcode(variant.Barcode, sv.Barcode);
+                usedBarcodes.Add(variant.Barcode);
                 if (variantImageUrl is not null) variant.ImageUrl = variantImageUrl;
                 variant.UpdatedAt = DateTime.UtcNow;
                 updated++;
@@ -748,33 +798,90 @@ public class ShopifyProductAppService : IShopifyProductService
             }
             else
             {
-                // Sku is unique across ALL variants store-wide, not just this colourway - fall back
-                // to the SHP-{id} placeholder if Shopify's own SKU already belongs to an unrelated
-                // variant, rather than letting SaveChangesAsync fail the whole batch on it.
+                // Sku is unique across ALL variants store-wide, not just this colourway. Look for a
+                // variant already sitting on the SKU we'd otherwise assign - either Shopify's own SKU,
+                // or our deterministic SHP-{id} placeholder (the fallback below, and the old bulk
+                // importer before it, both derive it the same way, so a stale unlinked row from a
+                // prior import can genuinely hold it).
                 var candidateSku = !string.IsNullOrWhiteSpace(sv.Sku) ? sv.Sku : $"SHP-{sv.Id}";
-                var skuTaken = await _unitOfWork.Set<ProductVariant>().AsNoTracking().AnyAsync(v => v.Sku == candidateSku, ct);
-                var newVariant = new ProductVariant
-                {
-                    ProductId = request.LocalProductId,
-                    ColorId = request.ColorId,
-                    ColorwayId = colorway.Id,
-                    SizeId = size.Id,
-                    Sku = skuTaken ? $"SHP-{sv.Id}" : candidateSku,
-                    Barcode = sv.Barcode,
-                    ImageUrl = variantImageUrl,
-                    ShopifyVariantId = sv.Id,
-                    IsActive = true
-                };
-                await _unitOfWork.AddAsync(newVariant, ct);
-                created++;
+                var placeholderSku = $"SHP-{sv.Id}";
+                var clashingVariant = await _unitOfWork.Set<ProductVariant>()
+                    .Include(v => v.StockItem)
+                    .FirstOrDefaultAsync(v => v.Sku == candidateSku || v.Sku == placeholderSku, ct);
 
-                await _unitOfWork.AddAsync(new StockItem
+                if (clashingVariant is not null && clashingVariant.ShopifyVariantId is null)
                 {
-                    ProductVariant = newVariant,
-                    QuantityOnHand = qty,
-                    ReorderLevel = 5,
-                    LastUpdatedAt = DateTime.UtcNow
-                }, ct);
+                    // Same physical item, previously imported under the old per-colour product model
+                    // and since unlinked (ShopifyVariantId cleared but the row - and its stock - never
+                    // deleted). Reparent it into the newly chosen colourway rather than creating a
+                    // duplicate that would collide on this exact SKU; this also preserves any sale
+                    // history already pointing at this variant's id.
+                    clashingVariant.ProductId = request.LocalProductId;
+                    clashingVariant.ColorId = request.ColorId;
+                    clashingVariant.ColorwayId = colorway.Id;
+                    clashingVariant.SizeId = size.Id;
+                    clashingVariant.ShopifyVariantId = sv.Id;
+                    clashingVariant.Barcode = ResolveBarcode(clashingVariant.Barcode, sv.Barcode);
+                    usedBarcodes.Add(clashingVariant.Barcode);
+                    if (variantImageUrl is not null) clashingVariant.ImageUrl = variantImageUrl;
+                    clashingVariant.UpdatedAt = DateTime.UtcNow;
+                    updated++;
+
+                    if (clashingVariant.StockItem is not null)
+                    {
+                        clashingVariant.StockItem.QuantityOnHand = qty;
+                        clashingVariant.StockItem.LastUpdatedAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        await _unitOfWork.AddAsync(new StockItem
+                        {
+                            ProductVariantId = clashingVariant.Id,
+                            QuantityOnHand = qty,
+                            ReorderLevel = 5,
+                            LastUpdatedAt = DateTime.UtcNow
+                        }, ct);
+                    }
+                }
+                else
+                {
+                    // Taken by a variant actively linked elsewhere (a genuine, unrelated SKU
+                    // collision) - fall back to a SKU that is guaranteed free instead of colliding
+                    // on the unique index.
+                    var finalSku = candidateSku;
+                    if (clashingVariant is not null)
+                    {
+                        var suffix = 2;
+                        finalSku = placeholderSku;
+                        while (await _unitOfWork.Set<ProductVariant>().AsNoTracking().AnyAsync(v => v.Sku == finalSku, ct))
+                            finalSku = $"{placeholderSku}-{suffix++}";
+                    }
+
+                    var newBarcode = ResolveBarcode(null, sv.Barcode);
+                    usedBarcodes.Add(newBarcode);
+                    var newVariant = new ProductVariant
+                    {
+                        ProductId = request.LocalProductId,
+                        ColorId = request.ColorId,
+                        ColorwayId = colorway.Id,
+                        SizeId = size.Id,
+                        Sku = finalSku,
+                        Barcode = newBarcode,
+                        ImageUrl = variantImageUrl,
+                        ShopifyVariantId = sv.Id,
+                        IsActive = true
+                    };
+                    await _unitOfWork.AddAsync(newVariant, ct);
+                    created++;
+
+                    await _unitOfWork.AddAsync(new StockItem
+                    {
+                        ProductVariant = newVariant,
+                        QuantityOnHand = qty,
+                        ReorderLevel = 5,
+                        LastUpdatedAt = DateTime.UtcNow
+                    }, ct);
+                }
             }
         }
 
@@ -788,9 +895,38 @@ public class ShopifyProductAppService : IShopifyProductService
 
         await _unitOfWork.SaveChangesAsync(ct);
 
+        // Any order that arrived referencing this Shopify product before it was linked has its
+        // items sitting unresolved (ProductVariantId null - shown as "produit non mappé au
+        // catalogue local" in the order detail, with no colour/size). Now that every size just got
+        // a real local variant, patch those items in directly rather than requiring a separate full
+        // catalog re-import: ImportCatalogFromShopifyAsync's own rematch only scans orders stuck in
+        // InventoryConflict status, which an already-Confirmed order with an unmapped line isn't.
+        var unresolvedOrderItems = await _unitOfWork.Set<OnlineOrderItem>()
+            .Where(i => i.ShopifyProductId == shopifyProductId && i.ProductVariantId == null)
+            .ToListAsync(ct);
+        var ordersItemsMatched = 0;
+        if (unresolvedOrderItems.Count > 0)
+        {
+            var variantsByShopifyId = await _unitOfWork.Set<ProductVariant>()
+                .Where(v => v.ColorwayId == colorway.Id && v.ShopifyVariantId != null)
+                .ToDictionaryAsync(v => v.ShopifyVariantId!.Value, ct);
+            foreach (var item in unresolvedOrderItems)
+            {
+                if (item.ShopifyVariantId.HasValue && variantsByShopifyId.TryGetValue(item.ShopifyVariantId.Value, out var matchedVariant))
+                {
+                    item.ProductVariantId = matchedVariant.Id;
+                    item.SkuSnapshot = matchedVariant.Sku;
+                    ordersItemsMatched++;
+                }
+            }
+            if (ordersItemsMatched > 0) await _unitOfWork.SaveChangesAsync(ct);
+        }
+
         var message = $"{created} taille(s) créée(s), {updated} mise(s) à jour.";
         if (conflicts.Count > 0)
             message += $" {conflicts.Count} ignorée(s) - déjà liée(s) ailleurs.";
+        if (ordersItemsMatched > 0)
+            message += $" {ordersItemsMatched} article(s) de commande rattaché(s) rétroactivement.";
 
         return new LinkColorwayResultDto
         {

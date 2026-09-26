@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UserSecretsId>22cf6cf5-3aae-4c84-b2eb-01ed16fb9b51</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SMS.Application\SMS.Application.csproj" />

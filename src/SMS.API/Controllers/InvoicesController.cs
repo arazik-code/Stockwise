@@ -69,6 +69,13 @@ public class InvoicesController : ControllerBase
         return invoice is null ? NotFound() : Ok(invoice);
     }
 
+    [HttpPost("{id:int}/payments/{paymentId:int}/undo")]
+    public async Task<IActionResult> UndoPayment(int id, int paymentId, CancellationToken ct)
+    {
+        var invoice = await _invoiceService.UndoPaymentAsync(id, paymentId, ct);
+        return invoice is null ? NotFound() : Ok(invoice);
+    }
+
     [HttpPost("{id:int}/toggle-paid")]
     public async Task<IActionResult> TogglePaid(int id, CancellationToken ct)
     {
@@ -104,6 +111,24 @@ public class InvoicesController : ControllerBase
     {
         var labels = await _invoiceService.GetLabelDataAsync(id, ct);
         return Ok(labels);
+    }
+
+    [HttpGet("archived")]
+    public async Task<IActionResult> GetArchived(CancellationToken ct)
+        => Ok(await _invoiceService.GetArchivedAsync(ct));
+
+    [HttpPost("{id:int}/archive")]
+    public async Task<IActionResult> Archive(int id, CancellationToken ct)
+    {
+        var invoice = await _invoiceService.ArchiveAsync(id, ct);
+        return invoice is null ? NotFound() : Ok(invoice);
+    }
+
+    [HttpPost("{id:int}/unarchive")]
+    public async Task<IActionResult> Unarchive(int id, CancellationToken ct)
+    {
+        var invoice = await _invoiceService.UnarchiveAsync(id, ct);
+        return invoice is null ? NotFound() : Ok(invoice);
     }
 }
 

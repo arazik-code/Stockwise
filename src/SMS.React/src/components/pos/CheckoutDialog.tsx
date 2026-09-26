@@ -427,8 +427,8 @@ function formatReceiptPreview(data: ReceiptData): string {
   const lines: string[] = []
 
   lines.push('════════════════════════════════')
-  lines.push(center('FLEX SHOES', W))
-  lines.push(center('Chaussures & Plus', W))
+  lines.push(center('MY STORE', W))
+  lines.push(center('Thank you for shopping with us', W))
   lines.push('════════════════════════════════')
   lines.push(`Ticket: ${data.saleNumber}`)
   lines.push(`Date:   ${formatDateShort(data.date)}`)

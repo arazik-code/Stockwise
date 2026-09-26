@@ -349,7 +349,7 @@ export default function OnlineOrdersPage() {
           items={TABS.map((tb) => ({ value: tb.key, label: tb.label }))}
         />
 
-        <Toolbar>
+        <Toolbar className="online-toolbar">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -750,7 +750,14 @@ function OrderDetailModal({ order, onClose, onUpdateStatus, onConfirmShip, onOpe
       render: (it) => (
         <div>
           <p className="font-medium text-fg">{it.productName}</p>
-          <p className="text-xs text-fg-subtle">{it.colorName} / {it.sizeValue}</p>
+          {/* Shopify's own variant_title (the size as the customer ordered it) takes priority -
+              it's available the moment the order arrives, independent of whether this line has
+              been matched to a local product yet. Only falls back to the local match for lines
+              with no Shopify variant at all (custom line items) or orders synced before this was
+              captured. */}
+          <p className="text-xs text-fg-subtle">
+            {it.shopifyVariantTitle || [it.colorName, it.sizeValue].filter(Boolean).join(' / ') || '—'}
+          </p>
         </div>
       ),
     },

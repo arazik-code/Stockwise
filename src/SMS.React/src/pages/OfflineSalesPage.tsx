@@ -80,7 +80,7 @@ export default function OfflineSalesPage() {
   ]
 
   return (
-    <Page section="offlineSales" title={t('offlineSales.title')}>
+    <Page section="offlineSales" title={t('offlineSales.title')} className="local-offline-sales">
       <div className="space-y-4">
         {/* Informational, not an error - ErrorBanner is fixed to the negative
             tone by design, so this stays a plain toned panel instead. */}

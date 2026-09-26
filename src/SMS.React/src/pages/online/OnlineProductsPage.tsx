@@ -190,7 +190,7 @@ function CatalogAnalyticsView() {
         />
       </div>
 
-      <Toolbar>
+      <Toolbar className="online-toolbar">
         <Input
           type="text"
           placeholder="Rechercher un produit..."
@@ -770,7 +770,7 @@ function ManualMappingView() {
         </div>
       </div>
 
-      <Toolbar>
+      <Toolbar className="online-toolbar">
         <Input
           type="text"
           placeholder="Rechercher par titre ou SKU..."

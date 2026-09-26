@@ -1,0 +1,361 @@
+/*
+ * Online commerce art direction.
+ * A violet operations studio: a cooler canvas, soft lilac surfaces, restrained
+ * glow, and clear semantic colors for payment, fulfillment, and risk states.
+ */
+
+[data-store-mode='online'] {
+  --canvas: oklch(0.968 0.012 296);
+  --surface-1: oklch(0.994 0.004 296);
+  --surface-2: oklch(0.947 0.018 296);
+  --surface-3: oklch(0.918 0.025 296);
+  --surface-sunken: oklch(0.935 0.015 296);
+  --fg: oklch(0.235 0.032 292);
+  --fg-muted: oklch(0.47 0.027 292);
+  --fg-subtle: oklch(0.58 0.02 292);
+  --border: oklch(0.865 0.022 296);
+  --border-strong: oklch(0.79 0.03 296);
+  --border-glass: oklch(0.89 0.015 296);
+  --highlight-top: oklch(1 0 0 / 0.82);
+  --glass-wash: none;
+  --shadow-ink: oklch(0.38 0.06 293);
+  --sh-h: 294;
+  --acc-h: 294;
+  --acc-k: 0.8;
+  --acc-c: 0.12;
+  --accent: oklch(0.47 0.16 294);
+  --accent-hover: oklch(0.42 0.16 294);
+  --accent-active: oklch(0.38 0.145 294);
+  --accent-ring: oklch(0.52 0.15 294 / 0.25);
+  --accent-soft: oklch(0.925 0.045 294);
+  --accent-soft-hover: oklch(0.89 0.06 294);
+  --accent-ink: oklch(0.37 0.12 294);
+  --accent-fg: oklch(1 0 0);
+}
+
+[data-theme='dark'] [data-store-mode='online'],
+[data-store-mode='online'] [data-theme='dark'] {
+  --canvas: oklch(0.19 0.025 292);
+  --surface-1: oklch(0.235 0.03 292);
+  --surface-2: oklch(0.27 0.034 292);
+  --surface-3: oklch(0.31 0.037 292);
+  --surface-sunken: oklch(0.16 0.021 292);
+  --fg: oklch(0.95 0.009 295);
+  --fg-muted: oklch(0.75 0.018 295);
+  --fg-subtle: oklch(0.62 0.019 295);
+  --border: oklch(1 0 0 / 0.11);
+  --border-strong: oklch(1 0 0 / 0.18);
+  --border-glass: oklch(1 0 0 / 0.1);
+  --highlight-top: oklch(1 0 0 / 0.035);
+  --glass-wash: none;
+  --shadow-ink: oklch(0.1 0.025 292);
+  --accent: oklch(0.73 0.14 294);
+  --accent-hover: oklch(0.79 0.125 294);
+  --accent-active: oklch(0.83 0.11 294);
+  --accent-ring: oklch(0.73 0.14 294 / 0.34);
+  --accent-soft: oklch(0.73 0.14 294 / 0.15);
+  --accent-soft-hover: oklch(0.73 0.14 294 / 0.22);
+  --accent-ink: oklch(0.84 0.085 294);
+  --accent-fg: oklch(0.18 0.025 292);
+}
+
+/* Violet is the online storefront's identity across routes; status tones stay
+   semantic, so a risky order still reads as risky. */
+[data-store-mode='online'] [data-section^='online'] {
+  --acc-h: 294;
+  --acc-k: 0.8;
+  --acc-c: 0.12;
+  --sh-h: 294;
+  --accent: oklch(0.47 0.16 294);
+  --accent-hover: oklch(0.42 0.16 294);
+  --accent-active: oklch(0.38 0.145 294);
+  --accent-ring: oklch(0.52 0.15 294 / 0.25);
+  --accent-soft: oklch(0.925 0.045 294);
+  --accent-soft-hover: oklch(0.89 0.06 294);
+  --accent-ink: oklch(0.37 0.12 294);
+  --accent-fg: oklch(1 0 0);
+}
+
+[data-theme='dark'] [data-store-mode='online'] [data-section^='online'],
+[data-store-mode='online'] [data-theme='dark'] [data-section^='online'],
+[data-store-mode='online'] [data-theme='dark'][data-section^='online'] {
+  --accent: oklch(0.73 0.14 294);
+  --accent-hover: oklch(0.79 0.125 294);
+  --accent-active: oklch(0.83 0.11 294);
+  --accent-ring: oklch(0.73 0.14 294 / 0.34);
+  --accent-soft: oklch(0.73 0.14 294 / 0.15);
+  --accent-soft-hover: oklch(0.73 0.14 294 / 0.22);
+  --accent-ink: oklch(0.84 0.085 294);
+  --accent-fg: oklch(0.18 0.025 292);
+}
+
+.online-page-kicker { display: none; }
+
+[data-store-mode='online'] .online-page-kicker {
+  display: block;
+  margin-bottom: 1px;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+[data-store-mode='online'].shell-mesh {
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(ellipse at 70% 4%, oklch(0.58 0.15 294 / 0.095), transparent 33%),
+    radial-gradient(ellipse at 5% 72%, oklch(0.54 0.13 316 / 0.055), transparent 30%);
+}
+
+[data-store-mode='online'] aside {
+  background: color-mix(in oklab, var(--surface-1) 95%, oklch(0.58 0.14 294 / 0.05));
+  border-color: var(--border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-store-mode='online'] aside a[aria-current='page'] {
+  background: color-mix(in oklab, var(--accent) 11%, transparent);
+}
+
+[data-store-mode='online'] header {
+  background: color-mix(in oklab, var(--surface-1) 91%, transparent);
+  border-color: var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-store-mode='online'] #page-chrome h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+[data-store-mode='online'] [data-section^='online'] .surface-glass,
+[data-store-mode='online'] [data-section^='online'] .surface-plain {
+  border-color: var(--border);
+  border-radius: 14px;
+  background-color: var(--surface-1);
+  background-image: none;
+  box-shadow: 0 2px 8px oklch(0.28 0.045 294 / 0.045), inset 0 1px 0 var(--highlight-top);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-store-mode='online'] [data-section^='online'] .rounded-surface { border-radius: 17px; }
+[data-store-mode='online'] [data-section^='online'] .rounded-card { border-radius: 14px; }
+[data-store-mode='online'] [data-section^='online'] .rounded-field { border-radius: 9px; }
+
+[data-store-mode='online'] [data-section^='online'] h2,
+[data-store-mode='online'] [data-section^='online'] h3 {
+  letter-spacing: -0.018em;
+}
+
+[data-store-mode='online'] [data-section^='online'] [role='tablist'] {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--accent) 35%, var(--border)) transparent;
+}
+
+[data-store-mode='online'] [data-section^='online'] .surface-glass tbody tr,
+[data-store-mode='online'] [data-section^='online'] .surface-plain tbody tr {
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+[data-store-mode='online'] [data-section^='online'] tbody tr:hover {
+  background: color-mix(in oklab, var(--accent) 6%, var(--surface-1));
+}
+
+/* Online overview: a commerce pulse, with confirmation work visible first. */
+[data-store-mode='online'] [data-section='onlineDash'] [data-stat-card] {
+  min-height: 120px;
+  border-radius: 13px;
+  padding: 16px;
+  animation: online-arrive 380ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+[data-store-mode='online'] [data-section='onlineDash'] [data-stat-card]:nth-child(2) { animation-delay: 45ms; }
+[data-store-mode='online'] [data-section='onlineDash'] [data-stat-card]:nth-child(3) { animation-delay: 90ms; }
+[data-store-mode='online'] [data-section='onlineDash'] [data-stat-card]:nth-child(4) { animation-delay: 135ms; }
+[data-store-mode='online'] [data-section='onlineDash'] [data-stat-card]:nth-child(5) { animation-delay: 180ms; }
+
+[data-store-mode='online'] [data-section='onlineDash'] [data-stat-card] > p {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+
+[data-store-mode='online'] [data-section='onlineDash'] .surface-glass {
+  box-shadow: 0 4px 14px oklch(0.28 0.045 294 / 0.055);
+}
+
+/* Orders: filters read as one compact command bar; transaction rows stay
+   tactile without sacrificing the dense order data. */
+[data-store-mode='online'] [data-section='onlineOrders'] [role='tablist'] {
+  padding: 5px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+[data-store-mode='online'] [data-section='onlineOrders'] .online-toolbar,
+[data-store-mode='online'] [data-section='onlineProducts'] .online-toolbar {
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-1);
+  box-shadow: 0 2px 8px oklch(0.28 0.045 294 / 0.035);
+}
+
+[data-store-mode='online'] [data-section='onlineOrders'] table,
+[data-store-mode='online'] [data-section='onlineDelivery'] table,
+[data-store-mode='online'] [data-section='onlineFinance'] table,
+[data-store-mode='online'] [data-section='onlineLink'] table {
+  min-width: 980px;
+}
+
+[data-store-mode='online'] [data-section='onlineOrders'] tbody tr,
+[data-store-mode='online'] [data-section='onlineFinance'] tbody tr {
+  height: 52px;
+}
+
+/* Catalog: a distinct storefront product surface and lighter product cards. */
+[data-store-mode='online'] [data-section='onlineProducts'] [data-stat-card] {
+  min-height: 112px;
+  border-radius: 13px;
+}
+
+[data-store-mode='online'] [data-section='onlineProducts'] .grid > .surface-glass {
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px oklch(0.28 0.045 294 / 0.055);
+  transition: transform 190ms ease, border-color 190ms ease, box-shadow 190ms ease;
+}
+
+[data-store-mode='online'] [data-section='onlineProducts'] .grid > .surface-glass:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in oklab, var(--accent) 36%, var(--border));
+  box-shadow: 0 12px 24px oklch(0.28 0.045 294 / 0.1);
+}
+
+/* Customer and CRM: insights get a quiet dashboard rhythm; customer rows
+   keep their familiar table affordances. */
+[data-store-mode='online'] [data-section='onlineClients'] [data-stat-card],
+[data-store-mode='online'] [data-section='onlineCrm'] [data-stat-card] {
+  min-height: 112px;
+  border-radius: 13px;
+}
+
+[data-store-mode='online'] [data-section='onlineClients'] table {
+  min-width: 940px;
+}
+
+[data-store-mode='online'] [data-section='onlineClients'] tbody tr {
+  height: 54px;
+}
+
+[data-store-mode='online'] [data-section='onlineCrm'] .surface-glass {
+  border-radius: 15px;
+}
+
+[data-store-mode='online'] [data-section='onlineCrm'] h3 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 600;
+}
+
+/* Fulfillment and confirmation: status, next action, then order detail. */
+[data-store-mode='online'] [data-section='onlineDelivery'] [data-stat-card],
+[data-store-mode='online'] [data-section='onlineConfirm'] [data-stat-card] {
+  min-height: 108px;
+  border-radius: 13px;
+}
+
+[data-store-mode='online'] [data-section='onlineDelivery'] .surface-glass,
+[data-store-mode='online'] [data-section='onlineConfirm'] .surface-glass {
+  border-radius: 14px;
+}
+
+[data-store-mode='online'] [data-section='onlineConfirm'] > div > .space-y-4 > .surface-glass {
+  border-left: 3px solid color-mix(in oklab, var(--accent) 58%, var(--border));
+}
+
+/* COD settlement: money out and money collected retain semantic tone colors;
+   the lilac surfaces give the finance page its own quieter cadence. */
+[data-store-mode='online'] [data-section='onlineFinance'] [data-stat-card] {
+  min-height: 118px;
+  border-radius: 13px;
+}
+
+[data-store-mode='online'] [data-section='onlineFinance'] .surface-glass {
+  border-radius: 14px;
+}
+
+/* Sync and catalog matching: clear callouts for conflicts, contained tables,
+   and visibly live connection state. */
+[data-store-mode='online'] [data-section='onlineSync'] .surface-glass,
+[data-store-mode='online'] [data-section='onlineLink'] .surface-glass {
+  border-radius: 14px;
+}
+
+[data-store-mode='online'] [data-section='onlineSync'] [data-tone='negative'],
+[data-store-mode='online'] [data-section='onlineLink'] [data-tone='negative'] {
+  box-shadow: inset 3px 0 0 var(--negative);
+}
+
+[data-store-mode='online'] [data-section='onlineSync'] [role='tablist'],
+[data-store-mode='online'] [data-section='onlineSettings'] [role='tablist'] {
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Messaging and integrations: focused configuration panels, clear selected
+   states, and gentle spring-ready hover feedback. */
+[data-store-mode='online'] [data-section='onlineWhatsApp'] .surface-glass,
+[data-store-mode='online'] [data-section='onlineSettings'] .surface-glass {
+  border-radius: 14px;
+  box-shadow: 0 2px 9px oklch(0.28 0.045 294 / 0.045);
+}
+
+[data-store-mode='online'] [data-section='onlineWhatsApp'] [aria-selected='true'],
+[data-store-mode='online'] [data-section='onlineSettings'] [aria-selected='true'] {
+  color: var(--accent);
+}
+
+[data-store-mode='online'] [data-section='onlineSettings'] .surface-glass h3 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 600;
+}
+
+@keyframes online-arrive {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+[data-theme='dark'] [data-store-mode='online'] aside a[aria-current='page'] {
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+}
+
+@media (max-width: 639px) {
+  [data-store-mode='online'] .online-page-kicker { display: none; }
+  [data-store-mode='online'] #page-chrome h1 { font-size: 1rem; }
+}
+
+@media (max-width: 767px) {
+  [data-store-mode='online'] [data-section='onlineOrders'] table,
+  [data-store-mode='online'] [data-section='onlineDelivery'] table,
+  [data-store-mode='online'] [data-section='onlineFinance'] table,
+  [data-store-mode='online'] [data-section='onlineLink'] table,
+  [data-store-mode='online'] [data-section='onlineClients'] table {
+    min-width: 780px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-store-mode='online'] [data-section='onlineDash'] [data-stat-card],
+  [data-store-mode='online'] [data-section='onlineProducts'] .grid > .surface-glass {
+    animation: none;
+    transition: none;
+  }
+}

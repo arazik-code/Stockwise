@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Building2, ChevronRight, Pencil, Plus, Receipt, Search, Trash2, TrendingUp, Truck,
+  Building2, ChevronRight, Pencil, Plus, Printer, Receipt, Search, Trash2, TrendingUp, Truck, Undo2,
 } from 'lucide-react'
 import { fournisseursApi } from '../api/fournisseurs'
 import { invoicesApi } from '../api/invoices'
 import { showToast } from '../components/shared/Toast'
 import { formatCurrency, formatDate } from '../utils/format'
+import { printFournisseurSummary } from '../utils/printFournisseurSummary'
 import { useTableSelection } from '../hooks/useTableSelection'
 import ReceiveDeliveryDialog from '../components/fournisseurs/ReceiveDeliveryDialog'
 import {
   Badge, Button, DataTable, EmptyState, IconButton, Input, Modal, Page,
-  SkeletonTable, StatusBadge, Tabs, Toolbar, cn,
+  Select, SkeletonTable, StatusBadge, Tabs, Toolbar, cn,
   type Column,
 } from '../components/ui'
 import type {
@@ -46,6 +47,15 @@ export default function FournisseursPage() {
   const [factureLoading, setFactureLoading] = useState(false)
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<number | null>(null)
   const [togglingId, setTogglingId] = useState<number | null>(null)
+
+  // Partial/installment payment - separate from the one-click "Marquer payé" toggle above, which
+  // only ever settles the full remaining balance in one shot.
+  const [payTarget, setPayTarget] = useState<Invoice | null>(null)
+  const [payAmount, setPayAmount] = useState(0)
+  const [payMethod, setPayMethod] = useState('Cash')
+  const [payReference, setPayReference] = useState('')
+  const [paySubmitting, setPaySubmitting] = useState(false)
+  const [undoPaymentTarget, setUndoPaymentTarget] = useState<{ invoiceId: number; paymentId: number; amount: number } | null>(null)
 
   const tableSelection = useTableSelection<Fournisseur>()
 
@@ -118,6 +128,25 @@ export default function FournisseursPage() {
     setExpandedInvoiceId(null)
   }
 
+  const handlePrintFactureSummary = () => {
+    if (!factureDetail) return
+    const full = fournisseurs.find((f) => f.id === factureDetail.fournisseurId)
+    printFournisseurSummary({
+      fournisseurName: factureDetail.fournisseurNom,
+      fournisseurPhone: full?.telephone,
+      fournisseurAddress: full?.adresse,
+      invoices: factureInvoices.map((inv) => ({
+        invoiceNumber: inv.invoiceNumber,
+        date: formatDate(inv.invoiceDate),
+        dueDate: inv.dueDate ? formatDate(inv.dueDate) : undefined,
+        status: inv.status,
+        totalAmount: inv.totalAmount,
+        paidAmount: inv.paidAmount,
+        balanceDue: inv.balanceDue,
+      })),
+    })
+  }
+
   const handleTogglePaid = async (inv: Invoice) => {
     const willBePaid = inv.status !== 'Paid'
     const confirmMsg = willBePaid ? t('invoices.markPaidConfirm') : t('invoices.markUnpaidConfirm')
@@ -135,6 +164,50 @@ export default function FournisseursPage() {
       showToast(t('common.error'), 'error')
     } finally {
       setTogglingId(null)
+    }
+  }
+
+  const openPay = (inv: Invoice) => {
+    setPayTarget(inv)
+    setPayAmount(inv.balanceDue)
+    setPayMethod('Cash')
+    setPayReference('')
+  }
+  const closePay = () => setPayTarget(null)
+
+  const handlePaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!payTarget || payAmount <= 0) return
+    setPaySubmitting(true)
+    try {
+      const updated = await invoicesApi.pay(payTarget.id, {
+        amount: payAmount,
+        paymentMethod: payMethod,
+        reference: payReference || undefined,
+      })
+      setFactureInvoices((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+      showToast(t('invoices.paySuccess'), 'success')
+      closePay()
+      // Same reasoning as handleTogglePaid above - the balance table behind this modal is a live
+      // aggregate and won't reflect this payment until reloaded.
+      loadFactures()
+    } catch {
+      showToast(t('common.error'), 'error')
+    } finally {
+      setPaySubmitting(false)
+    }
+  }
+
+  const handleUndoPayment = async () => {
+    if (!undoPaymentTarget) return
+    try {
+      const updated = await invoicesApi.undoPayment(undoPaymentTarget.invoiceId, undoPaymentTarget.paymentId)
+      setFactureInvoices((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+      showToast(t('invoices.undoPaymentSuccess'), 'success')
+      setUndoPaymentTarget(null)
+      loadFactures()
+    } catch {
+      showToast(t('common.error'), 'error')
     }
   }
 
@@ -248,6 +321,7 @@ export default function FournisseursPage() {
   return (
     <Page
       section="fournisseurs"
+      className="local-suppliers"
       title={t('fournisseurs.title')}
       actions={
         tab === 'liste' ? (
@@ -283,7 +357,7 @@ export default function FournisseursPage() {
           <SkeletonTable rows={8} cols={tab === 'factures' ? 4 : tab === 'analytique' ? 7 : 6} />
         ) : tab === 'liste' ? (
           <div className="space-y-4">
-            <Toolbar>
+            <Toolbar className="local-toolbar">
               {!loading && (
                 <Badge tone="neutral" size="sm">
                   <span className="num">{filteredFournisseurs.length}</span> {t('fournisseurs.title').toLowerCase()}
@@ -477,6 +551,19 @@ export default function FournisseursPage() {
             </>
           ) : undefined
         }
+        footer={
+          <>
+            <Button variant="outline" onClick={closeFactureDetail}>{t('common.close')}</Button>
+            <Button
+              variant="soft"
+              icon={<Printer className="h-3.5 w-3.5" />}
+              disabled={factureInvoices.length === 0}
+              onClick={handlePrintFactureSummary}
+            >
+              {t('invoices.printSummary')}
+            </Button>
+          </>
+        }
       >
         {factureLoading ? (
           <SkeletonTable rows={5} cols={4} />
@@ -519,7 +606,12 @@ export default function FournisseursPage() {
                     <span className="flex justify-center">
                       <StatusBadge domain="invoice" value={inv.status} size="xs" showIcon={false} animate={false} />
                     </span>
-                    <span className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+                    <span className="flex flex-wrap justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {inv.status !== 'Cancelled' && inv.status !== 'Paid' && inv.balanceDue > 0 && (
+                        <Button size="xs" variant="outline" onClick={() => openPay(inv)}>
+                          {t('invoices.pay')}
+                        </Button>
+                      )}
                       {inv.status !== 'Cancelled' && (
                         <Button
                           size="xs"
@@ -570,6 +662,20 @@ export default function FournisseursPage() {
                               { key: 'date', header: t('invoices.paymentDate'), render: (p: Invoice['payments'][number]) => <span className="text-xs text-fg-muted">{formatDate(p.paymentDate)}</span> },
                               { key: 'method', header: t('invoices.paymentMethod'), render: (p: Invoice['payments'][number]) => <span className="text-xs text-fg-muted">{p.paymentMethod}</span> },
                               { key: 'amount', header: t('invoices.paymentAmount'), numeric: true, render: (p: Invoice['payments'][number]) => <span className="text-xs font-medium text-fg">{formatCurrency(p.amount)}</span> },
+                              {
+                                key: 'undo',
+                                header: '',
+                                align: 'center',
+                                render: (p: Invoice['payments'][number]) => (
+                                  <IconButton
+                                    icon={<Undo2 className="h-3.5 w-3.5" />}
+                                    label={t('invoices.undoPayment')}
+                                    size="xs"
+                                    variant="danger-ghost"
+                                    onClick={() => setUndoPaymentTarget({ invoiceId: inv.id, paymentId: p.id, amount: p.amount })}
+                                  />
+                                ),
+                              },
                             ]}
                             data={inv.payments}
                             keyField={(p) => p.id}
@@ -584,6 +690,72 @@ export default function FournisseursPage() {
             })}
           </div>
         )}
+      </Modal>
+
+      {/* Partial payment - a specific amount the user types in, subtracted from the balance due.
+          Separate from "Marquer payé" above, which only ever settles the full remaining balance. */}
+      <Modal
+        open={!!payTarget}
+        onClose={closePay}
+        size="sm"
+        title={t('invoices.pay')}
+        description={payTarget ? `${payTarget.invoiceNumber} — ${payTarget.fournisseurNom}` : undefined}
+      >
+        {payTarget && (
+          <form onSubmit={handlePaySubmit} className="space-y-4">
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              max={payTarget.balanceDue}
+              label={t('invoices.paymentAmount')}
+              hint={`${t('invoices.balanceDue')}: ${formatCurrency(payTarget.balanceDue)}`}
+              value={payAmount}
+              onChange={(e) => setPayAmount(parseFloat(e.target.value) || 0)}
+              autoFocus
+            />
+            <Select label={t('invoices.paymentMethod')} value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+              <option value="Cash">{t('sales.payments.cash')}</option>
+              <option value="Card">{t('sales.payments.card')}</option>
+              <option value="Transfer">Virement</option>
+              <option value="Cheque">Cheque</option>
+            </Select>
+            <Input
+              label={t('invoices.paymentReference')}
+              value={payReference}
+              onChange={(e) => setPayReference(e.target.value)}
+              placeholder="CHQ-001, VIR-002..."
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={closePay}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={paySubmitting || payAmount <= 0} loading={paySubmitting}>
+                {t('common.confirm')}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Undo Payment Confirmation Modal */}
+      <Modal
+        open={!!undoPaymentTarget}
+        onClose={() => setUndoPaymentTarget(null)}
+        size="sm"
+        title={t('invoices.undoPayment')}
+      >
+        <p className="mb-5 text-sm text-fg-muted">
+          {t('invoices.undoPaymentConfirm', { amount: undoPaymentTarget ? formatCurrency(undoPaymentTarget.amount) : '' })}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setUndoPaymentTarget(null)}>
+            {t('common.cancel')}
+          </Button>
+          <Button variant="danger" onClick={handleUndoPayment}>
+            {t('common.confirm')}
+          </Button>
+        </div>
       </Modal>
     </Page>
   )

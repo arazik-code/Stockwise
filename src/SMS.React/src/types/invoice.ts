@@ -16,6 +16,7 @@ export interface InvoiceLineItem {
   discountPercent: number
   discountAmount: number
   lineTotal: number
+  productId?: number
   colorId?: number
   sizeId?: number
 }
@@ -47,12 +48,14 @@ export interface Invoice {
   invoiceDate: string
   dueDate?: string
   paidAt?: string
+  receivedAt?: string
   notes?: string
   reference?: string
   createdByUserName?: string
   items: InvoiceLineItem[]
   payments: InvoicePayment[]
   createdAt: string
+  archivedAt?: string
 }
 
 export interface CreateInvoiceLineItemRequest {

@@ -104,7 +104,7 @@ export function Page({
       {chromeHost &&
         (title || actions) &&
         createPortal(
-          <PageChrome title={title} subtitle={subtitle} actions={actions} />,
+          <PageChrome section={section} title={title} subtitle={subtitle} actions={actions} />,
           chromeHost
         )}
 
@@ -125,21 +125,57 @@ export function Page({
 
 /** Rendered into MainLayout's sticky header slot. */
 function PageChrome({
+  section,
   title,
   subtitle,
   actions,
 }: {
+  section: SectionName
   title?: ReactNode
   subtitle?: ReactNode
   actions?: ReactNode
 }) {
+  const localLabels: Partial<Record<SectionName, string>> = {
+    dashboard: 'Vue du jour',
+    pos: 'Vente en boutique',
+    sales: 'Historique des ventes',
+    refunds: 'Retours & remboursements',
+    clients: 'Relations clients',
+    products: 'Catalogue produits',
+    stock: 'Inventaire',
+    fournisseurs: 'Partenaires & fournisseurs',
+    invoices: 'Achats & factures',
+    reports: 'Analyse du commerce',
+    printer: 'Outils de préparation',
+    offlineSales: 'Continuité hors ligne',
+    invoiceDesign: 'Personnaliser les factures',
+    receiptDesign: 'Personnaliser les reçus',
+    settings: 'Préférences de la boutique',
+    admin: 'Administration',
+  }
+  const onlineLabels: Partial<Record<SectionName, string>> = {
+    onlineDash: 'Commerce en ligne',
+    onlineOrders: 'Commandes & traitement',
+    onlineProducts: 'Catalogue synchronisé',
+    onlineClients: 'Clients en ligne',
+    onlineCrm: 'Intelligence client',
+    onlineDelivery: 'Livraison & suivi',
+    onlineFinance: 'Encaissements & rapprochement',
+    onlineConfirm: 'Confirmation des commandes',
+    onlineSync: 'Synchronisation',
+    onlineLink: 'Correspondance catalogue',
+    onlineWhatsApp: 'Communication client',
+    onlineSettings: 'Intégrations & canaux',
+  }
   return (
     <>
       <div className="min-w-0 flex-1">
         {title && (
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg sm:text-lg">
-            {title}
-          </h1>
+          <div className="min-w-0">
+            <p className="local-page-kicker">{localLabels[section]}</p>
+            <p className="online-page-kicker">{onlineLabels[section]}</p>
+            <h1 className="truncate text-base font-semibold tracking-tight text-fg sm:text-lg">{title}</h1>
+          </div>
         )}
         {subtitle && <p className="truncate text-xs text-fg-subtle">{subtitle}</p>}
       </div>

@@ -6,7 +6,7 @@ import { showToast } from '../components/shared/Toast'
 import { Button, Input, Page, Select, Switch, Tabs, cn } from '../components/ui'
 
 const DEFAULT_TEMPLATE: InvoiceTemplateConfig = {
-  shopName: 'FLEX SHOES',
+  shopName: 'MY STORE',
   shopAddress: '',
   shopPhone: '',
   shopEmail: '',
@@ -35,7 +35,7 @@ const DEFAULT_TEMPLATE: InvoiceTemplateConfig = {
 }
 
 const PREVIEW_ITEMS = [
-  { productName: 'Chaussures Sport Elite', sku: 'PRD-001-C-N-42', colorName: 'Noir', sizeValue: '42', barcode: '6111234567890', description: 'Édition limitée cuir véritable', quantity: 2, unitCost: 299.00, discountPercent: 0, discountAmount: 0, lineTotal: 598.00 },
+  { productName: 'Essential cotton T-shirt', sku: 'DEMO-001-01-02', colorName: 'White', sizeValue: 'M', barcode: '6111234567890', description: 'Demo catalog sample', quantity: 2, unitCost: 55.00, discountPercent: 0, discountAmount: 0, lineTotal: 110.00 },
   { productName: 'Sneakers Classic Premium', sku: 'PRD-002-C-B-40', colorName: 'Blanc', sizeValue: '40', barcode: '6111234567891', description: '', quantity: 1, unitCost: 199.00, discountPercent: 10, discountAmount: 19.90, lineTotal: 179.10 },
   { productName: 'Mocassins Cuir Artisanal', sku: 'PRD-003-C-M-43', colorName: 'Marron', sizeValue: '43', barcode: '6111234567892', description: 'Cuir véritable handmade', quantity: 3, unitCost: 450.00, discountPercent: 0, discountAmount: 0, lineTotal: 1350.00 },
 ]
@@ -85,7 +85,7 @@ export default function InvoiceDesignerPage() {
 
   if (loading) {
     return (
-      <Page section="invoiceDesign" title="Design Facture" bare fill>
+      <Page section="invoiceDesign" title="Design Facture" className="local-invoice-designer" bare fill>
         <div className="flex flex-1 items-center justify-center text-sm text-fg-subtle">{t('common.loading')}</div>
       </Page>
     )
@@ -94,6 +94,7 @@ export default function InvoiceDesignerPage() {
   return (
     <Page
       section="invoiceDesign"
+      className="local-invoice-designer"
       title="Design Facture"
       bare
       fill
@@ -291,7 +292,7 @@ function InvoicePreview({ config }: { config: InvoiceTemplateConfig }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: 16, borderBottom: '2px solid #000' }}>
             <div>
               {config.logoBase64 && <img src={config.logoBase64} alt="Logo" style={{ maxHeight: 50, maxWidth: 140, objectFit: 'contain', marginBottom: 8, filter: 'grayscale(100%)' }} />}
-              <div style={{ fontSize: 22, fontWeight: 300, letterSpacing: 6, textTransform: 'uppercase' }}>{config.shopName || 'FLEX SHOES'}</div>
+              <div style={{ fontSize: 22, fontWeight: 300, letterSpacing: 6, textTransform: 'uppercase' }}>{config.shopName || 'MY STORE'}</div>
               {config.shopAddress && <div style={{ color: '#555', marginTop: 4, fontSize: fs - 1 }}>{config.shopAddress}</div>}
               <div style={{ color: '#555', fontSize: fs - 1, marginTop: 2 }}>
                 {config.shopPhone && <span>{config.shopPhone}</span>}

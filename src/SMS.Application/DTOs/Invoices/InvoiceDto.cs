@@ -20,12 +20,14 @@ public class InvoiceDto
     public DateTime InvoiceDate { get; set; }
     public DateTime? DueDate { get; set; }
     public DateTime? PaidAt { get; set; }
+    public DateTime? ReceivedAt { get; set; }
     public string? Notes { get; set; }
     public string? Reference { get; set; }
     public string? CreatedByUserName { get; set; }
     public List<InvoiceLineItemDto> Items { get; set; } = [];
     public List<InvoicePaymentDto> Payments { get; set; } = [];
     public DateTime CreatedAt { get; set; }
+    public DateTime? ArchivedAt { get; set; }
 }
 
 public class InvoiceLineItemDto
@@ -37,6 +39,7 @@ public class InvoiceLineItemDto
     public string? VariantBarcode { get; set; }
     public string ColorName { get; set; } = string.Empty;
     public string SizeValue { get; set; } = string.Empty;
+    public int? ProductId { get; set; }
     public int? ColorId { get; set; }
     public int? SizeId { get; set; }
     public string? Description { get; set; }

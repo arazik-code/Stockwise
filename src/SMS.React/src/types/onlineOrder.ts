@@ -24,6 +24,9 @@ export interface OnlineOrderItem {
   shopifyProductId?: number
   shopifyVariantId?: number
   shopifySku?: string
+  // Shopify's own variant_title (e.g. "42"), captured at ingest time - shown as-is regardless of
+  // whether this line is matched to a local product yet.
+  shopifyVariantTitle?: string
   productName: string
   sku: string
   colorName?: string

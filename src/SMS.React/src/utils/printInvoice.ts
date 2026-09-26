@@ -103,6 +103,7 @@ function buildHtml(t: InvoiceTemplateConfig, d: InvoicePrintData): string {
   const taxAmt = d.taxAmount
   const tot = d.totalAmount
   const due = tot - d.paidAmount
+  const totalPairs = d.items.reduce((s, it) => s + it.quantity, 0)
 
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${esc(d.invoiceNumber)}</title>
@@ -119,7 +120,7 @@ ${t.showHeader?`
 <div style="display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:16px;border-bottom:2px solid #000;">
 <div>
 ${t.logoBase64?`<img src="${t.logoBase64}" style="max-height:50px;max-width:140px;object-fit:contain;margin-bottom:8px;filter:grayscale(100%);"/>`:''}
-<div style="font-size:22px;font-weight:300;letter-spacing:6px;text-transform:uppercase;">${esc(t.shopName||'FLEX SHOES')}</div>
+<div style="font-size:22px;font-weight:300;letter-spacing:6px;text-transform:uppercase;">${esc(t.shopName||'MY STORE')}</div>
 ${t.shopAddress?`<div style="color:#555;margin-top:4px;font-size:${fs-1}px;">${esc(t.shopAddress)}</div>`:''}
 <div style="color:#555;font-size:${fs-1}px;margin-top:2px;">
 ${t.shopPhone?`<span>${esc(t.shopPhone)}</span>`:''}
@@ -167,6 +168,7 @@ ${rows}
 
 <div style="display:flex;justify-content:flex-end;margin-bottom:24px;">
 <div style="width:240px;">
+<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #d1d5db;"><span style="color:#555;">${d.items.length} article(s) · ${totalPairs} paire(s)</span></div>
 <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #d1d5db;"><span style="color:#555;">Sous-total</span><span style="font-weight:500;">${money(sub)}</span></div>
 ${disc>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #d1d5db;"><span style="color:#555;">Remise</span><span style="font-weight:500;">-${money(disc)}</span></div>`:''}
 ${t.showTax?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #d1d5db;"><span style="color:#555;">TVA (${(d.taxRate*100).toFixed(0)}%)</span><span style="font-weight:500;">${money(taxAmt)}</span></div>`:''}

@@ -261,6 +261,7 @@ export default function ClientsPage() {
   return (
     <Page
       section="clients"
+      className="local-clients"
       title={t('clients.title')}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">

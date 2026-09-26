@@ -7,6 +7,7 @@ import DeviceStatusIndicator from './DeviceStatusIndicator'
 import { ToastViewport } from '../ui/Toast'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { useUIStore } from '../../store/uiStore'
+import { useStoreModeStore } from '../../store/storeModeStore'
 import { pageVariants } from '../../design/variants'
 
 /**
@@ -35,6 +36,7 @@ import { pageVariants } from '../../design/variants'
 export default function MainLayout() {
   const location = useLocation()
   const openMobileNav = useUIStore((s) => s.openMobileNav)
+  const storeMode = useStoreModeStore((s) => s.mode)
 
   return (
     // h-screen + overflow-hidden, not min-h-screen: the shell must have a
@@ -53,7 +55,7 @@ export default function MainLayout() {
     // [data-section] ancestor sets --acc-h/l/c here, so it resolves to the
     // utility's own neutral defaults - a fixed wash for the persistent
     // chrome, not a per-page hue.
-    <div className="shell-mesh flex h-screen overflow-hidden bg-canvas" style={{ isolation: 'isolate' }}>
+    <div data-store-mode={storeMode} className="shell-mesh flex h-screen overflow-hidden bg-canvas" style={{ isolation: 'isolate' }}>
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">

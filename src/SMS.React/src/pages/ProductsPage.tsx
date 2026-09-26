@@ -263,6 +263,7 @@ export default function ProductsPage() {
   return (
     <Page
       section="products"
+      className="local-products"
       title={t('products.title')}
       actions={
         <>
@@ -298,7 +299,7 @@ export default function ProductsPage() {
       }
     >
       <div className="space-y-5">
-        <Toolbar>
+        <Toolbar className="local-toolbar">
           <Input
             type="text"
             placeholder={t('products.search')}

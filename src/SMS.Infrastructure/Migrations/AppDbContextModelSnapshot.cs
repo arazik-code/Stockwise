@@ -520,6 +520,9 @@ namespace SMS.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -559,6 +562,9 @@ namespace SMS.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Reference")
                         .HasMaxLength(100)
@@ -628,6 +634,9 @@ namespace SMS.Infrastructure.Migrations
                         .HasColumnType("numeric(5,2)");
 
                     b.Property<int>("InvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProductId")
                         .HasColumnType("integer");
 
                     b.Property<string>("ProductName")
@@ -962,6 +971,10 @@ namespace SMS.Infrastructure.Migrations
 
                     b.Property<long?>("ShopifyVariantId")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("ShopifyVariantTitle")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("SkuSnapshot")
                         .IsRequired()

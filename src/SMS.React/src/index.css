@@ -21,6 +21,10 @@
 @import './design/components.css';
 @import './design/theme.css';
 @import './design/print.css';
+@import './design/local-store.css';
+@import './design/online-store.css';
+@import './design/landing-page.css';
+@import './design/glass-fractal.css';
 
 html {
   background: var(--canvas);

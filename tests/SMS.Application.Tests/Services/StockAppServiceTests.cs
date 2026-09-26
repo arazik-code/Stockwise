@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using SMS.Application.DTOs.Stock;
 using SMS.Application.Interfaces;
 using SMS.Application.Services;
@@ -214,5 +215,84 @@ public class StockAppServiceTests
         var result = await _service.GetMovementsAsync(1, null, null);
 
         Assert.Equal(2, result.Count);
+    }
+
+    private void SetUpFindAsyncOverMovements(List<StockMovement> movements)
+    {
+        _unitOfWorkMock.Setup(u => u.FindAsync(It.IsAny<Expression<Func<StockMovement, bool>>>(), It.IsAny<CancellationToken>()))
+            .Returns((Expression<Func<StockMovement, bool>> predicate, CancellationToken _) =>
+                Task.FromResult<IReadOnlyList<StockMovement>>(movements.Where(predicate.Compile()).ToList()));
+    }
+
+    [Fact]
+    public async Task UndoAdjustmentAsync_LatestAdjustment_ReversesQuantityWithCompensatingMovement()
+    {
+        var stockItem = new StockItem { ProductVariantId = 1, QuantityOnHand = 75, ReorderLevel = 20 };
+        var movements = new List<StockMovement>
+        {
+            new() { Id = 10, ProductVariantId = 1, Type = StockMovementType.Adjustment, QuantityChange = 25, QuantityAfter = 75 }
+        };
+        SetUpFindAsyncOverMovements(movements);
+        _stockRepoMock.Setup(r => r.GetByVariantIdWithRowVersionAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stockItem);
+
+        await _service.UndoAdjustmentAsync(10);
+
+        Assert.Equal(50, stockItem.QuantityOnHand);
+        _stockRepoMock.Verify(r => r.AddMovementAsync(
+            It.Is<StockMovement>(m =>
+                m.ProductVariantId == 1 &&
+                m.Type == StockMovementType.Adjustment &&
+                m.QuantityChange == -25 &&
+                m.QuantityAfter == 50),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task UndoAdjustmentAsync_NotTheLatestMovement_ThrowsInvalidOperation()
+    {
+        var movements = new List<StockMovement>
+        {
+            new() { Id = 10, ProductVariantId = 1, Type = StockMovementType.Adjustment, QuantityChange = 25, QuantityAfter = 75 },
+            new() { Id = 11, ProductVariantId = 1, Type = StockMovementType.Sale, QuantityChange = -2, QuantityAfter = 73 }
+        };
+        SetUpFindAsyncOverMovements(movements);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.UndoAdjustmentAsync(10));
+    }
+
+    [Fact]
+    public async Task UndoAdjustmentAsync_NonAdjustmentMovement_ThrowsInvalidOperation()
+    {
+        var movements = new List<StockMovement>
+        {
+            new() { Id = 10, ProductVariantId = 1, Type = StockMovementType.Sale, QuantityChange = -2, QuantityAfter = 48 }
+        };
+        SetUpFindAsyncOverMovements(movements);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.UndoAdjustmentAsync(10));
+    }
+
+    [Fact]
+    public async Task UndoAdjustmentAsync_UnknownMovementId_ThrowsKeyNotFound()
+    {
+        SetUpFindAsyncOverMovements(new List<StockMovement>());
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.UndoAdjustmentAsync(999));
+    }
+
+    [Fact]
+    public async Task UndoAdjustmentAsync_WouldGoNegative_ThrowsInvalidOperation()
+    {
+        var stockItem = new StockItem { ProductVariantId = 1, QuantityOnHand = 10, ReorderLevel = 20 };
+        var movements = new List<StockMovement>
+        {
+            new() { Id = 10, ProductVariantId = 1, Type = StockMovementType.Adjustment, QuantityChange = 25, QuantityAfter = 10 }
+        };
+        SetUpFindAsyncOverMovements(movements);
+        _stockRepoMock.Setup(r => r.GetByVariantIdWithRowVersionAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(stockItem);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.UndoAdjustmentAsync(10));
     }
 }

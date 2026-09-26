@@ -227,6 +227,7 @@ export default function StockPage() {
   return (
     <Page
       section="stock"
+      className="local-stock"
       title={t('stock.title')}
       actions={
         <span className="hidden items-center gap-1.5 text-xs text-fg-subtle sm:flex">
@@ -236,7 +237,7 @@ export default function StockPage() {
       }
     >
       <div className="space-y-4">
-        <Toolbar>
+        <Toolbar className="local-toolbar">
           <Checkbox
             checked={showLowOnly}
             onChange={(e) => setShowLowOnly(e.target.checked)}

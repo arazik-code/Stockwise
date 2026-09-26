@@ -95,6 +95,36 @@ public class ShopifySyncAppServiceTests
     }
 
     [Fact]
+    public async Task ProcessOrderCreatedAsync_CapturesShopifyVariantTitleOnTheItem()
+    {
+        // Shopify's variant_title (e.g. "42") is what lets the order detail show a size without
+        // requiring the line to be matched to a local product first - captured here regardless of
+        // match outcome.
+        var variant = new ProductVariant { Id = 1, ProductId = 1, Sku = "SKU-1", Product = new Product { Id = 1, Name = "Shoe A" } };
+        var stock = new StockItem { ProductVariantId = 1, QuantityOnHand = 10, QuantityReserved = 0, ReorderLevel = 2 };
+        SetupMappedVariant(555, 777, variant, stock);
+
+        _orderRepoMock.Setup(r => r.GetByShopifyOrderIdAsync(999, It.IsAny<CancellationToken>())).ReturnsAsync((OnlineOrder?)null);
+        _orderRepoMock.Setup(r => r.GenerateOrderNumberAsync(OnlineOrderChannel.Shopify, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("SHP-20260723-001");
+
+        OnlineOrder? added = null;
+        _orderRepoMock.Setup(r => r.AddAsync(It.IsAny<OnlineOrder>(), It.IsAny<CancellationToken>()))
+            .Callback<OnlineOrder, CancellationToken>((o, _) => added = o)
+            .Returns(Task.CompletedTask);
+
+        var lineItems = new List<ShopifyLineItemDto>
+        {
+            new() { ProductId = 555, VariantId = 777, Title = "Shoe A", Quantity = 2, Price = 150m, VariantTitle = "42" }
+        };
+
+        await _service.ProcessOrderCreatedAsync(999, "#1001", "paid", "unfulfilled", 300m, "MAD",
+            "client@test.com", "Jane Doe", lineItems, DateTime.UtcNow);
+
+        Assert.Equal("42", added!.Items.Single().ShopifyVariantTitle);
+    }
+
+    [Fact]
     public async Task ProcessOrderCreatedAsync_InsufficientStock_CreatesConflictWithoutReserving()
     {
         var variant = new ProductVariant { Id = 1, ProductId = 1, Sku = "SKU-1", Product = new Product { Id = 1, Name = "Shoe A" } };

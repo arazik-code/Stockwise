@@ -32,7 +32,7 @@ export default function ChangePasswordPage() {
     try {
       await api.post('/auth/change-password', { currentPassword, newPassword })
       clearMustChangePassword()
-      navigate('/')
+      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Erreur lors du changement de mot de passe')
     } finally {

@@ -54,6 +54,9 @@ public class OnlineOrderItemDto
     public long? ShopifyProductId { get; set; }
     public long? ShopifyVariantId { get; set; }
     public string? ShopifySku { get; set; }
+    // Shopify's own variant_title (e.g. "42"), captured at ingest time - shown as-is in the online
+    // order detail regardless of whether this line is matched to a local ProductVariant yet.
+    public string? ShopifyVariantTitle { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public string Sku { get; set; } = string.Empty;
     public string? ColorName { get; set; }

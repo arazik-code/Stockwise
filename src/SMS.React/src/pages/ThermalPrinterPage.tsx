@@ -119,7 +119,7 @@ export default function ThermalPrinterPage() {
   ]
 
   return (
-    <Page section="printer" title={t('printer.title')} bare fill>
+    <Page section="printer" title={t('printer.title')} className="local-printer" bare fill>
       <div className="flex flex-1 gap-6 p-4 sm:p-6">
         {/* Left: Product list. Bounded height so it scrolls independently of
             the fixed-width print-queue sidebar, matching the original

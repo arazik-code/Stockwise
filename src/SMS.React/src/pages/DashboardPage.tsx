@@ -103,7 +103,7 @@ export default function DashboardPage() {
         </>
       }
     >
-      <div className="space-y-6">
+      <div className="local-dashboard space-y-6">
         {loading ? (
           <>
             <SkeletonStats count={cashOnHand.isAdmin ? 7 : 6} />
@@ -122,7 +122,7 @@ export default function DashboardPage() {
             )}
 
             {/* ── KPI GRID ── */}
-            <div className={cn('grid grid-cols-2 gap-4 md:grid-cols-3', cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6')}>
+            <div className={cn('dashboard-kpis grid grid-cols-2 gap-4 md:grid-cols-3', cashOnHand.isAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-6')}>
               {cashOnHand.isAdmin && (
                 <StatCard
                   label="Solde caisse"
@@ -139,6 +139,7 @@ export default function DashboardPage() {
                 numericValue={data?.todaySales ?? 0}
                 sub={`${data?.weekSales ?? 0} cette semaine`}
                 icon={ShoppingCart}
+                className="dashboard-sales"
               />
               <StatCard
                 label={t('dashboard.todayRevenue')}
@@ -147,6 +148,7 @@ export default function DashboardPage() {
                 sub={`Panier: ${formatCurrency(data?.todayAvgOrderValue ?? 0)}`}
                 icon={TrendingUp}
                 tone="positive"
+                className="dashboard-revenue"
               />
               <StatCard
                 label={t('dashboard.lowStock')}
@@ -154,6 +156,7 @@ export default function DashboardPage() {
                 sub={`${data?.totalStockUnits ?? 0} unites en stock`}
                 icon={AlertTriangle}
                 tone={(data?.lowStockCount ?? 0) > 0 ? 'caution' : 'accent'}
+                className="dashboard-stock"
               />
               <StatCard
                 label="Ce mois"
@@ -167,7 +170,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── SALES TREND + PAYMENT BREAKDOWN ── */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="dashboard-trends grid grid-cols-1 gap-6 lg:grid-cols-3">
               <ChartFrame
                 className="lg:col-span-2"
                 title="Ventes des 7 derniers jours"
@@ -209,7 +212,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── CATEGORY BREAKDOWN + TOP PRODUCTS ── */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="dashboard-performance grid grid-cols-1 gap-6 lg:grid-cols-3">
               <Card>
                 <h3 className="text-sm font-semibold text-fg">Ventes par categorie</h3>
                 <p className="mb-4 text-xs text-fg-subtle">Revenu par type de vente</p>
@@ -316,7 +319,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── RECENT SALES + LOW STOCK ── */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="dashboard-activity grid grid-cols-1 gap-6 lg:grid-cols-2">
               <Card padded={false}>
                 <div className="flex items-center justify-between border-b border-border px-5 py-4">
                   <div>
@@ -428,7 +431,7 @@ export default function DashboardPage() {
             </div>
 
             {/* ── QUICK NAV CARDS ── */}
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="dashboard-shortcuts grid grid-cols-2 gap-4 md:grid-cols-4">
               <Card interactive accent className="cursor-pointer" onClick={() => navigate('/products')}>
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-field bg-[var(--accent-soft)] text-[var(--accent)]">
